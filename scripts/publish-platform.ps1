@@ -61,7 +61,7 @@ function Invoke-External {
     }
 }
 
-function Set-CompatibleXcodeForIos26 {
+function Set-CompatibleXcodeForIos264 {
     if (-not $isMacHost) {
         return
     }
@@ -76,10 +76,10 @@ function Set-CompatibleXcodeForIos26 {
     if ([string]::IsNullOrWhiteSpace($developerDirectory) -or
         -not (Test-Path -LiteralPath $developerDirectory -PathType Container)) {
         $candidates = @(
-            '/Applications/Xcode_26.0.1.app',
-            '/Applications/Xcode_26.0.app')
+            '/Applications/Xcode_26.4.1.app',
+            '/Applications/Xcode_26.4.app')
 
-        $candidates += Get-ChildItem -LiteralPath '/Applications' -Directory -Filter 'Xcode_26.0*.app' -ErrorAction SilentlyContinue |
+        $candidates += Get-ChildItem -LiteralPath '/Applications' -Directory -Filter 'Xcode_26.4*.app' -ErrorAction SilentlyContinue |
             ForEach-Object { $_.FullName }
 
         foreach ($candidate in ($candidates | Select-Object -Unique)) {
@@ -97,8 +97,8 @@ function Set-CompatibleXcodeForIos26 {
         $installed = Get-ChildItem -LiteralPath '/Applications' -Directory -Filter 'Xcode*.app' -ErrorAction SilentlyContinue |
             ForEach-Object { $_.FullName }
         $installedText = if ($installed) { $installed -join [Environment]::NewLine } else { '（未找到）' }
-        throw ("未找到与 net10.0-ios26.0 匹配的 Xcode 26.0。" + [Environment]::NewLine +
-            "请安装 Xcode 26.0，或通过 HELLOCRAB_XCODE_PATH 指定其 .app 路径。" + [Environment]::NewLine +
+        throw ("未找到与 net10.0-ios 匹配的 Xcode 26.4。" + [Environment]::NewLine +
+            "请安装 Xcode 26.4，或通过 HELLOCRAB_XCODE_PATH 指定其 .app 路径。" + [Environment]::NewLine +
             "当前已安装的 Xcode：" + [Environment]::NewLine + $installedText)
     }
 
@@ -109,14 +109,27 @@ function Set-CompatibleXcodeForIos26 {
     }
 
     $versionLine = @($versionOutput)[0]
-    if (-not $versionLine.StartsWith('Xcode 26.0', [StringComparison]::Ordinal)) {
-        throw ("当前选择的是 $versionLine，但 net10.0-ios26.0 需要 Xcode 26.0。" + [Environment]::NewLine +
+    if (-not $versionLine.StartsWith('Xcode 26.4', [StringComparison]::Ordinal)) {
+        throw ("当前选择的是 $versionLine，但 net10.0-ios 需要 Xcode 26.4。" + [Environment]::NewLine +
             "DEVELOPER_DIR=$developerDirectory" + [Environment]::NewLine +
-            '请通过 HELLOCRAB_XCODE_PATH 指向 Xcode 26.0。')
+            '请通过 HELLOCRAB_XCODE_PATH 指向 Xcode 26.4。')
     }
 
     Write-Host "iOS 构建使用：$versionLine" -ForegroundColor Green
     Write-Host "DEVELOPER_DIR=$developerDirectory"
+
+    if ($Target -eq 'ios-simulator') {
+        $runtimeOutput = & xcrun simctl list runtimes
+        if ($LASTEXITCODE -ne 0) {
+            throw "执行 xcrun simctl list runtimes 失败，退出代码：$LASTEXITCODE"
+        }
+
+        $runtimeText = $runtimeOutput -join [Environment]::NewLine
+        Write-Host $runtimeText
+        if ($runtimeText -notmatch 'iOS 26\.4(\.| |$)') {
+            throw '未找到 iOS 26.4 Simulator runtime，无法编译模拟器包。'
+        }
+    }
 }
 
 function Reset-Directory {
@@ -304,10 +317,10 @@ elseif ($Target -eq 'ios-simulator') {
     }
 
     $project = Join-Path $root 'src/HelloCrab.iOS/HelloCrab.iOS.csproj'
-    $framework = 'net10.0-ios26.0'
+    $framework = 'net10.0-ios'
     $runtime = 'iossimulator-arm64'
 
-    Set-CompatibleXcodeForIos26
+    Set-CompatibleXcodeForIos264
     $buildOutput = Join-Path (Split-Path -Parent $project) "bin/$Configuration/$framework"
     if (Test-Path -LiteralPath $buildOutput) {
         Remove-Item -LiteralPath $buildOutput -Recurse -Force
@@ -349,7 +362,7 @@ elseif ($Target -eq 'ios-simulator') {
 }
 else {
     $project = Join-Path $root 'src/HelloCrab.iOS/HelloCrab.iOS.csproj'
-    $framework = 'net10.0-ios26.0'
+    $framework = 'net10.0-ios'
 
     if (-not $isMacHost -and [string]::IsNullOrWhiteSpace($ServerAddress)) {
         $messageLines = @(
@@ -360,7 +373,7 @@ else {
     }
 
     if ($isMacHost) {
-        Set-CompatibleXcodeForIos26
+        Set-CompatibleXcodeForIos264
     }
     $buildOutput = Join-Path (Split-Path -Parent $project) "bin/$Configuration/$framework"
     if (Test-Path -LiteralPath $buildOutput) {

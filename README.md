@@ -336,7 +336,7 @@ macOS 正式分发仍需在 macOS 上完成签名与公证。Linux 目标机器�
 
 ## Browser 远程端
 
-HelloCrab 全部项目统一使用 .NET 10 平台系列：Desktop 与 Core 为 `net10.0`，Browser 为 `net10.0-browser`，Android 为 `net10.0-android36.0`，iOS 为 `net10.0-ios26.0`。编译任意项目都需要安装 .NET 10 SDK；Browser、Android 和 iOS 还需要安装对应 workload。
+HelloCrab 全部项目统一使用 .NET 10 平台系列：Desktop 与 Core 为 `net10.0`，Browser 为 `net10.0-browser`，Android 为 `net10.0-android36.0`，iOS 为 `net10.0-ios`。编译任意项目都需要安装 .NET 10 SDK；Browser、Android 和 iOS 还需要安装对应 workload。
 
 Browser 端直接使用思源黑体 Slim 作为默认字体，确保字体程序集和中文字符资源真正进入 WASM 发布产物。首次还原会从 NuGet 下载字体包。
 
@@ -367,7 +367,7 @@ dotnet build src/HelloCrab.Android/HelloCrab.Android.csproj
 
 ## iOS
 
-iOS 项目目标为 `net10.0-ios26.0`，对应 Avalonia.iOS 12.1.0。
+iOS 项目目标为版本浮动的 `net10.0-ios`，对应 Avalonia.iOS 12.1.0。CI 会固定 .NET SDK、iOS workload set 和 Xcode 组合，避免 Runner 更新后出现 SDK 与模拟器运行时不匹配。
 
 ```bash
 dotnet workload install ios
@@ -377,7 +377,7 @@ dotnet build src/HelloCrab.iOS/HelloCrab.iOS.csproj
 
 iOS 的编译、签名和真机安装需要 macOS 与 Xcode。
 
-当前 `net10.0-ios26.0` 需要 Xcode 26.0。发布脚本会自动查找 Xcode 26.0，并通过当前进程的 `DEVELOPER_DIR` 使用它；不会永久修改 macOS 的全局 Xcode 选择。Xcode 安装在自定义位置时，可先设置 `HELLOCRAB_XCODE_PATH`。
+GitHub Actions 的 iOS 构建固定使用 .NET SDK `10.0.203`、workload set `10.0.203.1` 与 Xcode 26.4.x。该组合对应 Runner 中已安装的 iOS 26.4 Simulator runtime。发布脚本通过当前进程的 `DEVELOPER_DIR` 使用 Xcode，不会永久修改 macOS 的全局 Xcode 选择。Xcode 安装在自定义位置时，可先设置 `HELLOCRAB_XCODE_PATH`。
 
 ### 下载历史
 

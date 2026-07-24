@@ -215,10 +215,24 @@ jobs:
       - name: Checkout source
         uses: actions/checkout@v6
 
-      - name: Install .NET 10 SDK
+      - name: Install .NET 10.0.203 SDK
         uses: actions/setup-dotnet@v5
         with:
-          dotnet-version: 10.0.x
+          dotnet-version: 10.0.203
+
+      - name: Pin iOS workload set
+        shell: bash
+        run: |
+          cat > global.json <<'JSON'
+          {
+            "sdk": {
+              "version": "10.0.203",
+              "rollForward": "latestPatch",
+              "workloadVersion": "10.0.203.1"
+            }
+          }
+          JSON
+          cat global.json
 
       - name: Resolve package version
         id: version
@@ -232,14 +246,14 @@ jobs:
           echo "value=$VERSION" >> "$GITHUB_OUTPUT"
           echo "Package version: $VERSION"
 
-      - name: Select Xcode 26.0 for .NET iOS 26.0
+      - name: Select Xcode 26.4 and verify Simulator runtime
         shell: bash
         run: |
           XCODE_APP=""
           for candidate in \
-            /Applications/Xcode_26.0.1.app \
-            /Applications/Xcode_26.0.app \
-            /Applications/Xcode_26.0*.app; do
+            /Applications/Xcode_26.4.1.app \
+            /Applications/Xcode_26.4.app \
+            /Applications/Xcode_26.4*.app; do
             if [[ -d "$candidate/Contents/Developer" ]]; then
               XCODE_APP="$candidate"
               break
@@ -247,7 +261,7 @@ jobs:
           done
 
           if [[ -z "$XCODE_APP" ]]; then
-            echo "Xcode 26.0 was not found on this runner." >&2
+            echo "Xcode 26.4 was not found on this runner." >&2
             echo "Installed Xcode applications:" >&2
             find /Applications -maxdepth 1 -name 'Xcode*.app' -print | sort >&2
             exit 1
@@ -255,17 +269,29 @@ jobs:
 
           echo "HELLOCRAB_XCODE_PATH=$XCODE_APP" >> "$GITHUB_ENV"
           echo "DEVELOPER_DIR=$XCODE_APP/Contents/Developer" >> "$GITHUB_ENV"
+          export DEVELOPER_DIR="$XCODE_APP/Contents/Developer"
+
           echo "Selected Xcode: $XCODE_APP"
-          DEVELOPER_DIR="$XCODE_APP/Contents/Developer" xcodebuild -version
+          xcodebuild -version
+          xcrun --sdk iphonesimulator --show-sdk-version
+
+          echo "Installed iOS Simulator runtimes:"
+          xcrun simctl list runtimes
+          if ! xcrun simctl list runtimes | grep -Eq 'iOS 26\.4(\.| |$)'; then
+            echo "The macOS runner does not contain an iOS 26.4 Simulator runtime." >&2
+            exit 1
+          fi
 
       - name: Show iOS build environment
         shell: bash
         run: |
           dotnet --info
+          dotnet workload --version
+          dotnet workload --info
           xcodebuild -version
           xcrun --sdk iphonesimulator --show-sdk-version
+          xcrun --find actool
           echo "DEVELOPER_DIR=$DEVELOPER_DIR"
-          xcode-select -p
 
       - name: Prepare scripts
         shell: bash

@@ -98,7 +98,7 @@ collect_packages() {
   fi
 }
 
-configure_xcode_for_ios_26_0() {
+configure_xcode_for_ios_26_4() {
   if [[ "$HOST_OS" != "Darwin" ]]; then
     return
   fi
@@ -113,9 +113,9 @@ configure_xcode_for_ios_26_0() {
   if [[ -z "$developer_dir" || ! -d "$developer_dir" ]]; then
     local candidate
     for candidate in \
-      /Applications/Xcode_26.0.1.app \
-      /Applications/Xcode_26.0.app \
-      /Applications/Xcode_26.0*.app; do
+      /Applications/Xcode_26.4.1.app \
+      /Applications/Xcode_26.4.app \
+      /Applications/Xcode_26.4*.app; do
       if [[ -d "$candidate/Contents/Developer" ]]; then
         xcode_app="$candidate"
         developer_dir="$candidate/Contents/Developer"
@@ -125,8 +125,8 @@ configure_xcode_for_ios_26_0() {
   fi
 
   if [[ -z "$developer_dir" || ! -d "$developer_dir" ]]; then
-    echo "未找到与 net10.0-ios26.0 匹配的 Xcode 26.0。" >&2
-    echo "请安装 Xcode 26.0，或通过 HELLOCRAB_XCODE_PATH 指定其 .app 路径。" >&2
+    echo "未找到与 net10.0-ios 匹配的 Xcode 26.4。" >&2
+    echo "请安装 Xcode 26.4，或通过 HELLOCRAB_XCODE_PATH 指定其 .app 路径。" >&2
     echo "当前已安装的 Xcode：" >&2
     find /Applications -maxdepth 1 -name 'Xcode*.app' -print 2>/dev/null | sort >&2 || true
     exit 1
@@ -135,15 +135,25 @@ configure_xcode_for_ios_26_0() {
   export DEVELOPER_DIR="$developer_dir"
   local version_line
   version_line="$(xcodebuild -version | head -n 1)"
-  if [[ "$version_line" != "Xcode 26.0"* ]]; then
-    echo "当前选择的是 $version_line，但 net10.0-ios26.0 需要 Xcode 26.0。" >&2
+  if [[ "$version_line" != "Xcode 26.4"* ]]; then
+    echo "当前选择的是 $version_line，但 net10.0-ios 需要 Xcode 26.4。" >&2
     echo "DEVELOPER_DIR=$DEVELOPER_DIR" >&2
-    echo "请通过 HELLOCRAB_XCODE_PATH 指向 Xcode 26.0。" >&2
+    echo "请通过 HELLOCRAB_XCODE_PATH 指向 Xcode 26.4。" >&2
     exit 1
   fi
 
   echo "iOS 构建使用：$version_line"
   echo "DEVELOPER_DIR=$DEVELOPER_DIR"
+
+  if [[ "$TARGET" == "ios-simulator" ]]; then
+    local runtimes
+    runtimes="$(xcrun simctl list runtimes)"
+    echo "$runtimes"
+    if ! grep -Eq 'iOS 26\.4(\.| |$)' <<<"$runtimes"; then
+      echo "未找到 iOS 26.4 Simulator runtime，无法编译模拟器包。" >&2
+      exit 1
+    fi
+  fi
 }
 
 require_command dotnet
@@ -195,11 +205,11 @@ case "$TARGET" in
     fi
 
     PROJECT="$ROOT/src/HelloCrab.iOS/HelloCrab.iOS.csproj"
-    FRAMEWORK="net10.0-ios26.0"
+    FRAMEWORK="net10.0-ios"
     RUNTIME="iossimulator-arm64"
     SEARCH_ROOT="$ROOT/src/HelloCrab.iOS/bin/$CONFIGURATION"
 
-    configure_xcode_for_ios_26_0
+    configure_xcode_for_ios_26_4
     rm -rf "$ROOT/src/HelloCrab.iOS/bin/$CONFIGURATION/$FRAMEWORK"
     run dotnet workload restore "$PROJECT"
     run dotnet build "$PROJECT" \
@@ -231,7 +241,7 @@ README
 
   ios)
     PROJECT="$ROOT/src/HelloCrab.iOS/HelloCrab.iOS.csproj"
-    FRAMEWORK="net10.0-ios26.0"
+    FRAMEWORK="net10.0-ios"
 
     if [[ "$HOST_OS" != "Darwin" && -z "${HELLOCRAB_IOS_SERVER_ADDRESS:-}" ]]; then
       cat >&2 <<'MSG'
@@ -244,7 +254,7 @@ MSG
     fi
 
     if [[ "$HOST_OS" == "Darwin" ]]; then
-      configure_xcode_for_ios_26_0
+      configure_xcode_for_ios_26_4
     fi
     rm -rf "$ROOT/src/HelloCrab.iOS/bin/$CONFIGURATION/$FRAMEWORK"
     run dotnet workload restore "$PROJECT"

@@ -50,14 +50,23 @@ HelloCrab-iOS-Simulator-arm64-<版本>.zip
 
 这是未签名的 Apple Silicon iOS Simulator `.app`，只能在 Xcode Simulator 中测试，不能直接安装到实体 iPhone 或 iPad。
 
-HelloCrab 的 iOS 目标框架为 `net10.0-ios26.0`，对应的 Microsoft.iOS SDK 要求 Xcode 26.0。GitHub 的 `macos-26` Runner 可能把更新的 Xcode 设为默认版本，因此工作流会在构建前明确寻找并使用：
+HelloCrab 的 iOS 项目使用版本浮动的 `net10.0-ios`。iOS Job 会临时生成 `global.json`，把构建环境固定为：
 
 ```text
-/Applications/Xcode_26.0.1.app
-/Applications/Xcode_26.0.app
+.NET SDK:       10.0.203
+Workload set:   10.0.203.1
+Xcode:          26.4.x
+iOS Simulator:  26.4
 ```
 
-工作流通过 `DEVELOPER_DIR` 只影响当前 Job，不会永久修改 Runner 的全局 `xcode-select` 设置。如果 Runner 中找不到 Xcode 26.0，会列出已安装版本并给出明确错误，而不是继续用不兼容的 Xcode 构建。
+该 workload set 是与 Xcode 26.4 配套发布的版本。GitHub `macos-26` Runner 当前提供 Xcode 26.4.1 和 iOS 26.4 Simulator runtime。工作流会优先寻找：
+
+```text
+/Applications/Xcode_26.4.1.app
+/Applications/Xcode_26.4.app
+```
+
+工作流通过 `DEVELOPER_DIR` 只影响当前 Job，不会永久修改 Runner 的全局 `xcode-select` 设置。构建前还会执行 `xcrun simctl list runtimes`，确认 iOS 26.4 Simulator runtime 可用；缺失时会直接输出清晰错误。
 
 ## 生成可安装的签名 IPA
 

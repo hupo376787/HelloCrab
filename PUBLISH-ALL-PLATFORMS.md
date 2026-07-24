@@ -128,10 +128,10 @@ APK + AAB
 
 该包不能安装到实体 iPhone 或 iPad。iOS IPA 仍需要 Apple 证书和 Provisioning Profile。macOS 可设置：
 
-`net10.0-ios26.0` 需要 Xcode 26.0。脚本会优先使用 `/Applications/Xcode_26.0.1.app` 或 `/Applications/Xcode_26.0.app`，并仅通过当前进程的 `DEVELOPER_DIR` 选择 Xcode，不会永久修改系统设置。自定义安装位置时可指定：
+iOS 项目使用版本浮动的 `net10.0-ios`。GitHub Actions 为保证可重复构建，会固定使用 .NET SDK `10.0.203`、workload set `10.0.203.1` 和 Xcode 26.4.x，并在构建前确认 iOS 26.4 Simulator runtime 已安装。脚本优先使用 `/Applications/Xcode_26.4.1.app` 或 `/Applications/Xcode_26.4.app`，仅通过当前进程的 `DEVELOPER_DIR` 选择 Xcode，不会永久修改系统设置。自定义安装位置时可指定：
 
 ```bash
-export HELLOCRAB_XCODE_PATH='/Applications/Xcode_26.0.1.app'
+export HELLOCRAB_XCODE_PATH='/Applications/Xcode_26.4.1.app'
 ```
 
 然后再设置签名信息：
