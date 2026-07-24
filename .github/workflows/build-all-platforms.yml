@@ -413,6 +413,12 @@ jobs:
       contents: write
 
     steps:
+      - name: Checkout release tag
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
       - name: Download all build artifacts
         uses: actions/download-artifact@v5
         with:
@@ -449,14 +455,21 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
         run: |
           TAG="$GITHUB_REF_NAME"
 
-          if gh release view "$TAG" >/dev/null 2>&1; then
+          echo "Repository: $GH_REPO"
+          echo "Release tag: $TAG"
+
+          if gh release view "$TAG" --repo "$GH_REPO" >/dev/null 2>&1; then
             echo "Release $TAG already exists; replacing files with the same names."
-            gh release upload "$TAG" release-files/* --clobber
+            gh release upload "$TAG" release-files/* \
+              --clobber \
+              --repo "$GH_REPO"
           else
             gh release create "$TAG" release-files/* \
+              --repo "$GH_REPO" \
               --verify-tag \
               --generate-notes \
               --title "HelloCrab $TAG"
