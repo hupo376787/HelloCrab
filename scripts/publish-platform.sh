@@ -128,28 +128,16 @@ case "$TARGET" in
       "-p:ApplicationDisplayVersion=$VERSION" \
       '-p:AndroidPackageFormats=apk%3Baab'
 
+    PACKAGE_NAME="HelloCrab-Android-$VERSION"
+    PACKAGE_DIR="$STAGING/$PACKAGE_NAME"
     SEARCH_ROOT="$ROOT/src/HelloCrab.Android/bin/$CONFIGURATION/$FRAMEWORK"
-    LEGACY_ARCHIVE="$ARTIFACTS/HelloCrab-Android-$VERSION.zip"
-    rm -f "$LEGACY_ARCHIVE"
-
-    # Android 安装包保持原文件名，直接复制到 artifacts，不再生成汇总 ZIP。
-    PACKAGE_COUNT=0
-    if [[ -d "$SEARCH_ROOT" ]]; then
-      while IFS= read -r -d '' package; do
-        destination="$ARTIFACTS/$(basename "$package")"
-        cp -f "$package" "$destination"
-        echo "已复制：$destination"
-        PACKAGE_COUNT=$((PACKAGE_COUNT + 1))
-      done < <(find "$SEARCH_ROOT" -type f \( -name '*.apk' -o -name '*.aab' \) -print0)
-    fi
-
-    if [[ "$PACKAGE_COUNT" == "0" ]]; then
+    if ! collect_packages "$SEARCH_ROOT" "$PACKAGE_DIR" -name '*.apk' -o -name '*.aab'; then
       echo "没有在 $SEARCH_ROOT 中找到 APK 或 AAB。" >&2
       exit 1
     fi
-
+    zip_package "$PACKAGE_DIR" "$ARTIFACTS/$PACKAGE_NAME.zip"
     echo
-    echo "Android 发布完成：已将 $PACKAGE_COUNT 个安装文件复制到 $ARTIFACTS"
+    echo "打包完成：$ARTIFACTS/$PACKAGE_NAME.zip"
     ;;
 
   ios)

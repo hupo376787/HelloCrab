@@ -91,6 +91,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
     private string? _currentAuthorDirectory;
     private string? _currentAuthorName;
     private string? _currentAuthorId;
+    private string? _currentAuthorAvatarUrl;
+    private IImage? _currentAuthorAvatarImage;
+    private long _authorAvatarRequestVersion;
     private string? _currentCoverUrl;
     private IImage? _currentCoverImage;
     private long _coverRequestVersion;
@@ -630,6 +633,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
     public string? CurrentAuthorDirectory { get => _currentAuthorDirectory; private set => SetProperty(ref _currentAuthorDirectory, value); }
     public string? CurrentAuthorName { get => _currentAuthorName; private set => SetProperty(ref _currentAuthorName, value); }
     public string? CurrentAuthorId { get => _currentAuthorId; private set => SetProperty(ref _currentAuthorId, value); }
+    public IImage? CurrentAuthorAvatarImage { get => _currentAuthorAvatarImage; private set => SetProperty(ref _currentAuthorAvatarImage, value); }
     public IImage? CurrentCoverImage { get => _currentCoverImage; private set => SetProperty(ref _currentCoverImage, value); }
 
     private async Task InitializeRuntimeComponentStatusAsync()
@@ -1124,6 +1128,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
         {
             IsCapturing = false;
             CurrentWork = "-";
+            ClearCurrentAuthorAvatar();
             ClearCurrentCover();
             RefreshCommands();
         }
@@ -1289,6 +1294,13 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
         Interlocked.Increment(ref _coverRequestVersion);
         _currentCoverUrl = null;
         CurrentCoverImage = null;
+    }
+
+    private void ClearCurrentAuthorAvatar()
+    {
+        Interlocked.Increment(ref _authorAvatarRequestVersion);
+        _currentAuthorAvatarUrl = null;
+        CurrentAuthorAvatarImage = null;
     }
 
     public async Task ApplyRemoteSettingsAsync(
@@ -1793,6 +1805,12 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
             CurrentAuthorName = progress.CurrentAuthorName;
         if (!string.IsNullOrWhiteSpace(progress.CurrentAuthorId))
             CurrentAuthorId = progress.CurrentAuthorId;
+        if (!string.IsNullOrWhiteSpace(progress.CurrentAuthorAvatarUrl)
+            && !progress.CurrentAuthorAvatarUrl.Equals(_currentAuthorAvatarUrl, StringComparison.Ordinal))
+        {
+            _currentAuthorAvatarUrl = progress.CurrentAuthorAvatarUrl;
+            _ = LoadCurrentAuthorAvatarAsync(progress.CurrentAuthorAvatarUrl);
+        }
 
         if (!string.IsNullOrWhiteSpace(progress.CurrentCoverUrl)
             && !progress.CurrentCoverUrl.Equals(_currentCoverUrl, StringComparison.Ordinal))
@@ -1810,6 +1828,16 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
             return;
 
         Ui(() => CurrentCoverImage = image);
+    }
+
+    private async Task LoadCurrentAuthorAvatarAsync(string url)
+    {
+        var requestVersion = Interlocked.Increment(ref _authorAvatarRequestVersion);
+        var image = await _imageCache.LoadAsync(url);
+        if (requestVersion != Interlocked.Read(ref _authorAvatarRequestVersion) || image is null)
+            return;
+
+        Ui(() => CurrentAuthorAvatarImage = image);
     }
 
     private async Task LoadHistoryAvatarsAsync(IEnumerable<DownloadHistoryItem> items)

@@ -15,12 +15,11 @@ HelloCrab-Desktop-win-x64-1.0.0.zip
 HelloCrab-Desktop-linux-arm64-1.0.0.zip
 HelloCrab-Desktop-osx-arm64-1.0.0.zip
 HelloCrab-Browser-1.0.0.zip
-<Android 项目生成的原始文件名>.apk
-<Android 项目生成的原始文件名>.aab
+HelloCrab-Android-1.0.0.zip
 HelloCrab-iOS-1.0.0.zip
 ```
 
-Android 不再生成汇总 ZIP，构建产生的 APK、AAB 文件会保持原文件名，直接复制到 `artifacts/`。iOS 汇总 ZIP 内包含签名后的 IPA。
+Android 汇总 ZIP 内包含生成的 APK 和 AAB。iOS 汇总 ZIP 内包含签名后的 IPA。
 
 ## 单个平台
 
@@ -155,7 +154,7 @@ hdiutil create -volname HelloCrab -srcfolder artifacts/.staging/HelloCrab-Deskto
 1. 直接使用命令行传入 `-Version`；或
 2. 批量替换快捷入口中的 `1.0.0`。
 
-版本号用于各平台压缩包名称和移动端显示版本。Android 安装文件保持 MSBuild 生成的原文件名，不会按版本号重命名。版本号不会自动修改源码中的程序集版本。
+版本号只用于压缩包名称和移动端显示版本，不会自动修改源码中的程序集版本。
 
 
 ## 发布脚本自检
@@ -165,4 +164,4 @@ Windows 可先双击 `one-click-publish/Validate-scripts.bat`，它会使用 Pow
 ### Android APK + AAB 参数说明
 
 脚本使用 `-p:AndroidPackageFormats=apk%3Baab`。`%3B` 是 MSBuild 对分号的转义，
-可避免 PowerShell/MSBuild 把 `aab` 误解析为额外开关。最终仍会同时生成 APK 和 AAB，并将这些安装文件直接复制到 `artifacts/`，不再额外生成 Android ZIP。
+可避免 PowerShell/MSBuild 把 `aab` 误解析为额外开关。最终仍会同时生成 APK 和 AAB。

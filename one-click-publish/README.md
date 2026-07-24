@@ -16,7 +16,7 @@ scripts/publish-all-platforms.sh
 | `Windows-x64.bat` | Windows x64 桌面版 ZIP |
 | `Windows-arm64.bat` | Windows ARM64 桌面版 ZIP |
 | `Browser.bat` | Browser/WASM 静态站点 ZIP |
-| `Android.bat` | APK、AAB 原文件（直接复制到 `artifacts/`） |
+| `Android.bat` | APK、AAB 及汇总 ZIP |
 | `iOS-remote.bat` | 通过配对 Mac 生成 IPA |
 | `All-supported.bat` | 六个桌面 RID、Browser、Android |
 
@@ -48,7 +48,7 @@ All-supported.command
 chmod +x one-click-publish/*.command one-click-publish/*.sh scripts/*.sh
 ```
 
-所有发布产物统一输出到项目根目录的 `artifacts/`。桌面、Browser 和 iOS 使用 ZIP；Android 的 APK、AAB 保持原文件名直接复制，不生成 ZIP。
+所有最终压缩包统一输出到项目根目录的 `artifacts/`。
 
 
 ## 发布脚本自检

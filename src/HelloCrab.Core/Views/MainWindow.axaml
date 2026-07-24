@@ -625,9 +625,20 @@
           </UniformGrid>
 
           <Border Grid.Row="1" Classes="card">
-            <Grid ColumnDefinitions="8,*" ColumnSpacing="12">
-              <Border Width="8" CornerRadius="3" Background="#A78BFA" />
-              <StackPanel Grid.Column="1" Spacing="5">
+            <Grid ColumnDefinitions="88,8,*" ColumnSpacing="12">
+              <Border Width="88"
+                      Height="88"
+                      CornerRadius="44"
+                      Background="#22FFFFFF"
+                      BorderBrush="#40FFFFFF"
+                      BorderThickness="1"
+                      ClipToBounds="True"
+                      VerticalAlignment="Center">
+                <Image Source="{Binding CurrentAuthorAvatarImage}"
+                       Stretch="UniformToFill" />
+              </Border>
+              <Border Grid.Column="1" Width="8" CornerRadius="3" Background="#A78BFA" />
+              <StackPanel Grid.Column="2" Spacing="5">
                 <TextBlock Classes="caption" Text="{DynamicResource Lang.Metrics.CurrentWork}" />
                 <TextBlock Text="{Binding CurrentWork}" FontWeight="Medium" TextWrapping="Wrap" />
                 <ProgressBar IsVisible="{Binding IsDownloadProgressVisible}"

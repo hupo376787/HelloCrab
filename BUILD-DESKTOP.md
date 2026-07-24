@@ -67,3 +67,21 @@ macOS:   HelloCrab.app/Contents/MacOS/HelloCrab
 
 最终文件位于 `artifacts/`。Browser、Android 和 iOS 的一键脚本及签名说明见 `PUBLISH-ALL-PLATFORMS.md`。
 
+
+## GitHub Actions 自动构建
+
+仓库中的 `.github/workflows/build-desktop.yml` 会在以下情况运行：
+
+- 代码推送到 `main` 分支；
+- 在 GitHub 的 Actions 页面手动点击运行。
+
+工作流会分别生成 Windows x64/ARM64、Linux x64/ARM64、macOS Intel/Apple Silicon 六个平台的产物。当前工作流明确安装 .NET 10 SDK，不依赖 Runner 偶然预装的 SDK；Linux 和 macOS 发布前会恢复 Shell 脚本执行权限，并始终通过 `bash` 调用脚本，避免从 Windows 提交后出现退出代码 126。
+
+如不希望每次推送都自动构建，可删除工作流中：
+
+```yaml
+push:
+  branches: [main]
+```
+
+保留 `workflow_dispatch` 后，仍可在 Actions 页面手动构建。

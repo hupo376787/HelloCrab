@@ -1,2 +1,12 @@
-# Auto detect text files and perform LF normalization
 * text=auto
+
+# GitHub Actions and Unix scripts must stay LF on every development OS.
+*.yml text eol=lf
+*.yaml text eol=lf
+*.sh text eol=lf
+*.command text eol=lf
+
+# Windows command scripts keep CRLF for Windows PowerShell 5.1 and cmd.exe.
+*.ps1 text eol=crlf
+*.bat text eol=crlf
+*.cmd text eol=crlf

@@ -263,7 +263,7 @@ FFmpeg 工具查找顺序：
 
 ## 各平台一键打包发布
 
-项目已提供统一发布入口，会自动清理旧目录、执行 `dotnet publish` 并收集平台产物到 `artifacts/`。桌面、Browser 和 iOS 会生成 ZIP；Android 的 APK、AAB 保持原文件名直接复制，不生成 ZIP：
+项目已提供统一发布入口，会自动清理旧目录、执行 `dotnet publish`、收集平台产物并压缩到 `artifacts/`：
 
 ```powershell
 ./scripts/publish-platform.ps1 -Target win-x64 -Version 1.0.0
@@ -287,7 +287,7 @@ FFmpeg 工具查找顺序：
 ./scripts/publish-all-platforms.sh Release 1.0.0
 ```
 
-Windows 可直接双击 `one-click-publish/*.bat`，macOS 可双击 `.command`。Android 会同时收集 APK 与 AAB 并直接复制到 `artifacts/`；iOS 需要 macOS/Xcode 或配对 Mac，并需要有效签名。完整说明见 [PUBLISH-ALL-PLATFORMS.md](PUBLISH-ALL-PLATFORMS.md)。
+Windows 可直接双击 `one-click-publish/*.bat`，macOS 可双击 `.command`。Android 会同时收集 APK 与 AAB；iOS 需要 macOS/Xcode 或配对 Mac，并需要有效签名。完整说明见 [PUBLISH-ALL-PLATFORMS.md](PUBLISH-ALL-PLATFORMS.md)。
 
 ## 发布桌面端
 

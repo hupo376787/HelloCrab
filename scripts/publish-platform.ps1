@@ -227,22 +227,18 @@ elseif ($Target -eq 'android') {
         throw "没有在 $searchRoot 中找到 APK 或 AAB。"
     }
 
-    New-Item -Path $artifactsRoot -ItemType Directory -Force | Out-Null
-
-    # Android 安装包保持原文件名，直接复制到 artifacts，不再生成汇总 ZIP。
-    $legacyArchivePath = Join-Path $artifactsRoot "HelloCrab-Android-$Version.zip"
-    if (Test-Path -LiteralPath $legacyArchivePath) {
-        Remove-Item -LiteralPath $legacyArchivePath -Force
-    }
-
+    $packageName = "HelloCrab-Android-$Version"
+    $packageDirectory = Join-Path $stagingRoot $packageName
+    Reset-Directory -Path $packageDirectory
     foreach ($package in $packages) {
-        $destinationPath = Join-Path $artifactsRoot $package.Name
-        Copy-Item -LiteralPath $package.FullName -Destination $destinationPath -Force
-        Write-Host "已复制：$destinationPath"
+        Copy-Item -LiteralPath $package.FullName -Destination $packageDirectory -Force
+        Write-Host "已收集：$($package.FullName)"
     }
 
+    $archivePath = Join-Path $artifactsRoot "$packageName.zip"
+    New-ZipArchive -PackageDirectory $packageDirectory -ArchivePath $archivePath
     Write-Host ''
-    Write-Host "Android 发布完成：已将 $($packages.Count) 个安装文件复制到 $artifactsRoot" -ForegroundColor Green
+    Write-Host "打包完成：$archivePath" -ForegroundColor Green
 }
 else {
     $project = Join-Path $root 'src/HelloCrab.iOS/HelloCrab.iOS.csproj'
