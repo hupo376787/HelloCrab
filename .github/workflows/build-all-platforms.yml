@@ -232,11 +232,39 @@ jobs:
           echo "value=$VERSION" >> "$GITHUB_OUTPUT"
           echo "Package version: $VERSION"
 
+      - name: Select Xcode 26.0 for .NET iOS 26.0
+        shell: bash
+        run: |
+          XCODE_APP=""
+          for candidate in \
+            /Applications/Xcode_26.0.1.app \
+            /Applications/Xcode_26.0.app \
+            /Applications/Xcode_26.0*.app; do
+            if [[ -d "$candidate/Contents/Developer" ]]; then
+              XCODE_APP="$candidate"
+              break
+            fi
+          done
+
+          if [[ -z "$XCODE_APP" ]]; then
+            echo "Xcode 26.0 was not found on this runner." >&2
+            echo "Installed Xcode applications:" >&2
+            find /Applications -maxdepth 1 -name 'Xcode*.app' -print | sort >&2
+            exit 1
+          fi
+
+          echo "HELLOCRAB_XCODE_PATH=$XCODE_APP" >> "$GITHUB_ENV"
+          echo "DEVELOPER_DIR=$XCODE_APP/Contents/Developer" >> "$GITHUB_ENV"
+          echo "Selected Xcode: $XCODE_APP"
+          DEVELOPER_DIR="$XCODE_APP/Contents/Developer" xcodebuild -version
+
       - name: Show iOS build environment
         shell: bash
         run: |
           dotnet --info
           xcodebuild -version
+          xcrun --sdk iphonesimulator --show-sdk-version
+          echo "DEVELOPER_DIR=$DEVELOPER_DIR"
           xcode-select -p
 
       - name: Prepare scripts

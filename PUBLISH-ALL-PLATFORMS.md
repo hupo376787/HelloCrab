@@ -128,6 +128,14 @@ APK + AAB
 
 该包不能安装到实体 iPhone 或 iPad。iOS IPA 仍需要 Apple 证书和 Provisioning Profile。macOS 可设置：
 
+`net10.0-ios26.0` 需要 Xcode 26.0。脚本会优先使用 `/Applications/Xcode_26.0.1.app` 或 `/Applications/Xcode_26.0.app`，并仅通过当前进程的 `DEVELOPER_DIR` 选择 Xcode，不会永久修改系统设置。自定义安装位置时可指定：
+
+```bash
+export HELLOCRAB_XCODE_PATH='/Applications/Xcode_26.0.1.app'
+```
+
+然后再设置签名信息：
+
 ```bash
 export HELLOCRAB_IOS_CODESIGN_KEY='Apple Distribution: Company (TEAMID)'
 export HELLOCRAB_IOS_PROVISION='ProvisioningProfileName'

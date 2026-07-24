@@ -98,6 +98,54 @@ collect_packages() {
   fi
 }
 
+configure_xcode_for_ios_26_0() {
+  if [[ "$HOST_OS" != "Darwin" ]]; then
+    return
+  fi
+
+  local developer_dir="${DEVELOPER_DIR:-}"
+  local xcode_app="${HELLOCRAB_XCODE_PATH:-}"
+
+  if [[ -n "$xcode_app" ]]; then
+    developer_dir="$xcode_app/Contents/Developer"
+  fi
+
+  if [[ -z "$developer_dir" || ! -d "$developer_dir" ]]; then
+    local candidate
+    for candidate in \
+      /Applications/Xcode_26.0.1.app \
+      /Applications/Xcode_26.0.app \
+      /Applications/Xcode_26.0*.app; do
+      if [[ -d "$candidate/Contents/Developer" ]]; then
+        xcode_app="$candidate"
+        developer_dir="$candidate/Contents/Developer"
+        break
+      fi
+    done
+  fi
+
+  if [[ -z "$developer_dir" || ! -d "$developer_dir" ]]; then
+    echo "未找到与 net10.0-ios26.0 匹配的 Xcode 26.0。" >&2
+    echo "请安装 Xcode 26.0，或通过 HELLOCRAB_XCODE_PATH 指定其 .app 路径。" >&2
+    echo "当前已安装的 Xcode：" >&2
+    find /Applications -maxdepth 1 -name 'Xcode*.app' -print 2>/dev/null | sort >&2 || true
+    exit 1
+  fi
+
+  export DEVELOPER_DIR="$developer_dir"
+  local version_line
+  version_line="$(xcodebuild -version | head -n 1)"
+  if [[ "$version_line" != "Xcode 26.0"* ]]; then
+    echo "当前选择的是 $version_line，但 net10.0-ios26.0 需要 Xcode 26.0。" >&2
+    echo "DEVELOPER_DIR=$DEVELOPER_DIR" >&2
+    echo "请通过 HELLOCRAB_XCODE_PATH 指向 Xcode 26.0。" >&2
+    exit 1
+  fi
+
+  echo "iOS 构建使用：$version_line"
+  echo "DEVELOPER_DIR=$DEVELOPER_DIR"
+}
+
 require_command dotnet
 mkdir -p "$ARTIFACTS"
 reset_dir "$STAGING"
@@ -151,6 +199,7 @@ case "$TARGET" in
     RUNTIME="iossimulator-arm64"
     SEARCH_ROOT="$ROOT/src/HelloCrab.iOS/bin/$CONFIGURATION"
 
+    configure_xcode_for_ios_26_0
     rm -rf "$ROOT/src/HelloCrab.iOS/bin/$CONFIGURATION/$FRAMEWORK"
     run dotnet workload restore "$PROJECT"
     run dotnet build "$PROJECT" \
@@ -194,6 +243,9 @@ MSG
       exit 1
     fi
 
+    if [[ "$HOST_OS" == "Darwin" ]]; then
+      configure_xcode_for_ios_26_0
+    fi
     rm -rf "$ROOT/src/HelloCrab.iOS/bin/$CONFIGURATION/$FRAMEWORK"
     run dotnet workload restore "$PROJECT"
     IOS_ARGS=(

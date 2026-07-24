@@ -377,6 +377,8 @@ dotnet build src/HelloCrab.iOS/HelloCrab.iOS.csproj
 
 iOS 的编译、签名和真机安装需要 macOS 与 Xcode。
 
+当前 `net10.0-ios26.0` 需要 Xcode 26.0。发布脚本会自动查找 Xcode 26.0，并通过当前进程的 `DEVELOPER_DIR` 使用它；不会永久修改 macOS 的全局 Xcode 选择。Xcode 安装在自定义位置时，可先设置 `HELLOCRAB_XCODE_PATH`。
+
 ### 下载历史
 
 - 历史文件固定为可执行文件同目录下的 `History.json`。
