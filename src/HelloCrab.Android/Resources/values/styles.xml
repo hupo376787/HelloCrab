@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!--
+    AvaloniaMainActivity derives from AppCompatActivity in Avalonia 12,
+    therefore the native Android host theme must inherit from Theme.AppCompat.
+    Avalonia still renders the actual application light/dark theme itself.
+  -->
+  <style name="AppTheme" parent="Theme.AppCompat.Light.NoActionBar">
+    <item name="windowActionModeOverlay">true</item>
+    <item name="android:windowActionModeOverlay">true</item>
+    <item name="android:windowNoTitle">true</item>
+    <item name="android:fontFamily">sans</item>
+    <item name="android:windowLightStatusBar">false</item>
+    <item name="android:statusBarColor">#101522</item>
+    <item name="android:navigationBarColor">#101522</item>
+  </style>
+</resources>

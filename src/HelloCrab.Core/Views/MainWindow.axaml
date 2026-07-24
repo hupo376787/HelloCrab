@@ -1,0 +1,1039 @@
+<Window
+    x:Class="HelloCrab.Core.Views.MainWindow"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:vm="using:HelloCrab.Core.ViewModels"
+    xmlns:models="using:HelloCrab.Core.Models"
+    xmlns:scheduleControls="using:ScheduleEditor.Controls"
+    x:DataType="vm:MainWindowViewModel"
+    Title="HelloCrab"
+    Icon="avares://HelloCrab.Core/Assets/app-icon.ico"
+    Width="1600"
+    Height="1000"
+    MinWidth="1120"
+    MinHeight="720"
+    WindowStartupLocation="CenterScreen"
+    WindowDecorations="None"
+    ExtendClientAreaToDecorationsHint="True"
+    CanResize="True"
+    Background="Transparent"
+    TransparencyLevelHint="Transparent"
+    TransparencyBackgroundFallback="Transparent">
+
+  <Window.Styles>
+    <Style Selector="Border.card">
+      <Setter Property="Background" Value="{DynamicResource CardColor}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource BorderColor}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="12" />
+      <Setter Property="Padding" Value="18" />
+    </Style>
+    <Style Selector="Border.metricCard">
+      <Setter Property="Background" Value="{DynamicResource CardColor}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource BorderColor}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="10" />
+      <Setter Property="Padding" Value="15" />
+    </Style>
+    <Style Selector="TextBlock">
+      <Setter Property="Foreground" Value="{DynamicResource TextPrimaryColor}" />
+    </Style>
+    <Style Selector="TextBlock.caption">
+      <Setter Property="Foreground" Value="{DynamicResource TextSecondaryColor}" />
+      <Setter Property="FontSize" Value="12" />
+    </Style>
+    <Style Selector="TextBlock.metric">
+      <Setter Property="FontSize" Value="27" />
+      <Setter Property="FontWeight" Value="Bold" />
+    </Style>
+    <Style Selector="TextBox, ComboBox">
+      <Setter Property="Background" Value="{DynamicResource InputColor}" />
+      <Setter Property="CornerRadius" Value="7" />
+    </Style>
+    <Style Selector="NumericUpDown.thresholdNumeric">
+      <Setter Property="Background" Value="{DynamicResource InputColor}" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="5" />
+      <Setter Property="Height" Value="42" />
+      <Setter Property="MinHeight" Value="42" />
+      <Setter Property="Margin" Value="0" />
+      <Setter Property="Padding" Value="12,0,0,0" />
+      <Setter Property="ClipToBounds" Value="True" />
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="HorizontalContentAlignment" Value="Left" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+    <Style Selector="NumericUpDown.thresholdNumeric /template/ TextBox#PART_TextBox">
+      <Setter Property="Padding" Value="12,0,0,0" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Button">
+      <Setter Property="CornerRadius" Value="7" />
+      <Setter Property="Padding" Value="15,9" />
+    </Style>
+    <Style Selector="Button.sectionAction">
+      <Setter Property="Height" Value="42" />
+      <Setter Property="MinHeight" Value="42" />
+      <Setter Property="Padding" Value="12,0" />
+      <Setter Property="FontSize" Value="14" />
+      <Setter Property="FontWeight" Value="Medium" />
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Button.primary">
+      <Setter Property="Background" Value="#7C3AED" />
+      <Setter Property="Foreground" Value="White" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+    <Style Selector="Button.coral">
+      <Setter Property="Background" Value="#FD6F71" />
+      <Setter Property="Foreground" Value="White" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+    <Style Selector="Button.windowButton">
+      <Setter Property="Width" Value="44" />
+      <Setter Property="Height" Value="36" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="CornerRadius" Value="5" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Foreground" Value="White" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Button.windowButton:pointerover">
+      <Setter Property="Background" Value="{DynamicResource WindowButtonHoverColor}" />
+    </Style>
+    <Style Selector="Button.windowButton.closeButton:pointerover">
+      <Setter Property="Background" Value="#E5484D" />
+    </Style>
+    <Style Selector="Button.historyToggle">
+      <Setter Property="Width" Value="36" />
+      <Setter Property="MinWidth" Value="36" />
+      <Setter Property="Height" Value="72" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="CornerRadius" Value="7" />
+      <Setter Property="Background" Value="#B8262B3D" />
+      <Setter Property="BorderBrush" Value="#55FFFFFF" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Button.historyToggle:pointerover">
+      <Setter Property="Background" Value="#E63A4056" />
+    </Style>
+    <Style Selector="ListBox.historyList ListBoxItem">
+      <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="Margin" Value="0,0,0,10" />
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+    <Style Selector="ListBox.historyList ListBoxItem:selected">
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+    <Style Selector="ListBox.logList">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+    </Style>
+    <Style Selector="ListBox.logList ScrollViewer">
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+    <Style Selector="ListBox.logList ListBoxItem">
+      <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+    <Style Selector="ListBox.logList ListBoxItem:selected">
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+  </Window.Styles>
+
+  <Grid>
+    <Border x:Name="WindowFrame"
+            Margin="1"
+            CornerRadius="8"
+            ClipToBounds="True"
+            Background="{DynamicResource PageBackgroundColor}"
+            BorderBrush="{DynamicResource BorderColor}"
+            BorderThickness="1">
+      <Grid x:Name="RootGrid" RowDefinitions="78,*">
+    <!-- 动态封面背景：没有当前作品时显示底层渐变。 -->
+    <Border Grid.RowSpan="2">
+      <Border.Background>
+        <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%">
+          <GradientStop Color="#5B21B6" Offset="0" />
+          <GradientStop Color="#BE185D" Offset="0.48" />
+          <GradientStop Color="#0369A1" Offset="1" />
+        </LinearGradientBrush>
+      </Border.Background>
+    </Border>
+    <Image Grid.RowSpan="2"
+           Source="{Binding CurrentCoverImage}"
+           Stretch="UniformToFill"
+           Opacity="0.82"
+           RenderOptions.BitmapInterpolationMode="HighQuality">
+      <Image.RenderTransform>
+        <ScaleTransform ScaleX="1.08" ScaleY="1.08" />
+      </Image.RenderTransform>
+      <Image.Effect>
+        <BlurEffect Radius="26" />
+      </Image.Effect>
+    </Image>
+    <Border Grid.RowSpan="2" Background="{DynamicResource BackgroundOverlayColor}" />
+
+    <!-- 自定义标题栏 -->
+    <Grid Grid.Row="0"
+          ColumnDefinitions="Auto,*,Auto"
+          Background="{DynamicResource TitleBarColor}"
+          Panel.ZIndex="100">
+      <Grid Grid.Column="0"
+            Margin="18,8,10,8"
+            ColumnDefinitions="56,Auto"
+            ColumnSpacing="12"
+            VerticalAlignment="Center"
+            PointerPressed="TitleBar_PointerPressed">
+        <Border Width="52" Height="52" CornerRadius="10" Background="#28FFFFFF" Padding="6">
+          <Image Source="avares://HelloCrab.Core/Assets/app-icon.png" Stretch="Uniform" />
+        </Border>
+        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+          <TextBlock Text="HelloCrab" FontSize="23" FontWeight="Bold" Foreground="White" />
+          <TextBlock Text="Avalonia + Playwright" FontSize="12" Foreground="#DFFFFFFF" Margin="0,2,0,0" />
+        </StackPanel>
+      </Grid>
+
+      <Border Grid.Column="1"
+              Background="Transparent"
+              PointerPressed="TitleBar_PointerPressed" />
+
+      <StackPanel Grid.Column="2"
+                  Orientation="Horizontal"
+                  Spacing="0"
+                  Margin="0"
+                  HorizontalAlignment="Right"
+                  VerticalAlignment="Top">
+        <Button Classes="windowButton"
+                Command="{Binding ToggleThemeCommand}"
+                ToolTip.Tip="{Binding ThemeButtonText}">
+          <TextBlock Text="{Binding ThemeIcon}"
+                     FontSize="17"
+                     FontWeight="SemiBold"
+                     Foreground="White"
+                     HorizontalAlignment="Center"
+                     VerticalAlignment="Center" />
+        </Button>
+        <Button Classes="windowButton" Click="MinimizeButton_Click" ToolTip.Tip="{DynamicResource Lang.Window.Minimize}">
+          <Viewbox Width="14" Height="14" Stretch="Uniform">
+            <Path Data="M 1,7 L 13,7"
+                  Stroke="White"
+                  StrokeThickness="1.5"
+                  StrokeLineCap="Round" />
+          </Viewbox>
+        </Button>
+        <Button Classes="windowButton" Click="MaximizeButton_Click" ToolTip.Tip="{DynamicResource Lang.Window.Maximize}">
+          <Viewbox Width="14" Height="14" Stretch="Uniform">
+            <Rectangle Width="10"
+                       Height="10"
+                       Stroke="White"
+                       StrokeThickness="1"
+                       Fill="Transparent" />
+          </Viewbox>
+        </Button>
+        <Button Classes="windowButton closeButton" Click="CloseButton_Click" ToolTip.Tip="{DynamicResource Lang.Window.Close}">
+          <Viewbox Width="14" Height="14" Stretch="Uniform">
+            <Path Data="M 2,2 L 12,12 M 12,2 L 2,12"
+                  Stroke="White"
+                  StrokeThickness="1.5"
+                  StrokeLineCap="Round" />
+          </Viewbox>
+        </Button>
+      </StackPanel>
+    </Grid>
+
+    <Grid Grid.Row="1"
+          Margin="20,14,8,20"
+          ColumnDefinitions="*,Auto,36">
+      <!-- 主内容参与布局；历史显示时此区域自动收缩。 -->
+      <Grid Grid.Column="0"
+            Margin="0,0,8,0"
+            ColumnDefinitions="430,*"
+            ColumnSpacing="16">
+        <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto">
+          <StackPanel Spacing="14">
+            <Border Classes="card">
+              <StackPanel Spacing="11">
+                <TextBlock Text="{DynamicResource Lang.Browser.Title}" FontSize="18" FontWeight="SemiBold" />
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                  <StackPanel VerticalAlignment="Center" Spacing="2">
+                    <TextBlock Text="{DynamicResource Lang.Browser.Headless}" FontWeight="Medium" />
+                    <TextBlock Classes="caption"
+                               Text="{DynamicResource Lang.Browser.HeadlessDescription}"
+                               TextWrapping="Wrap" />
+                  </StackPanel>
+                  <ToggleSwitch Grid.Column="1"
+                                IsChecked="{Binding IsHeadlessMode, Mode=TwoWay}"
+                                IsEnabled="{Binding CanChangeBrowserMode}"
+                                OnContent="{DynamicResource Lang.Common.Enabled}"
+                                OffContent="{DynamicResource Lang.Common.Disabled}"
+                                VerticalAlignment="Center" />
+                </Grid>
+                <TextBlock Classes="caption"
+                           Text="{Binding BrowserModeStatusText}"
+                           TextWrapping="Wrap" />
+                <ComboBox ItemsSource="{Binding Platforms}"
+                          SelectedItem="{Binding SelectedPlatform}"
+                          MinHeight="42">
+                  <ComboBox.ItemTemplate>
+                    <DataTemplate x:DataType="models:PlatformOption">
+                      <StackPanel Orientation="Horizontal" Spacing="10">
+                        <Border Width="22"
+                                Height="22"
+                                CornerRadius="11"
+                                Background="#14FFFFFF"
+                                ClipToBounds="True"
+                                VerticalAlignment="Center">
+                          <Image Source="{Binding Icon}"
+                                 Width="22"
+                                 Height="22"
+                                 Stretch="UniformToFill" />
+                        </Border>
+                        <TextBlock Text="{Binding DisplayName}"
+                                   VerticalAlignment="Center" />
+                      </StackPanel>
+                    </DataTemplate>
+                  </ComboBox.ItemTemplate>
+                </ComboBox>
+                <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
+                  <Button Classes="sectionAction" Content="{Binding InstallChromiumButtonText}" Command="{Binding InstallChromiumCommand}" />
+                  <Button Grid.Column="1"
+                          Content="{Binding OpenBrowserButtonText}"
+                          Classes="coral sectionAction"
+                          Command="{Binding OpenBrowserCommand}" />
+                </Grid>
+                <TextBlock Classes="caption"
+                           Text="{DynamicResource Lang.Browser.ChromiumPathHint}"
+                           TextWrapping="Wrap" />
+                <StackPanel IsVisible="{Binding IsChromiumInstallProgressVisible}"
+                            Spacing="4">
+                  <ProgressBar Minimum="0"
+                               Maximum="100"
+                               Height="8"
+                               IsIndeterminate="{Binding IsChromiumInstallProgressIndeterminate}"
+                               Value="{Binding ChromiumInstallProgressPercent}" />
+                  <TextBlock Classes="caption"
+                             Text="{Binding ChromiumInstallProgressText}"
+                             TextWrapping="Wrap" />
+                </StackPanel>
+                <TextBlock Classes="caption" Text="{DynamicResource Lang.Browser.CurrentUrl}" />
+                <TextBox Text="{Binding CurrentUrl, Mode=TwoWay}"
+                         IsReadOnly="{Binding IsCurrentUrlReadOnly}"
+                         Watermark="{DynamicResource Lang.Browser.UrlWatermark}"
+                         TextWrapping="Wrap"
+                         MinHeight="54" />
+              </StackPanel>
+            </Border>
+
+            <Border Classes="card">
+              <StackPanel Spacing="11">
+                <TextBlock Text="{DynamicResource Lang.Capture.Title}" FontSize="18" FontWeight="SemiBold" />
+                <CheckBox Content="{DynamicResource Lang.Capture.StopOnDuplicate}" IsChecked="{Binding StopOnDuplicateThreshold}" />
+                <Grid ColumnDefinitions="*,126" ColumnSpacing="12">
+                  <StackPanel VerticalAlignment="Center">
+                    <TextBlock Text="{DynamicResource Lang.Capture.DuplicateThreshold}" FontWeight="Medium" />
+                    <TextBlock Classes="caption" Text="{DynamicResource Lang.Capture.DuplicateThresholdHint}" />
+                  </StackPanel>
+                  <Grid Grid.Column="1"
+                        Height="42"
+                        ClipToBounds="False">
+                    <NumericUpDown Classes="thresholdNumeric"
+                                   Value="{Binding DuplicateStopThreshold}"
+                                   Minimum="1"
+                                   Maximum="10000"
+                                   Increment="1"
+                                   IsEnabled="{Binding StopOnDuplicateThreshold}" />
+                    <!-- 覆盖层只负责绘制完整外框，避免 Fluent 模板中的 TextBox 负 Margin 吃掉右侧边框。 -->
+                    <Border IsHitTestVisible="False"
+                            BorderBrush="{DynamicResource BorderColor}"
+                            BorderThickness="1"
+                            CornerRadius="5" />
+                  </Grid>
+                </Grid>
+                <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
+                  <Button Content="{DynamicResource Lang.Capture.Start}"
+                          Classes="coral sectionAction"
+                          Command="{Binding StartCaptureCommand}" />
+                  <Button Grid.Column="1"
+                          Classes="sectionAction"
+                          Content="{DynamicResource Lang.Capture.Stop}"
+                          IsEnabled="{Binding CanStopCurrentTask}"
+                          Click="StopCaptureButton_Click" />
+                </Grid>
+              </StackPanel>
+            </Border>
+
+            <Border Classes="card">
+              <StackPanel Spacing="11">
+                <TextBlock Text="{DynamicResource Lang.Download.Title}" FontSize="18" FontWeight="SemiBold" />
+                <Grid ColumnDefinitions="*,42" ColumnSpacing="8">
+                  <TextBox Text="{Binding DownloadRoot}"
+                           Watermark="{DynamicResource Lang.Download.RootWatermark}"
+                           VerticalContentAlignment="Center" />
+                  <Button Grid.Column="1"
+                          Width="42"
+                          Height="42"
+                          Padding="0"
+                          Content="..."
+                          FontSize="18"
+                          HorizontalContentAlignment="Center"
+                          VerticalContentAlignment="Center"
+                          HorizontalAlignment="Right"
+                          Click="SelectFolder_Click"
+                          ToolTip.Tip="{DynamicResource Lang.Download.SelectFolder}" />
+                </Grid>
+                <TextBlock Classes="caption"
+                           Foreground="#F59E0B"
+                           Text="{DynamicResource Lang.Download.PageDelay}"
+                           TextWrapping="Wrap" />
+                <Grid ColumnDefinitions="*,126,Auto" ColumnSpacing="8">
+                  <StackPanel Spacing="2" VerticalAlignment="Center">
+                    <TextBlock Text="{DynamicResource Lang.Download.SpeedLimit}"
+                               FontWeight="Medium" />
+                    <TextBlock Classes="caption"
+                               Text="{DynamicResource Lang.Download.SpeedLimitDescription}"
+                               TextWrapping="Wrap" />
+                  </StackPanel>
+                  <Grid Grid.Column="1"
+                        Height="42"
+                        VerticalAlignment="Center"
+                        ClipToBounds="False">
+                    <NumericUpDown Classes="thresholdNumeric"
+                                   Value="{Binding DownloadSpeedLimitMBps}"
+                                   Minimum="0"
+                                   Maximum="10000"
+                                   Increment="0.5"
+                                   FormatString="0.##" />
+                    <Border IsHitTestVisible="False"
+                            BorderBrush="{DynamicResource BorderColor}"
+                            BorderThickness="1"
+                            CornerRadius="5" />
+                  </Grid>
+                  <TextBlock Grid.Column="2"
+                             Text="MB/s"
+                             VerticalAlignment="Center" />
+                </Grid>
+                <Border Height="1"
+                        Margin="0,4,0,2"
+                        Background="{DynamicResource SettingsDividerColor}" />
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                  <StackPanel Spacing="3" VerticalAlignment="Center">
+                    <TextBlock Text="{DynamicResource Lang.Download.ImageCache}" FontWeight="Medium" />
+                    <TextBlock Classes="caption"
+                               Text="{Binding ImageCachePathText}"
+                               TextWrapping="Wrap" />
+                    <TextBlock Classes="caption"
+                               Text="{DynamicResource Lang.Download.ImageCacheDescription}"
+                               TextWrapping="Wrap" />
+                  </StackPanel>
+                  <Button Grid.Column="1"
+                          Classes="sectionAction"
+                          MinWidth="140"
+                          Content="{Binding ClearImageCacheButtonText}"
+                          Command="{Binding ClearImageCacheCommand}" />
+                </Grid>
+                <CheckBox Content="{DynamicResource Lang.Download.IncludeWorkId}" IsChecked="{Binding IncludeWorkId}" />
+                <Grid ColumnDefinitions="*,*" ColumnSpacing="14">
+                  <CheckBox Content="{DynamicResource Lang.Download.Cover}"
+                            IsChecked="{Binding DownloadCover}"
+                            VerticalAlignment="Center" />
+                  <CheckBox Grid.Column="1"
+                            Content="{DynamicResource Lang.Download.Music}"
+                            IsChecked="{Binding DownloadMusic}"
+                            VerticalAlignment="Center" />
+                </Grid>
+                <Border Height="1"
+                        Margin="0,4,0,2"
+                        Background="{DynamicResource SettingsDividerColor}" />
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                  <StackPanel Spacing="2" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding ScheduledDownloadStatusText}"
+                               FontWeight="Medium"
+                               TextWrapping="Wrap" />
+                    <TextBlock Classes="caption"
+                               Text="{DynamicResource Lang.Schedule.Description}"
+                               TextWrapping="Wrap" />
+                  </StackPanel>
+                  <Button Grid.Column="1"
+                          Classes="sectionAction"
+                          MinWidth="120"
+                          Content="{DynamicResource Lang.Schedule.Button}"
+                          Command="{Binding OpenScheduledDownloadEditorCommand}"
+                          VerticalAlignment="Center" />
+                </Grid>
+                <Border Height="1"
+                        Margin="0,4,0,2"
+                        Background="{DynamicResource SettingsDividerColor}" />
+                <CheckBox Content="{DynamicResource Lang.Download.CheckAudio}"
+                          IsChecked="{Binding CheckVideoAudio}" />
+                <TextBlock Classes="caption"
+                           Text="{DynamicResource Lang.Download.CheckAudioDescription}"
+                           TextWrapping="Wrap" />
+                <TextBlock Classes="caption"
+                           Foreground="#F59E0B"
+                           Text="{DynamicResource Lang.Download.CheckAudioImpact}"
+                           TextWrapping="Wrap" />
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                  <TextBlock Text="{Binding FfmpegInstallStatusText}"
+                             Classes="caption"
+                             TextWrapping="Wrap"
+                             VerticalAlignment="Center" />
+                  <Button Grid.Column="1"
+                          Classes="sectionAction"
+                          MinWidth="145"
+                          Content="{Binding InstallFfmpegButtonText}"
+                          Command="{Binding InstallFfmpegCommand}"
+                          IsVisible="{Binding IsFfmpegAutoInstallSupported}" />
+                </Grid>
+                <StackPanel IsVisible="{Binding IsFfmpegInstallProgressVisible}"
+                            Spacing="4">
+                  <ProgressBar Minimum="0"
+                               Maximum="100"
+                               Height="8"
+                               IsIndeterminate="{Binding IsFfmpegInstallProgressIndeterminate}"
+                               Value="{Binding FfmpegInstallProgressPercent}" />
+                  <TextBlock Classes="caption"
+                             Text="{Binding FfmpegInstallProgressText}"
+                             TextWrapping="Wrap" />
+                </StackPanel>
+                <TextBlock Classes="caption"
+                           IsVisible="{Binding IsFfmpegAutoInstallSupported}"
+                           Text="{DynamicResource Lang.Download.FfmpegDescription}"
+                           TextWrapping="Wrap" />
+                <Border Height="1"
+                        Margin="0,4,0,2"
+                        Background="{DynamicResource SettingsDividerColor}" />
+                <CheckBox Content="{DynamicResource Lang.Download.PersonDetection}"
+                          IsChecked="{Binding EnablePersonDetection}" />
+                <TextBlock Classes="caption"
+                           FontWeight="Medium"
+                           Text="{Binding PersonDetectionModelStatusText}"
+                           TextWrapping="Wrap" />
+                <TextBlock Classes="caption"
+                           Text="{DynamicResource Lang.Download.PersonDetectionDescription}"
+                           TextWrapping="Wrap" />
+                <TextBlock Classes="caption"
+                           Foreground="#F59E0B"
+                           Text="{DynamicResource Lang.Download.PersonDetectionImpact}"
+                           TextWrapping="Wrap" />
+              </StackPanel>
+            </Border>
+
+            <Border Classes="card">
+              <StackPanel Spacing="10">
+                <TextBlock Text="{DynamicResource Lang.PushPlus.Title}" FontSize="18" FontWeight="SemiBold" />
+                <TextBlock Classes="caption"
+                           Text="{DynamicResource Lang.PushPlus.Description}"
+                           TextWrapping="Wrap" />
+                <TextBox Text="{Binding PushPlusToken, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                         Watermark="{DynamicResource Lang.PushPlus.Watermark}"
+                         MaxLength="256"
+                         MinHeight="42"
+                         VerticalContentAlignment="Center" />
+              </StackPanel>
+            </Border>
+            <Border Classes="card">
+              <StackPanel Spacing="10">
+                <TextBlock Text="{DynamicResource Lang.Remote.Title}" FontSize="18" FontWeight="SemiBold" />
+                <ToggleSwitch IsChecked="{Binding RemoteApiEnabled, Mode=TwoWay}"
+                              OnContent="{DynamicResource Lang.Remote.On}"
+                              OffContent="{DynamicResource Lang.Remote.Off}" />
+                <TextBlock Classes="caption"
+                           Text="{DynamicResource Lang.Remote.Description}"
+                           TextWrapping="Wrap" />
+                <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto" ColumnSpacing="10" RowSpacing="7">
+                  <TextBlock Text="{DynamicResource Lang.Remote.Status}" Classes="caption" />
+                  <TextBlock Grid.Column="1" Text="{Binding RemoteApiStatusText}" TextWrapping="Wrap" />
+                  <TextBlock Grid.Row="1" Text="{DynamicResource Lang.Remote.Port}" Classes="caption" />
+                  <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding RemoteApiPort}" />
+                  <TextBlock Grid.Row="2"
+                             Text="{DynamicResource Lang.Remote.Token}"
+                             Classes="caption"
+                             VerticalAlignment="Center" />
+                  <StackPanel Grid.Row="2" Grid.Column="1" Spacing="6">
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                      <TextBox Text="{Binding RemoteApiTokenDraft, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                               MaxLength="64"
+                               Watermark="{DynamicResource Lang.Remote.TokenWatermark}"
+                               FontFamily="Consolas,Menlo,Monospace"
+                               MinHeight="38"
+                               VerticalAlignment="Center"
+                               VerticalContentAlignment="Center" />
+                      <Button Grid.Column="1"
+                              Width="36"
+                              Height="34"
+                              MinWidth="36"
+                              MinHeight="34"
+                              Padding="0"
+                              VerticalAlignment="Center"
+                              HorizontalContentAlignment="Center"
+                              VerticalContentAlignment="Center"
+                              Command="{Binding ApplyRemoteApiTokenCommand}"
+                              ToolTip.Tip="{DynamicResource Lang.Remote.SaveToken}">
+                        <TextBlock Text="&#xE74E;"
+                                   FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+                                   FontSize="16"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center" />
+                      </Button>
+                    </Grid>
+                    <TextBlock Classes="caption"
+                               Text="{DynamicResource Lang.Remote.TokenHint}"
+                               TextWrapping="Wrap" />
+                  </StackPanel>
+                </Grid>
+              </StackPanel>
+            </Border>
+
+            <Border Classes="card">
+              <StackPanel Spacing="10">
+                <TextBlock Text="{DynamicResource Lang.Settings.Language.Title}" FontSize="18" FontWeight="SemiBold" />
+                <TextBlock Classes="caption"
+                           Text="{DynamicResource Lang.Settings.Language.Description}"
+                           TextWrapping="Wrap" />
+                <TextBlock Text="{DynamicResource Lang.Settings.Language.Current}" FontWeight="Medium" />
+                <ComboBox ItemsSource="{Binding LanguageOptions}"
+                          SelectedItem="{Binding SelectedLanguage, Mode=TwoWay}" />
+                <TextBlock Classes="caption"
+                           Text="{Binding LanguageDirectoryText}"
+                           TextWrapping="Wrap" />
+                <Button Classes="sectionAction"
+                        Content="{DynamicResource Lang.Settings.Language.Reload}"
+                        Command="{Binding ReloadLanguagesCommand}" />
+              </StackPanel>
+            </Border>
+
+          </StackPanel>
+        </ScrollViewer>
+
+        <Grid Grid.Column="1" RowDefinitions="Auto,Auto,*" RowSpacing="14">
+          <UniformGrid Columns="5">
+            <Border Classes="metricCard" Margin="0,0,7,0"><StackPanel><TextBlock Classes="caption" Text="{DynamicResource Lang.Metrics.Responses}"/><TextBlock Classes="metric" Text="{Binding ResponseCount}" Foreground="#8B5CF6"/></StackPanel></Border>
+            <Border Classes="metricCard" Margin="0,0,7,0"><StackPanel><TextBlock Classes="caption" Text="{DynamicResource Lang.Metrics.Discovered}"/><TextBlock Classes="metric" Text="{Binding DiscoveredCount}" Foreground="#06B6D4"/></StackPanel></Border>
+            <Border Classes="metricCard" Margin="0,0,7,0"><StackPanel><TextBlock Classes="caption" Text="{DynamicResource Lang.Metrics.Downloaded}"/><TextBlock Classes="metric" Text="{Binding DownloadedCount}" Foreground="#10B981"/></StackPanel></Border>
+            <Border Classes="metricCard" Margin="0,0,7,0"><StackPanel><TextBlock Classes="caption" Text="{DynamicResource Lang.Metrics.Skipped}"/><TextBlock Classes="metric" Text="{Binding SkippedCount}" Foreground="#F59E0B"/></StackPanel></Border>
+            <Border Classes="metricCard"><StackPanel><TextBlock Classes="caption" Text="{DynamicResource Lang.Metrics.Failed}"/><TextBlock Classes="metric" Text="{Binding FailedCount}" Foreground="#F43F5E"/></StackPanel></Border>
+          </UniformGrid>
+
+          <Border Grid.Row="1" Classes="card">
+            <Grid ColumnDefinitions="8,*" ColumnSpacing="12">
+              <Border Width="8" CornerRadius="3" Background="#A78BFA" />
+              <StackPanel Grid.Column="1" Spacing="5">
+                <TextBlock Classes="caption" Text="{DynamicResource Lang.Metrics.CurrentWork}" />
+                <TextBlock Text="{Binding CurrentWork}" FontWeight="Medium" TextWrapping="Wrap" />
+                <ProgressBar IsVisible="{Binding IsDownloadProgressVisible}"
+                             IsIndeterminate="{Binding IsDownloadProgressIndeterminate}"
+                             Minimum="0"
+                             Maximum="100"
+                             Value="{Binding DownloadProgressPercent}"
+                             Height="8"
+                             Margin="0,4,0,0" />
+                <TextBlock IsVisible="{Binding IsDownloadProgressVisible}"
+                           Classes="caption"
+                           Text="{Binding DownloadProgressText}"
+                           TextWrapping="Wrap" />
+                <TextBlock Classes="caption emojiText" Text="{Binding CurrentAuthorName}" />
+              </StackPanel>
+            </Grid>
+          </Border>
+
+          <Border Grid.Row="2" Classes="card">
+            <Grid RowDefinitions="Auto,*">
+              <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Text="{DynamicResource Lang.Log.Title}" FontSize="18" FontWeight="SemiBold" />
+                <TextBlock Grid.Column="1"
+                           Classes="caption"
+                           Text="{DynamicResource Lang.Log.Hint}"
+                           VerticalAlignment="Center" />
+              </Grid>
+              <ScrollViewer x:Name="LogScrollViewer"
+                            Grid.Row="1"
+                            Margin="0,12,0,0"
+                            HorizontalScrollBarVisibility="Disabled"
+                            VerticalScrollBarVisibility="Auto"
+                            IsScrollChainingEnabled="False"
+                            Background="Transparent">
+                <ItemsControl ItemsSource="{Binding Logs}">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:CompileBindings="False">
+                      <TextBlock Text="{Binding}" FontSize="12" TextWrapping="Wrap" Margin="8,5" />
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </ScrollViewer>
+            </Grid>
+          </Border>
+        </Grid>
+      </Grid>
+
+      <!-- 下载历史属于主布局右侧列，不悬浮；显示后左侧统计与日志自动收缩。 -->
+      <Border Grid.Column="1"
+              Width="390"
+              Margin="0,0,8,0"
+              Classes="card"
+              IsVisible="{Binding IsHistoryVisible}">
+        <Grid RowDefinitions="Auto,Auto,Auto,*">
+          <StackPanel>
+            <TextBlock Text="{DynamicResource Lang.History.Title}" FontSize="19" FontWeight="SemiBold" />
+            <TextBlock Classes="caption" Text="{DynamicResource Lang.History.Hint}" Margin="0,3,0,0" />
+          </StackPanel>
+
+          <Border Grid.Row="1"
+                  Background="#1FFFFFFF"
+                  CornerRadius="7"
+                  Padding="10,8"
+                  Margin="0,12,0,10">
+            <TextBlock Classes="caption"
+                       Text="{DynamicResource Lang.History.FileHint}"
+                       TextWrapping="Wrap" />
+          </Border>
+
+          <TextBox Grid.Row="2"
+                   Height="40"
+                   Margin="0,0,0,10"
+                   Padding="12,0"
+                   VerticalContentAlignment="Center"
+                   Text="{Binding HistorySearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                   Watermark="{Binding HistorySearchPlaceholderText}" />
+
+          <ListBox x:Name="HistoryList"
+                   Grid.Row="3"
+                   Classes="historyList"
+                   ItemsSource="{Binding FilteredDownloadHistory}"
+                   Background="Transparent"
+                   BorderThickness="0"
+                   SelectionMode="Single"
+                   ScrollViewer.VerticalScrollBarVisibility="Auto">
+            <ListBox.ItemTemplate>
+              <DataTemplate x:CompileBindings="False">
+                <Border Classes="historyItem"
+                        Background="{DynamicResource HistoryItemColor}"
+                        BorderBrush="{DynamicResource BorderColor}"
+                        BorderThickness="1"
+                        CornerRadius="9"
+                        Padding="11"
+                        PointerPressed="HistoryItem_PointerPressed">
+                  <Border.ContextMenu>
+                    <ContextMenu>
+                      <MenuItem Header="{DynamicResource Lang.History.OpenHome}" Tag="{Binding}" Click="HistoryOpenHome_Click" />
+                      <MenuItem Header="{DynamicResource Lang.History.OpenFolder}" Tag="{Binding}" Click="HistoryOpenFolder_Click" />
+                      <MenuItem Header="{DynamicResource Lang.History.Recollect}" Tag="{Binding}" Click="HistoryRecollect_Click" />
+                      <Separator />
+                      <MenuItem Header="{DynamicResource Lang.History.Remove}" Tag="{Binding}" Click="HistoryRemove_Click" />
+                    </ContextMenu>
+                  </Border.ContextMenu>
+
+                  <Grid ColumnDefinitions="64,*,Auto" ColumnSpacing="11">
+                    <Border Width="58"
+                            Height="58"
+                            CornerRadius="29"
+                            ClipToBounds="True"
+                            Background="#24FFFFFF"
+                            VerticalAlignment="Center">
+                      <Grid>
+                        <Image Source="avares://HelloCrab.Core/Assets/app-icon.png"
+                               Margin="8"
+                               Opacity="0.82"
+                               Stretch="Uniform"
+                               IsHitTestVisible="False" />
+                        <Image Source="{Binding AvatarImage}" Stretch="UniformToFill" />
+                      </Grid>
+                    </Border>
+
+                    <StackPanel Grid.Column="1" Spacing="3" VerticalAlignment="Center">
+                      <Grid ColumnDefinitions="*,Auto" ColumnSpacing="7">
+                        <TextBlock Text="{Binding UserName}"
+                                   Classes="emojiText"
+                                   FontSize="15"
+                                   FontWeight="SemiBold"
+                                   VerticalAlignment="Center"
+                                   TextTrimming="CharacterEllipsis" />
+                        <Border Grid.Column="1"
+                                Padding="7,2"
+                                CornerRadius="8"
+                                Background="#267C3AED"
+                                BorderBrush="#557C3AED"
+                                BorderThickness="1"
+                                VerticalAlignment="Center">
+                          <TextBlock Text="{Binding PlatformDisplayText}"
+                                     FontSize="11"
+                                     FontWeight="SemiBold"
+                                     Foreground="{DynamicResource TextPrimaryColor}" />
+                        </Border>
+                      </Grid>
+                      <TextBlock Classes="caption" Text="{Binding UidText}" TextTrimming="CharacterEllipsis" />
+                      <TextBlock Classes="caption" Text="{Binding ItemsSummary}" />
+                      <TextBlock Classes="caption" Text="{Binding UpdatedAtText}" />
+                    </StackPanel>
+
+                    <TextBlock Grid.Column="2"
+                               Text="⋮⋮"
+                               FontSize="17"
+                               Foreground="{DynamicResource TextSecondaryColor}"
+                               VerticalAlignment="Center"
+                               ToolTip.Tip="{DynamicResource Lang.History.Drag}" />
+                  </Grid>
+                </Border>
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
+        </Grid>
+      </Border>
+
+      <!-- 固定在最右侧中部，距离窗口右侧 8 像素。 -->
+      <Button Grid.Column="2"
+              Classes="historyToggle"
+              Command="{Binding ToggleHistoryCommand}"
+              ToolTip.Tip="{Binding HistoryButtonText}"
+              VerticalAlignment="Center">
+        <Grid Width="16" Height="16">
+          <Border BorderBrush="White"
+                  BorderThickness="1.5"
+                  CornerRadius="2" />
+          <Border Width="1.5"
+                  Height="11"
+                  Margin="0,0,3,0"
+                  Background="White"
+                  HorizontalAlignment="Right"
+                  VerticalAlignment="Center" />
+        </Grid>
+      </Button>
+    </Grid>
+
+
+    <Canvas x:Name="DragOverlay"
+            Grid.RowSpan="2"
+            IsHitTestVisible="False"
+            Panel.ZIndex="2000" />
+
+    <!-- 定时自动下载设置。ScheduleEditor 自己提供保存、取消和下次运行预览。 -->
+    <Grid Grid.RowSpan="2"
+          Background="#B3000000"
+          IsVisible="{Binding IsScheduledDownloadEditorVisible}"
+          Panel.ZIndex="2900">
+      <Border Width="780"
+              MaxHeight="900"
+              Margin="24"
+              Padding="12"
+              CornerRadius="12"
+              Background="{DynamicResource CardColor}"
+              BorderBrush="{DynamicResource BorderColor}"
+              BorderThickness="1"
+              HorizontalAlignment="Center"
+              VerticalAlignment="Center">
+        <ScrollViewer VerticalScrollBarVisibility="Auto"
+                      HorizontalScrollBarVisibility="Disabled">
+          <scheduleControls:ScheduleEditor
+              DataContext="{Binding ScheduledDownloadEditor}"
+              ShowEverySeconds="False"
+              ShowEveryMinutes="True"
+              ShowEveryHours="True"
+              ShowDaily="True"
+              ShowWeekly="True"
+              ShowMonthly="True"
+              ShowCron="True" />
+        </ScrollViewer>
+      </Border>
+    </Grid>
+
+    <!-- 停止采集确认对话框：与退出程序保持相同样式。 -->
+    <Grid x:Name="StopCaptureConfirmOverlay"
+          Grid.RowSpan="2"
+          Background="#99000000"
+          IsVisible="False"
+          Panel.ZIndex="3000">
+      <Border Width="420"
+              Padding="22"
+              CornerRadius="10"
+              Background="{DynamicResource CardColor}"
+              BorderBrush="{DynamicResource BorderColor}"
+              BorderThickness="1"
+              HorizontalAlignment="Center"
+              VerticalAlignment="Center">
+        <StackPanel Spacing="16">
+          <StackPanel Spacing="6">
+            <TextBlock Text="{DynamicResource Lang.Dialog.Stop.Title}"
+                       FontSize="20"
+                       FontWeight="SemiBold" />
+            <TextBlock Text="{DynamicResource Lang.Dialog.Stop.Message}"
+                       Classes="caption"
+                       TextWrapping="Wrap" />
+          </StackPanel>
+          <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
+            <Button Classes="sectionAction"
+                    Content="{DynamicResource Lang.Common.Cancel}"
+                    Click="StopCaptureCancelButton_Click" />
+            <Button Grid.Column="1"
+                    Classes="coral sectionAction"
+                    Content="{DynamicResource Lang.Dialog.Stop.Confirm}"
+                    Click="StopCaptureConfirmButton_Click" />
+          </Grid>
+        </StackPanel>
+      </Border>
+    </Grid>
+
+    <!-- 关闭确认对话框 -->
+    <Grid x:Name="CloseConfirmOverlay"
+          Grid.RowSpan="2"
+          Background="#99000000"
+          IsVisible="False"
+          Panel.ZIndex="3000">
+      <Border Width="420"
+              Padding="22"
+              CornerRadius="10"
+              Background="{DynamicResource CardColor}"
+              BorderBrush="{DynamicResource BorderColor}"
+              BorderThickness="1"
+              HorizontalAlignment="Center"
+              VerticalAlignment="Center">
+        <StackPanel Spacing="16">
+          <StackPanel Spacing="6">
+            <TextBlock Text="{DynamicResource Lang.Dialog.Exit.Title}"
+                       FontSize="20"
+                       FontWeight="SemiBold" />
+            <TextBlock Text="{DynamicResource Lang.Dialog.Exit.Message}"
+                       Classes="caption"
+                       TextWrapping="Wrap" />
+          </StackPanel>
+          <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
+            <Button Classes="sectionAction"
+                    Content="{DynamicResource Lang.Common.Cancel}"
+                    Click="CloseCancelButton_Click" />
+            <Button Grid.Column="1"
+                    Classes="coral sectionAction"
+                    Content="{DynamicResource Lang.Dialog.Exit.Confirm}"
+                    Click="CloseConfirmButton_Click" />
+          </Grid>
+        </StackPanel>
+      </Border>
+    </Grid>
+
+    <!-- 删除历史作者确认对话框 -->
+    <Grid x:Name="HistoryDeleteOverlay"
+          Grid.RowSpan="2"
+          Background="#99000000"
+          IsVisible="False"
+          Panel.ZIndex="3100">
+      <Border Width="590"
+              Padding="22"
+              CornerRadius="10"
+              Background="{DynamicResource CardColor}"
+              BorderBrush="{DynamicResource BorderColor}"
+              BorderThickness="1"
+              HorizontalAlignment="Center"
+              VerticalAlignment="Center">
+        <StackPanel Spacing="16">
+          <StackPanel Spacing="7">
+            <TextBlock Text="{DynamicResource Lang.Dialog.Delete.Title}"
+                       FontSize="20"
+                       FontWeight="SemiBold" />
+            <TextBlock x:Name="HistoryDeleteAuthorText"
+                       Classes="emojiText"
+                       FontWeight="SemiBold"
+                       TextWrapping="Wrap" />
+            <TextBlock Text="{DynamicResource Lang.Dialog.Delete.Message}"
+                       Classes="caption"
+                       TextWrapping="Wrap" />
+            <TextBlock x:Name="HistoryDeletePathText"
+                       Classes="caption"
+                       TextWrapping="Wrap" />
+            <TextBlock Text="{DynamicResource Lang.Dialog.Delete.Warning}"
+                       Foreground="#F87171"
+                       FontWeight="SemiBold" />
+          </StackPanel>
+          <Grid ColumnDefinitions="Auto,*,*" ColumnSpacing="10">
+            <Button MinWidth="92"
+                    Classes="sectionAction"
+                    Content="{DynamicResource Lang.Common.Cancel}"
+                    Click="HistoryDeleteCancelButton_Click" />
+            <Button Grid.Column="1"
+                    Classes="sectionAction"
+                    Content="{DynamicResource Lang.Dialog.Delete.HistoryOnly}"
+                    Click="HistoryDeleteHistoryOnlyButton_Click" />
+            <Button Grid.Column="2"
+                    Classes="primary sectionAction"
+                    Content="{DynamicResource Lang.Dialog.Delete.WithFiles}"
+                    Click="HistoryDeleteFilesButton_Click" />
+          </Grid>
+        </StackPanel>
+      </Border>
+    </Grid>
+      </Grid>
+    </Border>
+
+    <!-- 自定义无边框窗口的缩放热区。 -->
+    <Grid x:Name="ResizeHandles"
+          Panel.ZIndex="5000">
+      <Border Width="7"
+              HorizontalAlignment="Left"
+              Margin="0,10,0,10"
+              Background="Transparent"
+              Cursor="SizeWestEast"
+              Tag="West"
+              PointerPressed="ResizeHandle_PointerPressed" />
+      <Border Width="7"
+              HorizontalAlignment="Right"
+              Margin="0,10,0,10"
+              Background="Transparent"
+              Cursor="SizeWestEast"
+              Tag="East"
+              PointerPressed="ResizeHandle_PointerPressed" />
+      <Border Height="7"
+              VerticalAlignment="Top"
+              Margin="10,0,10,0"
+              Background="Transparent"
+              Cursor="SizeNorthSouth"
+              Tag="North"
+              PointerPressed="ResizeHandle_PointerPressed" />
+      <Border Height="7"
+              VerticalAlignment="Bottom"
+              Margin="10,0,10,0"
+              Background="Transparent"
+              Cursor="SizeNorthSouth"
+              Tag="South"
+              PointerPressed="ResizeHandle_PointerPressed" />
+
+      <Border Width="12"
+              Height="12"
+              HorizontalAlignment="Left"
+              VerticalAlignment="Top"
+              Background="Transparent"
+              Cursor="TopLeftCorner"
+              Tag="NorthWest"
+              PointerPressed="ResizeHandle_PointerPressed" />
+      <Border Width="12"
+              Height="12"
+              HorizontalAlignment="Right"
+              VerticalAlignment="Top"
+              Background="Transparent"
+              Cursor="TopRightCorner"
+              Tag="NorthEast"
+              PointerPressed="ResizeHandle_PointerPressed" />
+      <Border Width="12"
+              Height="12"
+              HorizontalAlignment="Left"
+              VerticalAlignment="Bottom"
+              Background="Transparent"
+              Cursor="BottomLeftCorner"
+              Tag="SouthWest"
+              PointerPressed="ResizeHandle_PointerPressed" />
+      <Border Width="12"
+              Height="12"
+              HorizontalAlignment="Right"
+              VerticalAlignment="Bottom"
+              Background="Transparent"
+              Cursor="BottomRightCorner"
+              Tag="SouthEast"
+              PointerPressed="ResizeHandle_PointerPressed" />
+    </Grid>
+  </Grid>
+</Window>

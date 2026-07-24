@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=HelloCrab
+Comment=社交媒体作者作品采集工具
+Exec=__EXECUTABLE__
+Icon=__ICON__
+Terminal=false
+Categories=Network;Utility;
+StartupNotify=true

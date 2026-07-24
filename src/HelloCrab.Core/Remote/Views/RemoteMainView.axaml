@@ -1,0 +1,440 @@
+﻿<UserControl
+    x:Class="HelloCrab.Core.Remote.Views.RemoteMainView"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <Grid ClipToBounds="True">
+    <!-- 无下载或封面尚未就绪时，继续使用控制端保存的亮/暗渐变背景。 -->
+    <Border Background="{DynamicResource RemoteBackgroundBrush}" />
+
+    <!-- 下载过程中使用桌面端当前作品封面；图片由桌面 API 代理，避免 CDN 跨域。 -->
+    <Image Source="{Binding CurrentCoverImage}"
+           IsVisible="{Binding HasCurrentCoverBackground}"
+           Stretch="UniformToFill"
+           Opacity="0.9"
+           RenderOptions.BitmapInterpolationMode="MediumQuality"
+           IsHitTestVisible="False">
+      <Image.RenderTransform>
+        <ScaleTransform ScaleX="1.08" ScaleY="1.08" />
+      </Image.RenderTransform>
+      <Image.Effect>
+        <BlurEffect Radius="24" />
+      </Image.Effect>
+    </Image>
+    <Border Background="{DynamicResource RemoteCoverOverlayBrush}"
+            IsVisible="{Binding HasCurrentCoverBackground}"
+            IsHitTestVisible="False" />
+
+    <!-- 渐变背景上的轻量装饰光晕。 -->
+    <Border Width="520" Height="520" CornerRadius="260"
+            Background="{DynamicResource RemoteGlowOneBrush}"
+            IsVisible="{Binding ShowDecorativeGlows}"
+            HorizontalAlignment="Right" VerticalAlignment="Top"
+            Margin="0,-220,-180,0" IsHitTestVisible="False" />
+    <Border Width="420" Height="420" CornerRadius="210"
+            Background="{DynamicResource RemoteGlowTwoBrush}"
+            IsVisible="{Binding ShowDecorativeGlows}"
+            HorizontalAlignment="Left" VerticalAlignment="Center"
+            Margin="-230,120,0,0" IsHitTestVisible="False" />
+    <Border Width="360" Height="360" CornerRadius="180"
+            Background="{DynamicResource RemoteGlowThreeBrush}"
+            IsVisible="{Binding ShowDecorativeGlows}"
+            HorizontalAlignment="Right" VerticalAlignment="Bottom"
+            Margin="0,0,-180,-150" IsHitTestVisible="False" />
+
+    <ScrollViewer x:Name="RootScrollViewer"
+                  HorizontalScrollBarVisibility="Disabled"
+                  VerticalScrollBarVisibility="Auto"
+                  IsScrollChainingEnabled="False"
+                  ScrollChanged="RootScrollViewer_OnScrollChanged">
+      <StackPanel Margin="18" Spacing="14" MaxWidth="1180" HorizontalAlignment="Center">
+        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
+          <Border Width="56" Height="56" CornerRadius="12" Background="{DynamicResource RemoteIconBackgroundBrush}" Padding="7">
+            <Image Source="avares://HelloCrab.Core/Remote/Assets/app-icon.png" Stretch="Uniform" />
+          </Border>
+          <StackPanel Grid.Column="1" VerticalAlignment="Center">
+            <TextBlock Text="HelloCrab Remote" FontSize="24" FontWeight="Bold" Foreground="{DynamicResource RemotePrimaryTextBrush}" />
+            <TextBlock Text="Web / Android / iOS 远程控制端" Classes="caption" Margin="0,3,0,0" />
+          </StackPanel>
+          <Button Grid.Column="2"
+                  Classes="action secondary themeIcon"
+                  Command="{Binding ToggleRemoteThemeCommand}"
+                  Width="44"
+                  Height="44"
+                  MinWidth="44"
+                  Padding="0"
+                  HorizontalContentAlignment="Center"
+                  VerticalContentAlignment="Center"
+                  VerticalAlignment="Center"
+                  ToolTip.Tip="{Binding RemoteThemeButtonText}">
+            <Grid Width="22" Height="22">
+              <!-- 使用矢量图标，避免 Browser/WASM 字体不包含太阳、月亮字符。 -->
+              <Viewbox Width="22" Height="22" IsVisible="{Binding IsRemoteDarkTheme}">
+                <Canvas Width="24" Height="24">
+                  <Ellipse Canvas.Left="7" Canvas.Top="7"
+                           Width="10" Height="10"
+                           Stroke="White"
+                           StrokeThickness="2" />
+                  <Path Data="M12,1 L12,4 M12,20 L12,23 M1,12 L4,12 M20,12 L23,12 M4.22,4.22 L6.34,6.34 M17.66,17.66 L19.78,19.78 M4.22,19.78 L6.34,17.66 M17.66,6.34 L19.78,4.22"
+                        Stroke="White"
+                        StrokeThickness="2"
+                        StrokeLineCap="Round" />
+                </Canvas>
+              </Viewbox>
+              <Viewbox Width="22" Height="22" IsVisible="{Binding IsRemoteLightTheme}">
+                <Path Data="M20.2,15.3 C18.8,16 17.2,16.4 15.5,16.4 C11.1,16.4 7.6,12.9 7.6,8.5 C7.6,6.8 8,5.2 8.7,3.8 C5.1,5.1 2.5,8.5 2.5,12.5 C2.5,17.5 6.5,21.5 11.5,21.5 C15.5,21.5 18.9,18.9 20.2,15.3 Z"
+                      Fill="White" />
+              </Viewbox>
+            </Grid>
+          </Button>
+        </Grid>
+
+        <Border Classes="card">
+          <StackPanel Spacing="10">
+            <TextBlock Text="连接桌面客户端" FontSize="17" FontWeight="SemiBold" />
+            <TextBox Watermark="例如：http://192.168.1.10:5088"
+                     Text="{Binding ServerAddress, Mode=TwoWay}"
+                     MinHeight="42" />
+            <Grid ColumnDefinitions="*,44" ColumnSpacing="8">
+              <Grid>
+                <TextBox Watermark="输入桌面端日志显示的远程访问令牌"
+                         Text="{Binding AccessToken, Mode=TwoWay}"
+                         PasswordChar="●"
+                         MinHeight="42"
+                         VerticalContentAlignment="Center"
+                         IsVisible="{Binding IsAccessTokenHidden}" />
+                <TextBox Watermark="输入桌面端日志显示的远程访问令牌"
+                         Text="{Binding AccessToken, Mode=TwoWay}"
+                         MinHeight="42"
+                         VerticalContentAlignment="Center"
+                         IsVisible="{Binding IsAccessTokenVisible}" />
+              </Grid>
+              <Button Grid.Column="1"
+                      Classes="action secondary tokenEye"
+                      Command="{Binding ToggleAccessTokenVisibilityCommand}"
+                      ToolTip.Tip="{Binding AccessTokenVisibilityToolTip}">
+                <Grid Width="22" Height="22">
+                  <Viewbox Width="22" Height="22" IsVisible="{Binding IsAccessTokenHidden}">
+                    <Path Data="M2,12 C4.7,7.7 8.1,5.5 12,5.5 C15.9,5.5 19.3,7.7 22,12 C19.3,16.3 15.9,18.5 12,18.5 C8.1,18.5 4.7,16.3 2,12 Z M12,8.5 C10.1,8.5 8.5,10.1 8.5,12 C8.5,13.9 10.1,15.5 12,15.5 C13.9,15.5 15.5,13.9 15.5,12 C15.5,10.1 13.9,8.5 12,8.5 Z"
+                          Fill="White" />
+                  </Viewbox>
+                  <Viewbox Width="22" Height="22" IsVisible="{Binding IsAccessTokenVisible}">
+                    <Canvas Width="24" Height="24">
+                      <Path Data="M2,12 C4.7,7.7 8.1,5.5 12,5.5 C15.9,5.5 19.3,7.7 22,12 C19.3,16.3 15.9,18.5 12,18.5 C8.1,18.5 4.7,16.3 2,12 Z"
+                            Stroke="White" StrokeThickness="2" Fill="Transparent" />
+                      <Path Data="M4,4 L20,20" Stroke="White" StrokeThickness="2.3" StrokeLineCap="Round" />
+                    </Canvas>
+                  </Viewbox>
+                </Grid>
+              </Button>
+            </Grid>
+            <TextBlock Text="{Binding ConnectionHint}"
+                       Classes="caption"
+                       TextWrapping="Wrap" />
+            <TextBlock Text="主机地址、访问令牌和控制端主题会保存在当前浏览器或手机本地，下次打开自动恢复。"
+                       Classes="caption"
+                       TextWrapping="Wrap" />
+            <Button Classes="action primary"
+                    Command="{Binding ConnectCommand}"
+                    Content="连接桌面客户端"
+                    HorizontalAlignment="Stretch" />
+            <TextBlock Text="{Binding ConnectionText}" TextWrapping="Wrap" Foreground="{DynamicResource RemoteConnectionBrush}" />
+          </StackPanel>
+        </Border>
+
+        <Border Classes="card">
+          <StackPanel Spacing="10">
+            <TextBlock Text="主机操作" FontSize="17" FontWeight="SemiBold" />
+            <!-- 四个按钮统一高度；网页端使用固定单元宽度，Android/iOS 使用等宽两列。 -->
+            <WrapPanel IsVisible="{Binding IsBrowserClient}" ItemWidth="184" ItemHeight="52">
+              <Button Width="176" Height="46" Classes="action secondary hostAction" Command="{Binding InstallChromiumCommand}" Content="安装 Chromium" Margin="0,0,8,6" />
+              <Button Width="176" Height="46" Classes="action coral hostAction" Command="{Binding OpenBrowserCommand}" Content="打开浏览器" Margin="0,0,8,6" />
+              <Button Width="176" Height="46" Classes="action coral hostAction" Command="{Binding StartCaptureCommand}" Content="开始采集" Margin="0,0,8,6" />
+              <Button Width="176" Height="46" Classes="action danger hostAction" IsEnabled="{Binding IsCapturing}" Click="StopCaptureButton_Click" Content="停止采集" Margin="0,0,8,6" />
+            </WrapPanel>
+            <Grid IsVisible="{Binding IsNativeMobileClient}"
+                  ColumnDefinitions="*,*"
+                  RowDefinitions="48,48"
+                  ColumnSpacing="8"
+                  RowSpacing="8">
+              <Button Grid.Row="0" Grid.Column="0" Classes="action secondary hostAction" Command="{Binding InstallChromiumCommand}" Content="安装 Chromium" />
+              <Button Grid.Row="0" Grid.Column="1" Classes="action coral hostAction" Command="{Binding OpenBrowserCommand}" Content="打开浏览器" />
+              <Button Grid.Row="1" Grid.Column="0" Classes="action coral hostAction" Command="{Binding StartCaptureCommand}" Content="开始采集" />
+              <Button Grid.Row="1" Grid.Column="1" Classes="action danger hostAction" IsEnabled="{Binding IsCapturing}" Click="StopCaptureButton_Click" Content="停止采集" />
+            </Grid>
+            <TextBlock Text="扫码登录和浏览器窗口仍显示在运行 Playwright 的桌面主机上。" Classes="caption" TextWrapping="Wrap" />
+          </StackPanel>
+        </Border>
+
+        <WrapPanel IsVisible="{Binding IsBrowserClient}">
+          <Border Classes="card" Width="190" Margin="0,0,8,8">
+            <StackPanel><TextBlock Text="响应" Classes="caption"/><TextBlock Text="{Binding ResponseCount}" FontSize="25" FontWeight="Bold"/></StackPanel>
+          </Border>
+          <Border Classes="card" Width="190" Margin="0,0,8,8">
+            <StackPanel><TextBlock Text="发现" Classes="caption"/><TextBlock Text="{Binding DiscoveredCount}" FontSize="25" FontWeight="Bold"/></StackPanel>
+          </Border>
+          <Border Classes="card" Width="190" Margin="0,0,8,8">
+            <StackPanel><TextBlock Text="下载" Classes="caption"/><TextBlock Text="{Binding DownloadedCount}" FontSize="25" FontWeight="Bold"/></StackPanel>
+          </Border>
+          <Border Classes="card" Width="190" Margin="0,0,8,8">
+            <StackPanel><TextBlock Text="跳过" Classes="caption"/><TextBlock Text="{Binding SkippedCount}" FontSize="25" FontWeight="Bold"/></StackPanel>
+          </Border>
+          <Border Classes="card" Width="190" Margin="0,0,8,8">
+            <StackPanel><TextBlock Text="失败" Classes="caption"/><TextBlock Text="{Binding FailedCount}" FontSize="25" FontWeight="Bold"/></StackPanel>
+          </Border>
+        </WrapPanel>
+
+        <Grid IsVisible="{Binding IsNativeMobileClient}"
+              ColumnDefinitions="*,*"
+              RowDefinitions="Auto,Auto,Auto"
+              ColumnSpacing="8"
+              RowSpacing="8">
+          <Border Grid.Row="0" Grid.Column="0" Classes="card">
+            <StackPanel><TextBlock Text="响应" Classes="caption"/><TextBlock Text="{Binding ResponseCount}" FontSize="25" FontWeight="Bold"/></StackPanel>
+          </Border>
+          <Border Grid.Row="0" Grid.Column="1" Classes="card">
+            <StackPanel><TextBlock Text="发现" Classes="caption"/><TextBlock Text="{Binding DiscoveredCount}" FontSize="25" FontWeight="Bold"/></StackPanel>
+          </Border>
+          <Border Grid.Row="1" Grid.Column="0" Classes="card">
+            <StackPanel><TextBlock Text="下载" Classes="caption"/><TextBlock Text="{Binding DownloadedCount}" FontSize="25" FontWeight="Bold"/></StackPanel>
+          </Border>
+          <Border Grid.Row="1" Grid.Column="1" Classes="card">
+            <StackPanel><TextBlock Text="跳过" Classes="caption"/><TextBlock Text="{Binding SkippedCount}" FontSize="25" FontWeight="Bold"/></StackPanel>
+          </Border>
+          <Border Grid.Row="2" Grid.Column="0" Classes="card">
+            <StackPanel><TextBlock Text="失败" Classes="caption"/><TextBlock Text="{Binding FailedCount}" FontSize="25" FontWeight="Bold"/></StackPanel>
+          </Border>
+        </Grid>
+
+        <Border Classes="card">
+          <Grid RowDefinitions="Auto,Auto,Auto,Auto" ColumnDefinitions="Auto,*" ColumnSpacing="12" RowSpacing="10">
+            <TextBlock Text="状态" Classes="caption" />
+            <TextBlock Grid.Column="1" Text="{Binding StatusText}" TextWrapping="Wrap" />
+            <TextBlock Grid.Row="1" Text="作者" Classes="caption" />
+            <TextBlock Grid.Row="1" Grid.Column="1" Classes="emojiText" Text="{Binding CurrentAuthor}" TextWrapping="Wrap" />
+            <TextBlock Grid.Row="2" Text="当前作品" Classes="caption" />
+            <StackPanel Grid.Row="2" Grid.Column="1" Spacing="6">
+              <TextBlock Text="{Binding CurrentWork}" TextWrapping="Wrap" />
+              <ProgressBar IsVisible="{Binding IsDownloadProgressVisible}"
+                           IsIndeterminate="{Binding IsDownloadProgressIndeterminate}"
+                           Minimum="0"
+                           Maximum="100"
+                           Value="{Binding DownloadProgressPercent}"
+                           Height="7" />
+              <TextBlock IsVisible="{Binding IsDownloadProgressVisible}"
+                         Classes="caption"
+                         Text="{Binding DownloadProgressText}"
+                         TextWrapping="Wrap" />
+            </StackPanel>
+            <TextBlock Grid.Row="3" Text="页面" Classes="caption" />
+            <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding CurrentUrl}" TextWrapping="Wrap" />
+          </Grid>
+        </Border>
+
+        <Border Classes="card" IsEnabled="{Binding IsConnected}">
+          <StackPanel Spacing="10">
+            <TextBlock Text="下载设置（自动读取桌面主机）" FontSize="17" FontWeight="SemiBold" />
+            <TextBlock Text="{Binding SettingsSyncText}"
+                       Classes="caption"
+                       Foreground="{DynamicResource RemoteConnectionBrush}"
+                       TextWrapping="Wrap" />
+            <Grid ColumnDefinitions="130,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto" RowSpacing="8" ColumnSpacing="10">
+              <TextBlock Text="桌面端主题" VerticalAlignment="Center" />
+              <ComboBox Grid.Column="1"
+                        ItemsSource="{Binding ThemeOptions}"
+                        SelectedItem="{Binding Theme, Mode=TwoWay}"
+                        MinHeight="40" />
+              <TextBlock Grid.Row="1" Text="平台" VerticalAlignment="Center" />
+              <ComboBox Grid.Row="1"
+                        Grid.Column="1"
+                        ItemsSource="{Binding PlatformOptions}"
+                        SelectedItem="{Binding SelectedPlatformId, Mode=TwoWay}"
+                        MinHeight="40" />
+              <TextBlock Grid.Row="2" Text="无头模式" VerticalAlignment="Center" />
+              <ToggleSwitch Grid.Row="2"
+                            Grid.Column="1"
+                            IsChecked="{Binding HeadlessMode, Mode=TwoWay}"
+                            OnContent="已开启"
+                            OffContent="已关闭" />
+              <TextBlock Grid.Row="3" Text="目标 URL" VerticalAlignment="Center" />
+              <TextBox Grid.Row="3" Grid.Column="1" Text="{Binding BrowserUrl, Mode=TwoWay}" MinHeight="40" />
+              <TextBlock Grid.Row="4" Text="主机下载目录" VerticalAlignment="Center" />
+              <TextBox Grid.Row="4" Grid.Column="1" Text="{Binding DownloadRoot, Mode=TwoWay}" MinHeight="40" />
+            </Grid>
+            <CheckBox Content="文件名中添加作品 ID" IsChecked="{Binding IncludeWorkId, Mode=TwoWay}" />
+            <CheckBox Content="下载作品封面" IsChecked="{Binding DownloadCover, Mode=TwoWay}" />
+            <CheckBox Content="下载背景音乐" IsChecked="{Binding DownloadMusic, Mode=TwoWay}" />
+            <CheckBox Content="检测视频是否有声音，并自动修复无声视频"
+                      IsChecked="{Binding CheckVideoAudio, Mode=TwoWay}" />
+            <TextBlock Classes="caption"
+                       Text="默认关闭。开启后由桌面主机调用 ffprobe 检查视频音频轨；无声视频会在有背景音乐资源时通过 ffmpeg 自动合并。FFmpeg 的自动下载按钮位于桌面客户端。"
+                       TextWrapping="Wrap" />
+            <TextBlock Classes="caption"
+                       Foreground="#F59E0B"
+                       Text="影响说明：开启后会逐个等待视频音轨检测；无声视频还要下载音频并等待合并，因此会延长当前作者的下载时间。视频越多、文件越大，耗时越明显。"
+                       TextWrapping="Wrap" />
+            <CheckBox Content="人像检测：删除不包含人物的图片"
+                      IsChecked="{Binding EnablePersonDetection, Mode=TwoWay}" />
+            <TextBlock Classes="caption"
+                       Text="检测在桌面主机后台队列运行，默认关闭；开启后不逐张阻塞图片下载，上一位作者尚在检测时也可开始下一位作者。检测结果可能存在误判。桌面主机需在程序根目录的 Models 文件夹中放置 person-detection.onnx，或名称为 yolo11 加任意单个字母的 ONNX 模型（如 yolo11n.onnx、yolo11m.onnx）；程序会自动搜索。"
+                       TextWrapping="Wrap" />
+            <TextBlock Classes="caption"
+                       Foreground="#F59E0B"
+                       Text="影响说明：开启后会持续占用较多 CPU、内存和磁盘资源，可能使下载速度和界面响应变慢，并延后该作者的最终完成统计与通知。图片越多、分辨率越高，耗时越明显。"
+                       TextWrapping="Wrap" />
+            <Grid ColumnDefinitions="*,120" ColumnSpacing="10" MinHeight="44">
+              <CheckBox Content="重复作品达到阈值后停止"
+                        IsChecked="{Binding StopOnDuplicateThreshold, Mode=TwoWay}"
+                        VerticalAlignment="Center" />
+              <Grid Grid.Column="1"
+                    Width="120"
+                    Height="44"
+                    HorizontalAlignment="Right"
+                    VerticalAlignment="Center">
+                <NumericUpDown Classes="remoteThreshold"
+                               Minimum="1"
+                               Maximum="10000"
+                               Increment="1"
+                               Value="{Binding DuplicateStopThreshold, Mode=TwoWay}" />
+                <Border IsHitTestVisible="False"
+                        BorderBrush="{DynamicResource RemoteCardBorderBrush}"
+                        BorderThickness="1"
+                        CornerRadius="8" />
+              </Grid>
+            </Grid>
+            <Button Classes="action primary" Command="{Binding SaveSettingsCommand}" Content="保存并同步桌面客户端" HorizontalAlignment="Stretch" />
+          </StackPanel>
+        </Border>
+
+        <Border Classes="card">
+          <StackPanel Spacing="8">
+            <TextBlock Text="下载历史" FontSize="17" FontWeight="SemiBold" />
+            <ItemsControl ItemsSource="{Binding History}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                  <Border BorderBrush="{DynamicResource RemoteSeparatorBrush}"
+                          BorderThickness="0,0,0,1"
+                          Padding="2,11">
+                    <Grid ColumnDefinitions="56,*,Auto" ColumnSpacing="10">
+                      <Border Width="50"
+                              Height="50"
+                              CornerRadius="25"
+                              ClipToBounds="True"
+                              Background="#24FFFFFF"
+                              VerticalAlignment="Top">
+                        <Grid>
+                          <Image Source="avares://HelloCrab.Core/Assets/app-icon.png"
+                                 Margin="7"
+                                 Opacity="0.84"
+                                 Stretch="Uniform"
+                                 IsHitTestVisible="False" />
+                          <Image Source="{Binding AvatarImage}"
+                                 Stretch="UniformToFill" />
+                        </Grid>
+                      </Border>
+
+                      <StackPanel Grid.Column="1" Spacing="3" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding UserName}"
+                                   Classes="emojiText"
+                                   FontWeight="SemiBold"
+                                   TextTrimming="CharacterEllipsis" />
+                        <TextBlock Text="{Binding UidText}"
+                                   Classes="caption"
+                                   TextTrimming="CharacterEllipsis" />
+                      </StackPanel>
+
+                      <StackPanel Grid.Column="2"
+                                  HorizontalAlignment="Right"
+                                  VerticalAlignment="Center"
+                                  Spacing="3">
+                        <TextBlock Text="{Binding ItemsSummary}"
+                                   HorizontalAlignment="Right" />
+                        <TextBlock Text="{Binding UpdatedAtText}"
+                                   Classes="caption"
+                                   HorizontalAlignment="Right" />
+                      </StackPanel>
+                    </Grid>
+                  </Border>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+        </Border>
+
+        <!-- 日志是最后一个功能区域；产品说明和品牌页脚位于日志之后。 -->
+        <Border Classes="card">
+          <StackPanel Spacing="8">
+            <TextBlock Text="最新日志" FontSize="17" FontWeight="SemiBold" />
+            <ListBox ItemsSource="{Binding Logs}" Height="270" Background="Transparent">
+              <ListBox.ItemTemplate>
+                <DataTemplate>
+                  <TextBlock Text="{Binding}" TextWrapping="Wrap" Margin="4,5" />
+                </DataTemplate>
+              </ListBox.ItemTemplate>
+            </ListBox>
+          </StackPanel>
+        </Border>
+
+        <StackPanel Spacing="10" Margin="8,2,8,24">
+          <TextBlock Text="Web 和手机端是远程控制器；Playwright、FFmpeg 和文件下载必须运行在 Windows、macOS 或 Linux 桌面主机。"
+                     Classes="caption"
+                     TextAlignment="Center"
+                     TextWrapping="Wrap" />
+          <StackPanel Orientation="Horizontal"
+                      Spacing="9"
+                      HorizontalAlignment="Center">
+            <Border Width="32"
+                    Height="32"
+                    CornerRadius="8"
+                    Background="{DynamicResource RemoteIconBackgroundBrush}"
+                    Padding="4">
+              <Image Source="avares://HelloCrab.Core/Remote/Assets/app-icon.png"
+                     Stretch="Uniform" />
+            </Border>
+            <TextBlock Text="HelloCrab"
+                       FontSize="18"
+                       FontWeight="Bold"
+                       Foreground="{DynamicResource RemotePrimaryTextBrush}"
+                       VerticalAlignment="Center" />
+          </StackPanel>
+        </StackPanel>
+      </StackPanel>
+    </ScrollViewer>
+
+    <!-- 网页、Android、iOS 共用的停止采集确认对话框。 -->
+    <Grid x:Name="StopCaptureConfirmOverlay"
+          Background="#99000000"
+          IsVisible="False"
+          Panel.ZIndex="3000">
+      <Border MaxWidth="420"
+              Margin="20"
+              Padding="22"
+              CornerRadius="10"
+              Background="{DynamicResource RemoteCardBackgroundBrush}"
+              BorderBrush="{DynamicResource RemoteCardBorderBrush}"
+              BorderThickness="1"
+              HorizontalAlignment="Stretch"
+              VerticalAlignment="Center">
+        <StackPanel Spacing="16">
+          <StackPanel Spacing="6">
+            <TextBlock Text="确认停止采集？"
+                       FontSize="20"
+                       FontWeight="SemiBold"
+                       Foreground="{DynamicResource RemotePrimaryTextBrush}" />
+            <TextBlock Text="停止后当前采集和下载任务将终止，尚未完成的作品不会继续下载。"
+                       Classes="caption"
+                       TextWrapping="Wrap" />
+          </StackPanel>
+          <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
+            <Button Classes="action secondary"
+                    Content="取消"
+                    Click="StopCaptureCancelButton_Click" />
+            <Button Grid.Column="1"
+                    Classes="action coral"
+                    Content="确认停止"
+                    Click="StopCaptureConfirmButton_Click" />
+          </Grid>
+        </StackPanel>
+      </Border>
+    </Grid>
+  </Grid>
+</UserControl>

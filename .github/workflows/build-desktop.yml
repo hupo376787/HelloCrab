@@ -1,0 +1,70 @@
+name: Build desktop packages
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+
+jobs:
+  publish:
+    name: ${{ matrix.rid }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            rid: win-x64
+          - os: windows-latest
+            rid: win-arm64
+          - os: ubuntu-latest
+            rid: linux-x64
+          - os: ubuntu-latest
+            rid: linux-arm64
+          - os: macos-latest
+            rid: osx-arm64
+          - os: macos-latest
+            rid: osx-x64
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Publish on Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./scripts/publish-desktop.ps1 -Runtime ${{ matrix.rid }} -Configuration Release
+
+      - name: Publish on Linux or macOS
+        if: runner.os != 'Windows'
+        shell: bash
+        run: ./scripts/publish-desktop.sh ${{ matrix.rid }} Release
+
+      - name: Create Windows archive
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: Compress-Archive -Path "publish/desktop/${{ matrix.rid }}/*" -DestinationPath "HelloCrab-${{ matrix.rid }}.zip" -Force
+
+      - name: Create Unix archive
+        if: runner.os != 'Windows'
+        shell: bash
+        run: tar -czf "HelloCrab-${{ matrix.rid }}.tar.gz" -C "publish/desktop/${{ matrix.rid }}" .
+
+      - name: Upload Windows package
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: HelloCrab-${{ matrix.rid }}
+          path: HelloCrab-${{ matrix.rid }}.zip
+          if-no-files-found: error
+
+      - name: Upload Unix package
+        if: runner.os != 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: HelloCrab-${{ matrix.rid }}
+          path: HelloCrab-${{ matrix.rid }}.tar.gz
+          if-no-files-found: error

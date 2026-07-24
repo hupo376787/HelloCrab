@@ -1,0 +1,45 @@
+<Application
+    x:Class="HelloCrab.Desktop.App"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    RequestedThemeVariant="Light">
+  <Application.Resources>
+    <ResourceDictionary>
+      <ResourceDictionary.ThemeDictionaries>
+        <ResourceDictionary x:Key="Light">
+          <Color x:Key="PageBackgroundColor">#FFF0F3FA</Color>
+          <Color x:Key="BackgroundOverlayColor">#8AEEF2F9</Color>
+          <Color x:Key="TitleBarColor">#42FFFFFF</Color>
+          <Color x:Key="CardColor">#D8FFFFFF</Color>
+          <Color x:Key="CardStrongColor">#F2FFFFFF</Color>
+          <Color x:Key="TextPrimaryColor">#FF172033</Color>
+          <Color x:Key="TextSecondaryColor">#FF667085</Color>
+          <Color x:Key="InputColor">#D9FFFFFF</Color>
+          <Color x:Key="LogColor">#A8F8FAFF</Color>
+          <Color x:Key="BorderColor">#66FFFFFF</Color>
+          <Color x:Key="SettingsDividerColor">#2E344054</Color>
+          <Color x:Key="HistoryItemColor">#AFFFFFFF</Color>
+          <Color x:Key="WindowButtonHoverColor">#28FFFFFF</Color>
+        </ResourceDictionary>
+        <ResourceDictionary x:Key="Dark">
+          <Color x:Key="PageBackgroundColor">#FF0C1020</Color>
+          <Color x:Key="BackgroundOverlayColor">#B00B1020</Color>
+          <Color x:Key="TitleBarColor">#52111726</Color>
+          <Color x:Key="CardColor">#C21A2034</Color>
+          <Color x:Key="CardStrongColor">#E51B2238</Color>
+          <Color x:Key="TextPrimaryColor">#FFF5F7FF</Color>
+          <Color x:Key="TextSecondaryColor">#FFAAB3C7</Color>
+          <Color x:Key="InputColor">#CC232B43</Color>
+          <Color x:Key="LogColor">#B0121728</Color>
+          <Color x:Key="BorderColor">#42FFFFFF</Color>
+          <Color x:Key="SettingsDividerColor">#38FFFFFF</Color>
+          <Color x:Key="HistoryItemColor">#A6262D43</Color>
+          <Color x:Key="WindowButtonHoverColor">#24FFFFFF</Color>
+        </ResourceDictionary>
+      </ResourceDictionary.ThemeDictionaries>
+    </ResourceDictionary>
+  </Application.Resources>
+  <Application.Styles>
+    <FluentTheme />
+  </Application.Styles>
+</Application>

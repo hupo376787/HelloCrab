@@ -1,0 +1,150 @@
+﻿<Application
+    x:Class="HelloCrab.Core.Remote.RemoteApp"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    RequestedThemeVariant="Dark">
+  <Application.Resources>
+    <ResourceDictionary>
+      <ResourceDictionary.ThemeDictionaries>
+        <ResourceDictionary x:Key="Light">
+          <LinearGradientBrush x:Key="RemoteBackgroundBrush" StartPoint="0%,0%" EndPoint="100%,100%">
+            <GradientStop Color="#EEF4FF" Offset="0" />
+            <GradientStop Color="#FFF1F7" Offset="0.48" />
+            <GradientStop Color="#ECFEFF" Offset="1" />
+          </LinearGradientBrush>
+          <SolidColorBrush x:Key="RemoteCardBackgroundBrush" Color="#EFFFFFFF" />
+          <SolidColorBrush x:Key="RemoteCardBorderBrush" Color="#306366F1" />
+          <SolidColorBrush x:Key="RemoteCaptionBrush" Color="#64748B" />
+          <SolidColorBrush x:Key="RemotePrimaryTextBrush" Color="#172033" />
+          <LinearGradientBrush x:Key="RemoteIconBackgroundBrush" StartPoint="0%,0%" EndPoint="100%,100%">
+            <GradientStop Color="#DDE7FF" Offset="0" />
+            <GradientStop Color="#FFE0F0" Offset="1" />
+          </LinearGradientBrush>
+          <SolidColorBrush x:Key="RemoteConnectionBrush" Color="#075985" />
+          <SolidColorBrush x:Key="RemoteSeparatorBrush" Color="#2864748B" />
+          <SolidColorBrush x:Key="RemoteGlowOneBrush" Color="#4D8B5CF6" />
+          <SolidColorBrush x:Key="RemoteGlowTwoBrush" Color="#40EC4899" />
+          <SolidColorBrush x:Key="RemoteGlowThreeBrush" Color="#3506B6D4" />
+          <SolidColorBrush x:Key="RemoteCoverOverlayBrush" Color="#70F8FAFC" />
+        </ResourceDictionary>
+        <ResourceDictionary x:Key="Dark">
+          <LinearGradientBrush x:Key="RemoteBackgroundBrush" StartPoint="0%,0%" EndPoint="100%,100%">
+            <GradientStop Color="#0B1020" Offset="0" />
+            <GradientStop Color="#18112B" Offset="0.52" />
+            <GradientStop Color="#071B28" Offset="1" />
+          </LinearGradientBrush>
+          <SolidColorBrush x:Key="RemoteCardBackgroundBrush" Color="#D91A2032" />
+          <SolidColorBrush x:Key="RemoteCardBorderBrush" Color="#38A5B4FC" />
+          <SolidColorBrush x:Key="RemoteCaptionBrush" Color="#B7C4CEDF" />
+          <SolidColorBrush x:Key="RemotePrimaryTextBrush" Color="#FFFFFFFF" />
+          <LinearGradientBrush x:Key="RemoteIconBackgroundBrush" StartPoint="0%,0%" EndPoint="100%,100%">
+            <GradientStop Color="#507C3AED" Offset="0" />
+            <GradientStop Color="#50EC4899" Offset="1" />
+          </LinearGradientBrush>
+          <SolidColorBrush x:Key="RemoteConnectionBrush" Color="#7DD3FC" />
+          <SolidColorBrush x:Key="RemoteSeparatorBrush" Color="#25FFFFFF" />
+          <SolidColorBrush x:Key="RemoteGlowOneBrush" Color="#527C3AED" />
+          <SolidColorBrush x:Key="RemoteGlowTwoBrush" Color="#42DB2777" />
+          <SolidColorBrush x:Key="RemoteGlowThreeBrush" Color="#3806B6D4" />
+          <SolidColorBrush x:Key="RemoteCoverOverlayBrush" Color="#96070B16" />
+        </ResourceDictionary>
+      </ResourceDictionary.ThemeDictionaries>
+
+      <SolidColorBrush x:Key="RemotePrimaryButtonBrush" Color="#7C3AED" />
+      <SolidColorBrush x:Key="RemoteSecondaryButtonBrush" Color="#2563EB" />
+      <SolidColorBrush x:Key="RemoteSuccessButtonBrush" Color="#16A34A" />
+      <SolidColorBrush x:Key="RemoteDangerButtonBrush" Color="#EF4444" />
+      <SolidColorBrush x:Key="RemoteCoralButtonBrush" Color="#FD6F71" />
+    </ResourceDictionary>
+  </Application.Resources>
+
+  <Application.Styles>
+    <FluentTheme />
+    <Style Selector="Button.action">
+      <Setter Property="MinHeight" Value="44" />
+      <Setter Property="Padding" Value="16,0" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+      <Setter Property="CornerRadius" Value="10" />
+      <Setter Property="BorderBrush" Value="#45FFFFFF" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="White" />
+      <Setter Property="Background" Value="{StaticResource RemoteSecondaryButtonBrush}" />
+    </Style>
+    <Style Selector="Button.action.primary">
+      <Setter Property="Background" Value="{StaticResource RemotePrimaryButtonBrush}" />
+    </Style>
+    <Style Selector="Button.action.secondary">
+      <Setter Property="Background" Value="{StaticResource RemoteSecondaryButtonBrush}" />
+    </Style>
+    <Style Selector="Button.action.success">
+      <Setter Property="Background" Value="{StaticResource RemoteSuccessButtonBrush}" />
+    </Style>
+    <Style Selector="Button.action.coral">
+      <Setter Property="Background" Value="{StaticResource RemoteCoralButtonBrush}" />
+    </Style>
+    <Style Selector="Button.action.danger">
+      <Setter Property="Background" Value="{StaticResource RemoteDangerButtonBrush}" />
+    </Style>
+    <Style Selector="Button.action:pointerover">
+      <Setter Property="Opacity" Value="0.9" />
+    </Style>
+    <Style Selector="Button.action:pressed">
+      <Setter Property="Opacity" Value="0.78" />
+    </Style>
+    <Style Selector="Button.action.hostAction">
+      <Setter Property="MinHeight" Value="46" />
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="VerticalAlignment" Value="Stretch" />
+    </Style>
+    <Style Selector="Button.action.tokenEye">
+      <Setter Property="Width" Value="44" />
+      <Setter Property="Height" Value="42" />
+      <Setter Property="MinWidth" Value="44" />
+      <Setter Property="MinHeight" Value="42" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="CornerRadius" Value="10" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Button.action.themeIcon">
+      <Setter Property="Width" Value="44" />
+      <Setter Property="Height" Value="44" />
+      <Setter Property="MinWidth" Value="44" />
+      <Setter Property="MinHeight" Value="44" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="CornerRadius" Value="22" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+    <Style Selector="NumericUpDown.remoteThreshold">
+      <Setter Property="Height" Value="44" />
+      <Setter Property="MinHeight" Value="44" />
+      <Setter Property="Margin" Value="0" />
+      <Setter Property="Padding" Value="12,0,0,0" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="ClipToBounds" Value="True" />
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="HorizontalContentAlignment" Value="Left" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+    <Style Selector="NumericUpDown.remoteThreshold /template/ TextBox#PART_TextBox">
+      <Setter Property="Padding" Value="12,0,0,0" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Border.card">
+      <Setter Property="Background" Value="{DynamicResource RemoteCardBackgroundBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource RemoteCardBorderBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="14" />
+      <Setter Property="Padding" Value="17" />
+    </Style>
+    <Style Selector="TextBlock.caption">
+      <Setter Property="Foreground" Value="{DynamicResource RemoteCaptionBrush}" />
+      <Setter Property="FontSize" Value="12" />
+    </Style>
+  </Application.Styles>
+</Application>

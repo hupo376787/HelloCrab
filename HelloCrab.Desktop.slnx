@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="src/HelloCrab.Core/HelloCrab.Core.csproj" />
+  <Project Path="src/HelloCrab.Desktop/HelloCrab.Desktop.csproj" />
+</Solution>

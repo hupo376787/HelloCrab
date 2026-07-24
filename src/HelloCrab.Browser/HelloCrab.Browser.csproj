@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk.WebAssembly">
+  <PropertyGroup>
+    <TargetFramework>net10.0-browser</TargetFramework>
+    <RuntimeIdentifier>browser-wasm</RuntimeIdentifier>
+    <!-- 强制链接 Skia/HarfBuzz 等 WASM 原生库，避免运行时找不到 libSkiaSharp。 -->
+    <WasmBuildNative>true</WasmBuildNative>
+    <OutputType>Exe</OutputType>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <!-- Browser/WASM 使用源生成 JSON 元数据，不依赖会被裁剪的运行时反射。 -->
+    <JsonSerializerIsReflectionEnabledByDefault>false</JsonSerializerIsReflectionEnabledByDefault>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\HelloCrab.Core\HelloCrab.Core.csproj" />
+    <PackageReference Include="Avalonia.Browser" Version="12.1.0" />
+    <!-- Browser/WASM 的 Skia 画布不能可靠读取客户端系统字体。
+         通过 WithFont_SourceHanSansCN() 直接注册并保留该字体程序集。 -->
+    <PackageReference Include="Quick.AvaloniaFonts.SourceHanSansCN.Slim" Version="1.0.0" />
+  </ItemGroup>
+</Project>

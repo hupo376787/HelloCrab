@@ -1,0 +1,10 @@
+<Solution>
+  <Project Path="src/HelloCrab.Core/HelloCrab.Core.csproj" />
+  <Project Path="src/HelloCrab.Desktop/HelloCrab.Desktop.csproj" />
+  <Project Path="src/HelloCrab.Browser/HelloCrab.Browser.csproj" />
+  <Project Path="src/HelloCrab.Android/HelloCrab.Android.csproj">
+    <Deploy Solution="Debug|Any CPU" />
+    <Deploy Solution="Release|Any CPU" />
+  </Project>
+  <Project Path="src/HelloCrab.iOS/HelloCrab.iOS.csproj" />
+</Solution>
