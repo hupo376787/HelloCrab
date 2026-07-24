@@ -16,10 +16,11 @@ HelloCrab-Desktop-linux-arm64-1.0.0.zip
 HelloCrab-Desktop-osx-arm64-1.0.0.zip
 HelloCrab-Browser-1.0.0.zip
 HelloCrab-Android-1.0.0.zip
+HelloCrab-iOS-Simulator-arm64-1.0.0.zip
 HelloCrab-iOS-1.0.0.zip
 ```
 
-Android 汇总 ZIP 内包含生成的 APK 和 AAB。iOS 汇总 ZIP 内包含签名后的 IPA。
+Android 汇总 ZIP 内包含生成的 APK 和 AAB。`ios-simulator` 会生成无需证书的模拟器测试包；`ios` 汇总 ZIP 内包含签名后的 IPA。
 
 ## 单个平台
 
@@ -31,6 +32,7 @@ PowerShell：
 ./scripts/publish-platform.ps1 -Target osx-arm64
 ./scripts/publish-platform.ps1 -Target browser
 ./scripts/publish-platform.ps1 -Target android
+./scripts/publish-platform.ps1 -Target ios-simulator
 ./scripts/publish-platform.ps1 -Target ios
 ```
 
@@ -47,6 +49,7 @@ Bash：
 ./scripts/publish-platform.sh osx-arm64 Release 1.0.0
 ./scripts/publish-platform.sh browser Release 1.0.0
 ./scripts/publish-platform.sh android Release 1.0.0
+./scripts/publish-platform.sh ios-simulator Release 1.0.0
 ./scripts/publish-platform.sh ios Release 1.0.0
 ```
 
@@ -117,7 +120,13 @@ APK + AAB
 
 ### iOS
 
-iOS IPA 需要 Apple 证书和 Provisioning Profile。macOS 可设置：
+在 macOS 上，无需 Apple 证书也可以生成 Apple Silicon 模拟器测试包：
+
+```bash
+./scripts/publish-platform.sh ios-simulator Release 1.0.0
+```
+
+该包不能安装到实体 iPhone 或 iPad。iOS IPA 仍需要 Apple 证书和 Provisioning Profile。macOS 可设置：
 
 ```bash
 export HELLOCRAB_IOS_CODESIGN_KEY='Apple Distribution: Company (TEAMID)'
@@ -165,3 +174,8 @@ Windows 可先双击 `one-click-publish/Validate-scripts.bat`，它会使用 Pow
 
 脚本使用 `-p:AndroidPackageFormats=apk%3Baab`。`%3B` 是 MSBuild 对分号的转义，
 可避免 PowerShell/MSBuild 把 `aab` 误解析为额外开关。最终仍会同时生成 APK 和 AAB。
+
+
+## GitHub Actions 与 Release
+
+仓库包含 `.github/workflows/build-all-platforms.yml`，可自动构建桌面端、Browser、Android 和 iOS，并在推送 `v*` 标签时将全部产物发布到同一个 Release。完整配置和 iOS Secret 说明见 `GITHUB-ACTIONS-RELEASE.md`。

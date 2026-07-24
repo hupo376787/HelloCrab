@@ -68,20 +68,26 @@ macOS:   HelloCrab.app/Contents/MacOS/HelloCrab
 最终文件位于 `artifacts/`。Browser、Android 和 iOS 的一键脚本及签名说明见 `PUBLISH-ALL-PLATFORMS.md`。
 
 
-## GitHub Actions 自动构建
+## GitHub Actions 自动构建与 Release
 
-仓库中的 `.github/workflows/build-desktop.yml` 会在以下情况运行：
+仓库中的 `.github/workflows/build-all-platforms.yml` 会在以下情况运行：
 
 - 代码推送到 `main` 分支；
-- 在 GitHub 的 Actions 页面手动点击运行。
+- 推送 `v*` 版本标签；
+- 在 GitHub Actions 页面手动运行。
 
-工作流会分别生成 Windows x64/ARM64、Linux x64/ARM64、macOS Intel/Apple Silicon 六个平台的产物。当前工作流明确安装 .NET 10 SDK，不依赖 Runner 偶然预装的 SDK；Linux 和 macOS 发布前会恢复 Shell 脚本执行权限，并始终通过 `bash` 调用脚本，避免从 Windows 提交后出现退出代码 126。
+工作流包含：
 
-如不希望每次推送都自动构建，可删除工作流中：
-
-```yaml
-push:
-  branches: [main]
+```text
+Windows x64 / ARM64
+Linux x64 / ARM64
+macOS Intel / Apple Silicon
+Browser WebAssembly
+Android APK + AAB
+iOS Simulator Apple Silicon
+可选的签名 iOS IPA
 ```
 
-保留 `workflow_dispatch` 后，仍可在 Actions 页面手动构建。
+普通 `main` 提交只生成 Actions Artifacts；推送 `v1.0.0` 等标签时，会等待全部平台成功，然后创建或更新对应 Release，并上传全部包和 `SHA256SUMS.txt`。
+
+Linux/macOS 脚本始终通过 Bash 运行并恢复执行权限；工作流明确安装 .NET 10，Android 使用 Java 17，iOS 使用 `macos-26` Runner。完整使用方法见 `GITHUB-ACTIONS-RELEASE.md`。

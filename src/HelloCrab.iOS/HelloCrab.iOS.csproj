@@ -9,7 +9,16 @@
     <ApplicationId>com.hellocrab.remote</ApplicationId>
     <ApplicationVersion>1</ApplicationVersion>
     <ApplicationDisplayVersion>1.0.0</ApplicationDisplayVersion>
+    <!-- GitHub Actions always creates an unsigned Simulator package. -->
+    <CodesignConfigureDependsOn>$(CodesignConfigureDependsOn);DisableCodesignInSimulator</CodesignConfigureDependsOn>
   </PropertyGroup>
+
+  <Target Name="DisableCodesignInSimulator" Condition="'$(SdkIsSimulator)' == 'true'">
+    <PropertyGroup>
+      <EnableCodeSigning>false</EnableCodeSigning>
+    </PropertyGroup>
+  </Target>
+
   <ItemGroup>
     <ImageAsset Include="Assets.xcassets\**\*" />
   </ItemGroup>

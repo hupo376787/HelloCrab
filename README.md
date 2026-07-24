@@ -1,4 +1,4 @@
-# HelloCrab
+﻿# HelloCrab
 
 基于 Avalonia、Playwright 与 FFmpeg 的跨平台桌面采集器，以及 Android、iOS、Browser 远程控制端。  
 **Made By ChatGPT & Vincent with ❤**
@@ -452,3 +452,8 @@ Install-Package ScheduleEditor -Version 1.0.0
 - FFmpeg 下载显示百分比、已下载/总大小和速度；PushPlus 标题使用 `HelloCrab(昵称)下载完成…` 格式。
 
 - 支持设置作品媒体总下载速度上限（MB/s），0 表示不限速。
+
+
+## GitHub Actions 全平台发布
+
+`.github/workflows/build-all-platforms.yml` 会构建桌面端、Browser、Android 和 iOS。推送 `v*` 标签后，会把所有平台产物与 SHA256 校验文件一起发布到 GitHub Release。iOS 默认生成无需签名的 Simulator 包，配置 Apple 签名 Secrets 后还会生成 IPA。详见 `GITHUB-ACTIONS-RELEASE.md`。

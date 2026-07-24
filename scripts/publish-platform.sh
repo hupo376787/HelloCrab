@@ -6,7 +6,7 @@ CONFIGURATION="${2:-Release}"
 VERSION="${3:-1.0.0}"
 
 case "$TARGET" in
-  win-x64|win-arm64|linux-x64|linux-arm64|osx-x64|osx-arm64|browser|android|ios) ;;
+  win-x64|win-arm64|linux-x64|linux-arm64|osx-x64|osx-arm64|browser|android|ios-simulator|ios) ;;
   *)
     echo "不支持的目标：$TARGET" >&2
     exit 2
@@ -136,6 +136,46 @@ case "$TARGET" in
       exit 1
     fi
     zip_package "$PACKAGE_DIR" "$ARTIFACTS/$PACKAGE_NAME.zip"
+    echo
+    echo "打包完成：$ARTIFACTS/$PACKAGE_NAME.zip"
+    ;;
+
+  ios-simulator)
+    if [[ "$HOST_OS" != "Darwin" ]]; then
+      echo "iOS Simulator 构建必须在 macOS 上运行。" >&2
+      exit 1
+    fi
+
+    PROJECT="$ROOT/src/HelloCrab.iOS/HelloCrab.iOS.csproj"
+    FRAMEWORK="net10.0-ios26.0"
+    RUNTIME="iossimulator-arm64"
+    SEARCH_ROOT="$ROOT/src/HelloCrab.iOS/bin/$CONFIGURATION"
+
+    rm -rf "$ROOT/src/HelloCrab.iOS/bin/$CONFIGURATION/$FRAMEWORK"
+    run dotnet workload restore "$PROJECT"
+    run dotnet build "$PROJECT" \
+      -c "$CONFIGURATION" \
+      -f "$FRAMEWORK" \
+      "-p:RuntimeIdentifier=$RUNTIME" \
+      '-p:EnableCodeSigning=false' \
+      "-p:ApplicationDisplayVersion=$VERSION"
+
+    APP_PATH="$(find "$SEARCH_ROOT" -type d -name '*.app' -path "*$RUNTIME*" -print -quit 2>/dev/null || true)"
+    if [[ -z "$APP_PATH" || ! -d "$APP_PATH" ]]; then
+      echo "没有在 $SEARCH_ROOT 中找到 iOS Simulator .app。" >&2
+      exit 1
+    fi
+
+    PACKAGE_NAME="HelloCrab-iOS-Simulator-arm64-$VERSION"
+    PACKAGE_DIR="$STAGING/$PACKAGE_NAME"
+    reset_dir "$PACKAGE_DIR"
+    cp -a "$APP_PATH" "$PACKAGE_DIR/"
+    cat > "$PACKAGE_DIR/README.txt" <<'README'
+This package is an unsigned Apple Silicon iOS Simulator build.
+It is intended for testing with Xcode Simulator and cannot be installed on a physical iPhone or iPad.
+Configure the GitHub iOS signing secrets to also produce a signed IPA for physical devices.
+README
+    zip_package "$PACKAGE_DIR" "$ARTIFACTS/$PACKAGE_NAME.zip" 1
     echo
     echo "打包完成：$ARTIFACTS/$PACKAGE_NAME.zip"
     ;;

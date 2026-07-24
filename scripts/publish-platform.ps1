@@ -4,7 +4,7 @@ param(
         'win-x64', 'win-arm64',
         'linux-x64', 'linux-arm64',
         'osx-x64', 'osx-arm64',
-        'browser', 'android', 'ios')]
+        'browser', 'android', 'ios-simulator', 'ios')]
     [string]$Target = 'win-x64',
 
     [ValidateSet('Debug', 'Release')]
@@ -237,6 +237,54 @@ elseif ($Target -eq 'android') {
 
     $archivePath = Join-Path $artifactsRoot "$packageName.zip"
     New-ZipArchive -PackageDirectory $packageDirectory -ArchivePath $archivePath
+    Write-Host ''
+    Write-Host "打包完成：$archivePath" -ForegroundColor Green
+}
+elseif ($Target -eq 'ios-simulator') {
+    if (-not $isMacHost) {
+        throw 'iOS Simulator 构建必须在 macOS 上运行。'
+    }
+
+    $project = Join-Path $root 'src/HelloCrab.iOS/HelloCrab.iOS.csproj'
+    $framework = 'net10.0-ios26.0'
+    $runtime = 'iossimulator-arm64'
+
+    $buildOutput = Join-Path (Split-Path -Parent $project) "bin/$Configuration/$framework"
+    if (Test-Path -LiteralPath $buildOutput) {
+        Remove-Item -LiteralPath $buildOutput -Recurse -Force
+    }
+
+    Invoke-External -FilePath 'dotnet' -Arguments @('workload', 'restore', $project)
+    Invoke-External -FilePath 'dotnet' -Arguments @(
+        'build', $project,
+        '-c', $Configuration,
+        '-f', $framework,
+        "-p:RuntimeIdentifier=$runtime",
+        '-p:EnableCodeSigning=false',
+        "-p:ApplicationDisplayVersion=$Version")
+
+    $searchRoot = Join-Path (Split-Path -Parent $project) "bin/$Configuration/$framework/$runtime"
+    $app = Get-ChildItem -LiteralPath $searchRoot -Directory -Filter '*.app' -Recurse -ErrorAction SilentlyContinue |
+        Sort-Object LastWriteTimeUtc -Descending |
+        Select-Object -First 1
+    if ($null -eq $app) {
+        throw "没有在 $searchRoot 中找到 iOS Simulator .app。"
+    }
+
+    $packageName = "HelloCrab-iOS-Simulator-arm64-$Version"
+    $packageDirectory = Join-Path $stagingRoot $packageName
+    Reset-Directory -Path $packageDirectory
+    Copy-Item -LiteralPath $app.FullName -Destination $packageDirectory -Recurse -Force
+
+    $readme = @(
+        'This package is an unsigned Apple Silicon iOS Simulator build.',
+        'It is intended for testing with Xcode Simulator and cannot be installed on a physical iPhone or iPad.',
+        'Configure the GitHub iOS signing secrets to also produce a signed IPA for physical devices.'
+    ) -join [Environment]::NewLine
+    Set-Content -LiteralPath (Join-Path $packageDirectory 'README.txt') -Value $readme -Encoding UTF8
+
+    $archivePath = Join-Path $artifactsRoot "$packageName.zip"
+    New-ZipArchive -PackageDirectory $packageDirectory -ArchivePath $archivePath -PreferMacDitto
     Write-Host ''
     Write-Host "打包完成：$archivePath" -ForegroundColor Green
 }
