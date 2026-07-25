@@ -1,6 +1,6 @@
 ﻿# HelloCrab
 
-基于 Avalonia、Playwright 与 FFmpeg 的跨平台桌面采集器，以及 Android、iOS、Browser 远程控制端。  
+基于 Avalonia、Playwright、AI与 FFmpeg 的跨平台桌面采集器，以及 Android、iOS、Browser 远程控制端。  
 **Made By ChatGPT & Vincent with ❤**
 
 > 截至 2026-07-20，HelloCrab 的共同开发已分布在至少三个连续的长对话中，累计经历至少 80 轮需求确认、问题排查、运行反馈与源码迭代。实际协作内容还包括早期的跨平台架构、远程控制、站点解析和下载流程讨论，因此真实轮次可能更多。
@@ -459,3 +459,9 @@ Install-Package ScheduleEditor -Version 1.0.0
 ## GitHub Actions 全平台发布
 
 `.github/workflows/build-all-platforms.yml` 会构建桌面端、Browser、Android 和 iOS。推送 `v*` 标签后，会把所有平台产物与 SHA256 校验文件一起发布到 GitHub Release。iOS 默认生成无需签名的 Simulator 包，配置 Apple 签名 Secrets 后还会生成 IPA。详见 `GITHUB-ACTIONS-RELEASE.md`。
+
+## 免责声明
+
+本项目仅供学习、研究与技术交流使用，不得用于任何违法违规用途。使用者应自行遵守所在地法律法规、目标平台的服务条款，以及与著作权、隐私权和数据使用相关的规定。
+
+使用者因下载、安装、运行、修改、分发或以其他方式使用本项目而产生的任何直接或间接后果，均由使用者自行判断并承担责任。在适用法律允许的最大范围内，作者及项目贡献者不对由此造成的任何损失、纠纷、账号限制、数据损坏或其他后果承担责任。使用本项目即表示使用者已阅读、理解并接受本免责声明。
