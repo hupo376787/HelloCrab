@@ -1,4 +1,4 @@
-{
+﻿{
   "code": "en-US",
   "displayName": "English",
   "sortOrder": 10,
@@ -25,7 +25,7 @@
     "Browser.OpenHeadless": "Open headless browser",
     "Browser.InstallChromium": "Install Chromium",
     "Browser.InstallingChromium": "Installing Chromium…",
-    "Browser.ChromiumPathHint": "Chromium is installed in the chromium folder beside the executable. After the log confirms this portable copy is in use, close the app before deleting the old Playwright cache in the user profile.",
+    "Browser.ChromiumPathHint": "Chromium is installed in the chromium folder beside the executable.",
     "Browser.ChromiumDownloadPreparing": "Preparing the Chromium download…",
     "Browser.ChromiumDownloadTotalSize": "Total size {0}",
     "Browser.ChromiumDownloadExtracting": "Extracting…",
@@ -55,6 +55,8 @@
     "Download.CheckAudioImpact": "Impact: audio detection waits for each video; silent videos also require audio download and merging, so author downloads take longer.",
     "Download.FfmpegDescription": "The app downloads the latest FFmpeg release essentials archive from gyan.dev in the background and extracts ffmpeg.exe and ffprobe.exe to ffmpeg\\bin. No browser window is opened.",
     "Download.PersonDetection": "Person detection: delete images without people",
+    "Download.PersonDetectionConfidence": "Detection confidence",
+    "Download.PersonDetectionConfidenceDescription": "Default: 60%. Higher values are stricter and reduce false positives, but distant, small, or blurry people are more likely to be missed.",
     "Download.PersonDetectionDescription": "Off by default. Images are saved as .pending and sent to the YoloDotNet background queue. Images containing people are restored; others are deleted. Put person-detection.onnx or yolo11?.onnx in the Models folder.",
     "Download.PersonDetectionImpact": "Impact: this uses additional CPU, memory, and disk resources and can delay final statistics and notifications.",
     "Download.ClearCache": "Clear image cache",

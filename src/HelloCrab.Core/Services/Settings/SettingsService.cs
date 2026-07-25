@@ -1,4 +1,4 @@
-using System.Security.Cryptography;
+﻿using System.Security.Cryptography;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Unicode;
@@ -54,10 +54,10 @@ public sealed class SettingsService
             }
 
             // v4 增加 PushPlusToken；v6 清理已经下线的平台配置字段；v7 增加微博平台；
-            // v8 增加人像检测开关；v9 增加视频音轨检测开关；v10 增加 JSON 多语言；v11 增加下载速度限制。
+            // v8 增加人像检测开关；v9 增加视频音轨检测开关；v10 增加 JSON 多语言；v11 增加下载速度限制；v12 增加人像检测置信度。
             // 未知旧字段会在下次保存时自然移除。
-            if (settings.Version < 11)
-                settings.Version = 11;
+            if (settings.Version < 12)
+                settings.Version = 12;
             if (string.IsNullOrWhiteSpace(settings.LanguageCode))
                 settings.LanguageCode = "zh-CN";
 
@@ -65,6 +65,10 @@ public sealed class SettingsService
                 settings.DownloadSpeedLimitMBps,
                 0m,
                 10000m);
+            settings.PersonDetectionConfidence = Math.Clamp(
+                settings.PersonDetectionConfidence,
+                0.10,
+                0.95);
             settings.DuplicateStopThreshold = Math.Clamp(
                 settings.DuplicateStopThreshold,
                 1,

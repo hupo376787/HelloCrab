@@ -1,4 +1,4 @@
-using Avalonia.Media;
+﻿using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -54,7 +54,8 @@ public sealed record CrawlerDownloadOptions(
     bool EnablePersonDetection = false,
     bool StopOnDuplicateThreshold = true,
     int DuplicateStopThreshold = 20,
-    decimal DownloadSpeedLimitMBps = 0);
+    decimal DownloadSpeedLimitMBps = 0,
+    double PersonDetectionConfidence = 0.60);
 
 public sealed record ParsedWorkBatch(
     IReadOnlyList<WorkItem> Works,

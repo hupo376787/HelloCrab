@@ -1,4 +1,4 @@
-{
+﻿{
   "code": "zh-CN",
   "displayName": "简体中文",
   "sortOrder": 0,
@@ -25,7 +25,7 @@
     "Browser.OpenHeadless": "打开无头浏览器",
     "Browser.InstallChromium": "安装 Chromium",
     "Browser.InstallingChromium": "正在安装 Chromium…",
-    "Browser.ChromiumPathHint": "Chromium 默认安装到 exe 同目录的 chromium 文件夹；程序日志确认正在使用该目录后，可关闭软件并删除 %LOCALAPPDATA%\\ms-playwright 旧缓存。",
+    "Browser.ChromiumPathHint": "Chromium 默认安装到 exe 同目录的 chromium 文件夹。",
     "Browser.ChromiumDownloadPreparing": "正在准备 Chromium 下载…",
     "Browser.ChromiumDownloadTotalSize": "总大小 {0}",
     "Browser.ChromiumDownloadExtracting": "正在解压…",
@@ -55,6 +55,8 @@
     "Download.CheckAudioImpact": "影响说明：开启后会逐个等待视频音轨检测；无声视频还要下载音频并等待合并，因此会延长当前作者的下载时间。视频越多、文件越大，耗时越明显。",
     "Download.FfmpegDescription": "点击按钮后，程序会在后台访问 gyan.dev 的 FFmpeg Windows 构建页，解析并下载最新 release essentials ZIP，随后解压 ffmpeg.exe 和 ffprobe.exe 到程序目录的 ffmpeg\\bin 文件夹。下载期间不打开浏览器窗口。",
     "Download.PersonDetection": "人像检测：删除不包含人物的图片",
+    "Download.PersonDetectionConfidence": "检测置信度",
+    "Download.PersonDetectionConfidenceDescription": "默认 60%。数值越高越严格，误判为人物的概率更低，但远处、较小或模糊的人物更容易漏检。",
     "Download.PersonDetectionDescription": "默认关闭。勾选后图片先保存为 .pending，并立即进入后台 YoloDotNet 检测队列；下载线程无需逐张等待。检测到人物后恢复正式文件名，不包含人物时删除。该功能可能存在误判。请把 person-detection.onnx 或 yolo11?.onnx 放入 Models 文件夹。",
     "Download.PersonDetectionImpact": "影响说明：开启后会持续占用较多 CPU、内存和磁盘资源，可能使下载速度和界面响应变慢，并延后最终统计与通知。",
     "Download.ClearCache": "清空图片缓存",

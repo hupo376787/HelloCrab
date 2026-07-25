@@ -1,4 +1,4 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using Avalonia;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
@@ -50,6 +50,7 @@ public sealed class RemoteMainViewModel : ObservableObject, IAsyncDisposable
     private bool _downloadMusic;
     private bool _checkVideoAudio;
     private bool _enablePersonDetection;
+    private double _personDetectionConfidence = 0.60;
     private bool _stopOnDuplicateThreshold = true;
     private int _duplicateStopThreshold = 20;
     private bool _applyingSnapshot;
@@ -297,6 +298,23 @@ public sealed class RemoteMainViewModel : ObservableObject, IAsyncDisposable
         set { if (SetProperty(ref _enablePersonDetection, value)) MarkSettingsDirty(); }
     }
 
+    public double PersonDetectionConfidence
+    {
+        get => _personDetectionConfidence;
+        set
+        {
+            var normalized = Math.Round(Math.Clamp(value, 0.10, 0.95), 2);
+            if (!SetProperty(ref _personDetectionConfidence, normalized))
+                return;
+
+            OnPropertyChanged(nameof(PersonDetectionConfidenceText));
+            MarkSettingsDirty();
+        }
+    }
+
+    public string PersonDetectionConfidenceText
+        => $"{PersonDetectionConfidence * 100:0}%";
+
     public bool StopOnDuplicateThreshold
     {
         get => _stopOnDuplicateThreshold;
@@ -393,6 +411,7 @@ public sealed class RemoteMainViewModel : ObservableObject, IAsyncDisposable
                 DownloadMusic = DownloadMusic,
                 CheckVideoAudio = CheckVideoAudio,
                 EnablePersonDetection = EnablePersonDetection,
+                PersonDetectionConfidence = PersonDetectionConfidence,
                 StopOnDuplicateThreshold = StopOnDuplicateThreshold,
                 DuplicateStopThreshold = DuplicateStopThreshold
             });
@@ -443,6 +462,7 @@ public sealed class RemoteMainViewModel : ObservableObject, IAsyncDisposable
                 DownloadMusic = snapshot.Settings.DownloadMusic;
                 CheckVideoAudio = snapshot.Settings.CheckVideoAudio;
                 EnablePersonDetection = snapshot.Settings.EnablePersonDetection;
+                PersonDetectionConfidence = snapshot.Settings.PersonDetectionConfidence;
                 StopOnDuplicateThreshold = snapshot.Settings.StopOnDuplicateThreshold;
                 DuplicateStopThreshold = snapshot.Settings.DuplicateStopThreshold;
                 _settingsDirty = false;

@@ -1,8 +1,8 @@
-namespace HelloCrab.Core.Services.Settings;
+﻿namespace HelloCrab.Core.Services.Settings;
 
 public sealed class AppSettings
 {
-    public int Version { get; set; } = 11;
+    public int Version { get; set; } = 12;
 
     /// <summary>
     /// Light 或 Dark。
@@ -22,6 +22,9 @@ public sealed class AppSettings
     public decimal DownloadSpeedLimitMBps { get; set; }
     public bool CheckVideoAudio { get; set; }
     public bool EnablePersonDetection { get; set; }
+
+    /// <summary>人像检测置信度，范围 0.10～0.95；默认 0.60。</summary>
+    public double PersonDetectionConfidence { get; set; } = 0.60;
     public bool StopOnDuplicateThreshold { get; set; } = true;
     public int DuplicateStopThreshold { get; set; } = 20;
 

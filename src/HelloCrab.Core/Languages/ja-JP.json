@@ -1,4 +1,4 @@
-{
+﻿{
   "code": "ja-JP",
   "displayName": "日本語",
   "sortOrder": 20,
@@ -25,7 +25,7 @@
     "Browser.OpenHeadless": "ヘッドレスブラウザーを開く",
     "Browser.InstallChromium": "Chromium をインストール",
     "Browser.InstallingChromium": "Chromium をインストール中…",
-    "Browser.ChromiumPathHint": "Chromium は実行ファイルと同じ場所の chromium フォルダーにインストールされます。ログでこのポータブル版の使用を確認した後、アプリを終了してユーザープロファイル内の古い Playwright キャッシュを削除できます。",
+    "Browser.ChromiumPathHint": "Chromium は実行ファイルと同じ場所の chromium フォルダーにインストールされます。",
     "Browser.ChromiumDownloadPreparing": "Chromium のダウンロードを準備しています…",
     "Browser.ChromiumDownloadTotalSize": "合計サイズ {0}",
     "Browser.ChromiumDownloadExtracting": "展開しています…",
@@ -55,6 +55,8 @@
     "Download.CheckAudioImpact": "影響：動画ごとの検査と、無音動画の音声取得・結合により処理時間が延びます。",
     "Download.FfmpegDescription": "gyan.dev から最新の FFmpeg release essentials ZIP をバックグラウンドで取得し、ffmpeg\\bin に展開します。ブラウザー画面は開きません。",
     "Download.PersonDetection": "人物検出：人物のいない画像を削除",
+    "Download.PersonDetectionConfidence": "検出信頼度",
+    "Download.PersonDetectionConfidenceDescription": "既定値は 60% です。値を高くすると判定が厳しくなり誤検出は減りますが、遠い・小さい・ぼやけた人物を見逃しやすくなります。",
     "Download.PersonDetectionDescription": "既定ではオフです。画像を .pending として保存し、YoloDotNet のバックグラウンドキューで検出します。Models に person-detection.onnx または yolo11?.onnx を配置してください。",
     "Download.PersonDetectionImpact": "影響：CPU、メモリ、ディスクを多く使用し、最終集計や通知が遅れる場合があります。",
     "Download.ClearCache": "画像キャッシュを消去",

@@ -260,6 +260,9 @@
               <TextBlock Grid.Row="4" Text="主机下载目录" VerticalAlignment="Center" />
               <TextBox Grid.Row="4" Grid.Column="1" Text="{Binding DownloadRoot, Mode=TwoWay}" MinHeight="40" />
             </Grid>
+            <Border Height="1"
+                    Margin="0,4,0,2"
+                    Background="{DynamicResource RemoteSeparatorBrush}" />
             <CheckBox Content="文件名中添加作品 ID" IsChecked="{Binding IncludeWorkId, Mode=TwoWay}" />
             <CheckBox Content="下载作品封面" IsChecked="{Binding DownloadCover, Mode=TwoWay}" />
             <CheckBox Content="下载背景音乐" IsChecked="{Binding DownloadMusic, Mode=TwoWay}" />
@@ -274,6 +277,29 @@
                        TextWrapping="Wrap" />
             <CheckBox Content="人像检测：删除不包含人物的图片"
                       IsChecked="{Binding EnablePersonDetection, Mode=TwoWay}" />
+            <Grid ColumnDefinitions="Auto,*,54"
+                  ColumnSpacing="10"
+                  IsEnabled="{Binding EnablePersonDetection}"
+                  MinHeight="36">
+              <TextBlock Text="置信度" VerticalAlignment="Center" />
+              <Slider Grid.Column="1"
+                      Minimum="0.10"
+                      Maximum="0.95"
+                      SmallChange="0.05"
+                      LargeChange="0.10"
+                      TickFrequency="0.05"
+                      IsSnapToTickEnabled="True"
+                      Value="{Binding PersonDetectionConfidence, Mode=TwoWay}"
+                      VerticalAlignment="Center" />
+              <TextBlock Grid.Column="2"
+                         Text="{Binding PersonDetectionConfidenceText}"
+                         FontWeight="SemiBold"
+                         HorizontalAlignment="Right"
+                         VerticalAlignment="Center" />
+            </Grid>
+            <TextBlock Classes="caption"
+                       Text="默认 60%。数值越高越严格，误判为人物的概率更低，但远处、较小或模糊的人物更容易漏检。"
+                       TextWrapping="Wrap" />
             <TextBlock Classes="caption"
                        Text="检测在桌面主机后台队列运行，默认关闭；开启后不逐张阻塞图片下载，上一位作者尚在检测时也可开始下一位作者。检测结果可能存在误判。桌面主机需在程序根目录的 Models 文件夹中放置 person-detection.onnx，或名称为 yolo11 加任意单个字母的 ONNX 模型（如 yolo11n.onnx、yolo11m.onnx）；程序会自动搜索。"
                        TextWrapping="Wrap" />

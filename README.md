@@ -3,13 +3,7 @@
 基于 Avalonia、Playwright 与 FFmpeg 的跨平台桌面采集器，以及 Android、iOS、Browser 远程控制端。  
 **Made By ChatGPT & Vincent with ❤**
 
-## 截图
-![](Screenshot/Windows.jpg)
-![](Screenshot/Windows2.jpg)
-![](Screenshot/Android.jpg)
-![](Screenshot/Android2.jpg)
-
-> 截至 2026-07-20，HelloCrab 的共同开发已分布在至少四个连续的长对话中，累计经历至少 100 轮需求确认、问题排查、运行反馈与源码迭代。实际协作内容还包括早期的跨平台架构、远程控制、站点解析和下载流程讨论，因此真实轮次可能更多。
+> 截至 2026-07-20，HelloCrab 的共同开发已分布在至少三个连续的长对话中，累计经历至少 80 轮需求确认、问题排查、运行反馈与源码迭代。实际协作内容还包括早期的跨平台架构、远程控制、站点解析和下载流程讨论，因此真实轮次可能更多。
 
 ## 共同开发历程
 
@@ -20,7 +14,7 @@ HelloCrab 不是一次性生成的示例项目，而是在 Vincent 持续提出�
 - 修复微博滚动、分页延时、页面切换、无头模式、登录状态、历史记录和下载统计等实际运行问题；
 - 增加按日文件日志、下载历史排序、作者存储统计、完成通知和新下载/更新作品的差异化提示；
 - 使用 ffprobe 检测视频音轨，并通过 FFmpeg 为无声视频合并背景音乐，同时支持 Windows 后台自动下载安装 FFmpeg；
-- 使用 YoloDotNet 与 YOLO11 ONNX 模型实现可选的人像检测，并通过后台检测队列降低对图片下载流程的阻塞；
+- 使用 YoloDotNet 与 YOLO11 ONNX 模型实现可选的人像检测，支持 10%～95% 置信度滑块（默认 60%），并通过后台检测队列降低对图片下载流程的阻塞；
 - 优化 Android 端滚动流畅度、移动端布局、远程状态同步、主题切换和高负载功能的风险说明；
 - 为采集任务、后台检测、临时文件、异常退出恢复和跨作者切换补充更清晰的状态边界与安全保护。
 
@@ -465,14 +459,3 @@ Install-Package ScheduleEditor -Version 1.0.0
 ## GitHub Actions 全平台发布
 
 `.github/workflows/build-all-platforms.yml` 会构建桌面端、Browser、Android 和 iOS。推送 `v*` 标签后，会把所有平台产物与 SHA256 校验文件一起发布到 GitHub Release。iOS 默认生成无需签名的 Simulator 包，配置 Apple 签名 Secrets 后还会生成 IPA。详见 `GITHUB-ACTIONS-RELEASE.md`。
-
-
-## 完整对话记录
-https://chatgpt.com/share/6a641f2e-a20c-83e8-9bb6-eac5d94eed6c
-
-https://chatgpt.com/share/6a641f80-50e8-83ee-83ae-908b8c9b5934
-
-https://chatgpt.com/share/6a641f9c-21dc-83ee-964c-e724bd98d917
-
-https://chatgpt.com/share/6a641fb6-4c60-83e8-81d6-e7f0661a6017
-

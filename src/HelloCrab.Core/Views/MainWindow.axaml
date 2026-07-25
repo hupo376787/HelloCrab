@@ -1,4 +1,4 @@
-<Window
+﻿<Window
     x:Class="HelloCrab.Core.Views.MainWindow"
     xmlns="https://github.com/avaloniaui"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -199,7 +199,7 @@
         </Border>
         <StackPanel Grid.Column="1" VerticalAlignment="Center">
           <TextBlock Text="HelloCrab" FontSize="23" FontWeight="Bold" Foreground="White" />
-          <TextBlock Text="Avalonia + Playwright" FontSize="12" Foreground="#DFFFFFFF" Margin="0,2,0,0" />
+          <TextBlock Text="Avalonia + Playwright + AI" FontSize="12" Foreground="#DFFFFFFF" Margin="0,2,0,0" />
         </StackPanel>
       </Grid>
 
@@ -441,6 +441,9 @@
                           Content="{Binding ClearImageCacheButtonText}"
                           Command="{Binding ClearImageCacheCommand}" />
                 </Grid>
+                <Border Height="1"
+                        Margin="0,4,0,2"
+                        Background="{DynamicResource SettingsDividerColor}" />
                 <CheckBox Content="{DynamicResource Lang.Download.IncludeWorkId}" IsChecked="{Binding IncludeWorkId}" />
                 <Grid ColumnDefinitions="*,*" ColumnSpacing="14">
                   <CheckBox Content="{DynamicResource Lang.Download.Cover}"
@@ -514,6 +517,30 @@
                         Background="{DynamicResource SettingsDividerColor}" />
                 <CheckBox Content="{DynamicResource Lang.Download.PersonDetection}"
                           IsChecked="{Binding EnablePersonDetection}" />
+                <Grid ColumnDefinitions="Auto,*,54"
+                      ColumnSpacing="10"
+                      IsEnabled="{Binding EnablePersonDetection}"
+                      MinHeight="36">
+                  <TextBlock Text="{DynamicResource Lang.Download.PersonDetectionConfidence}"
+                             VerticalAlignment="Center" />
+                  <Slider Grid.Column="1"
+                          Minimum="0.10"
+                          Maximum="0.95"
+                          SmallChange="0.05"
+                          LargeChange="0.10"
+                          TickFrequency="0.05"
+                          IsSnapToTickEnabled="True"
+                          Value="{Binding PersonDetectionConfidence, Mode=TwoWay}"
+                          VerticalAlignment="Center" />
+                  <TextBlock Grid.Column="2"
+                             Text="{Binding PersonDetectionConfidenceText}"
+                             FontWeight="SemiBold"
+                             HorizontalAlignment="Right"
+                             VerticalAlignment="Center" />
+                </Grid>
+                <TextBlock Classes="caption"
+                           Text="{DynamicResource Lang.Download.PersonDetectionConfidenceDescription}"
+                           TextWrapping="Wrap" />
                 <TextBlock Classes="caption"
                            FontWeight="Medium"
                            Text="{Binding PersonDetectionModelStatusText}"

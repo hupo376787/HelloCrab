@@ -1,4 +1,4 @@
-using System.Threading.Channels;
+﻿using System.Threading.Channels;
 using HelloCrab.Core.Models;
 using HelloCrab.Core.Services.Browser;
 using HelloCrab.Core.Services.Downloading;
@@ -264,8 +264,12 @@ public sealed class CrawlCoordinator : IAsyncDisposable
 
     public Task<PersonDetectionSessionResult> RecoverPendingPersonDetectionAsync(
         string downloadRoot,
+        double confidence,
         CancellationToken cancellationToken = default)
-        => _downloader.RecoverPendingPersonDetectionAsync(downloadRoot, cancellationToken);
+        => _downloader.RecoverPendingPersonDetectionAsync(
+            downloadRoot,
+            confidence,
+            cancellationToken);
 
     public void Stop() => _captureCts?.Cancel();
 

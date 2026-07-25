@@ -1,4 +1,4 @@
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 using System.Threading.Channels;
 
 namespace HelloCrab.Core.Services.Images;
@@ -46,7 +46,11 @@ public sealed class PersonDetectionQueueService : IAsyncDisposable
     /// The same physical pending file is detected only once, even if recovery and a new capture
     /// discover it at the same time; every attached session still waits for the shared result.
     /// </summary>
-    public void Enqueue(Guid sessionId, string pendingPath, string finalPath)
+    public void Enqueue(
+        Guid sessionId,
+        string pendingPath,
+        string finalPath,
+        double confidence)
     {
         ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
         if (!_sessions.TryGetValue(sessionId, out var session))
@@ -63,7 +67,10 @@ public sealed class PersonDetectionQueueService : IAsyncDisposable
         session.AddPending();
 
         var candidate = new PathWorkState(
-            new PersonDetectionJob(normalizedPendingPath, normalizedFinalPath));
+            new PersonDetectionJob(
+                normalizedPendingPath,
+                normalizedFinalPath,
+                Math.Clamp(confidence, 0.10, 0.95)));
         var sharedState = _pathStates.GetOrAdd(normalizedPendingPath, candidate);
         _ = ObservePathForSessionAsync(session, sharedState.Completion.Task);
 
@@ -99,6 +106,7 @@ public sealed class PersonDetectionQueueService : IAsyncDisposable
     /// </summary>
     public async Task<PersonDetectionSessionResult> RecoverPendingFilesAsync(
         string downloadRoot,
+        double confidence = 0.60,
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(downloadRoot) || !Directory.Exists(downloadRoot))
@@ -134,7 +142,7 @@ public sealed class PersonDetectionQueueService : IAsyncDisposable
                 continue;
 
             var finalPath = pendingPath[..^PendingSuffix.Length];
-            Enqueue(sessionId, pendingPath, finalPath);
+            Enqueue(sessionId, pendingPath, finalPath, confidence);
             queued++;
         }
 
@@ -222,6 +230,7 @@ public sealed class PersonDetectionQueueService : IAsyncDisposable
 
         var result = await _detector.DetectAsync(
             job.PendingPath,
+            job.Confidence,
             RaiseLog,
             cancellationToken);
 
@@ -328,7 +337,10 @@ public sealed class PersonDetectionQueueService : IAsyncDisposable
         _shutdownCts.Dispose();
     }
 
-    private sealed record PersonDetectionJob(string PendingPath, string FinalPath);
+    private sealed record PersonDetectionJob(
+        string PendingPath,
+        string FinalPath,
+        double Confidence);
 
     private sealed class PathWorkState
     {

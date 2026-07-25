@@ -1,4 +1,4 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using System.Text.RegularExpressions;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
@@ -77,6 +77,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
     private decimal _downloadSpeedLimitMBps;
     private bool _checkVideoAudio;
     private bool _enablePersonDetection;
+    private double _personDetectionConfidence = 0.60;
     private bool _stopOnDuplicateThreshold = true;
     private int _duplicateStopThreshold = 20;
     private string _pushPlusToken = string.Empty;
@@ -151,6 +152,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
         _downloadSpeedLimitMBps = Math.Clamp(settings.DownloadSpeedLimitMBps, 0m, 10000m);
         _checkVideoAudio = settings.CheckVideoAudio;
         _enablePersonDetection = settings.EnablePersonDetection;
+        _personDetectionConfidence = Math.Clamp(settings.PersonDetectionConfidence, 0.10, 0.95);
         _stopOnDuplicateThreshold = settings.StopOnDuplicateThreshold;
         _duplicateStopThreshold = Math.Clamp(settings.DuplicateStopThreshold, 1, 10000);
         _pushPlusToken = settings.PushPlusToken ?? string.Empty;
@@ -516,6 +518,23 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
                 AddPersonDetectionModelLog(modelInfo);
         }
     }
+
+    public double PersonDetectionConfidence
+    {
+        get => _personDetectionConfidence;
+        set
+        {
+            var normalized = Math.Round(Math.Clamp(value, 0.10, 0.95), 2);
+            if (!SetProperty(ref _personDetectionConfidence, normalized))
+                return;
+
+            OnPropertyChanged(nameof(PersonDetectionConfidenceText));
+            QueueSettingsSave();
+        }
+    }
+
+    public string PersonDetectionConfidenceText
+        => $"{PersonDetectionConfidence * 100:0}%";
 
     public bool StopOnDuplicateThreshold
     {
@@ -1076,6 +1095,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
         AddLog("点击开始采集。程序会自动刷新作者主页、下载当前批次，然后继续滚动。");
         if (DownloadSpeedLimitMBps > 0)
             AddLog($"已启用下载速度限制：{DownloadSpeedLimitMBps:0.##} MB/s（所有作品媒体共享该上限）。");
+        if (EnablePersonDetection)
+            AddLog($"人像检测置信度：{PersonDetectionConfidenceText}。");
         try
         {
             var options = new CrawlerDownloadOptions(
@@ -1086,7 +1107,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
                 EnablePersonDetection,
                 StopOnDuplicateThreshold,
                 DuplicateStopThreshold,
-                DownloadSpeedLimitMBps);
+                DownloadSpeedLimitMBps,
+                PersonDetectionConfidence);
             var result = await _coordinator.StartAsync(
                 capturePlatformId,
                 DownloadRoot,
@@ -1227,6 +1249,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
                 DownloadMusic = DownloadMusic,
                 CheckVideoAudio = CheckVideoAudio,
                 EnablePersonDetection = EnablePersonDetection,
+                PersonDetectionConfidence = PersonDetectionConfidence,
                 StopOnDuplicateThreshold = StopOnDuplicateThreshold,
                 DuplicateStopThreshold = DuplicateStopThreshold
             },
@@ -1329,6 +1352,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
             DownloadMusic = settings.DownloadMusic;
             CheckVideoAudio = settings.CheckVideoAudio;
             EnablePersonDetection = settings.EnablePersonDetection;
+            PersonDetectionConfidence = settings.PersonDetectionConfidence;
             StopOnDuplicateThreshold = settings.StopOnDuplicateThreshold;
             DuplicateStopThreshold = settings.DuplicateStopThreshold;
             SetTheme(settings.Theme.Equals("Dark", StringComparison.OrdinalIgnoreCase));
@@ -1769,6 +1793,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
         {
             await _coordinator.RecoverPendingPersonDetectionAsync(
                 DownloadRoot,
+                PersonDetectionConfidence,
                 CancellationToken.None);
         }
         catch (Exception ex)
@@ -2152,6 +2177,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
             DownloadSpeedLimitMBps = DownloadSpeedLimitMBps,
             CheckVideoAudio = CheckVideoAudio,
             EnablePersonDetection = EnablePersonDetection,
+            PersonDetectionConfidence = PersonDetectionConfidence,
             StopOnDuplicateThreshold = StopOnDuplicateThreshold,
             DuplicateStopThreshold = DuplicateStopThreshold,
             PushPlusToken = PushPlusToken,

@@ -10,6 +10,7 @@ public interface IPersonImageDetector : IAsyncDisposable
 
     Task<PersonImageDetectionResult> DetectAsync(
         string imagePath,
+        double confidence,
         Action<string>? log = null,
         CancellationToken cancellationToken = default);
 }

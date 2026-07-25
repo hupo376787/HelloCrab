@@ -1,4 +1,4 @@
-using System.Net;
+﻿using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Diagnostics;
@@ -56,8 +56,12 @@ public sealed class MediaDownloadService : IAsyncDisposable
 
     public Task<PersonDetectionSessionResult> RecoverPendingPersonDetectionAsync(
         string downloadRoot,
+        double confidence,
         CancellationToken cancellationToken = default)
-        => _personDetectionQueue.RecoverPendingFilesAsync(downloadRoot, cancellationToken);
+        => _personDetectionQueue.RecoverPendingFilesAsync(
+            downloadRoot,
+            confidence,
+            cancellationToken);
 
     public async Task DownloadWorkAsync(
         WorkItem work,
@@ -150,7 +154,8 @@ public sealed class MediaDownloadService : IAsyncDisposable
                 QueuePersonDetection(
                     imagePath,
                     options.EnablePersonDetection,
-                    personDetectionSessionId);
+                    personDetectionSessionId,
+                    options.PersonDetectionConfidence);
             }
             else
             {
@@ -194,7 +199,8 @@ public sealed class MediaDownloadService : IAsyncDisposable
                 QueuePersonDetection(
                     coverPath,
                     options.EnablePersonDetection,
-                    personDetectionSessionId);
+                    personDetectionSessionId,
+                    options.PersonDetectionConfidence);
             }
             else
             {
@@ -224,7 +230,8 @@ public sealed class MediaDownloadService : IAsyncDisposable
     private void QueuePersonDetection(
         string imagePath,
         bool enabled,
-        Guid? sessionId)
+        Guid? sessionId,
+        double confidence)
     {
         if (!enabled)
             return;
@@ -247,7 +254,11 @@ public sealed class MediaDownloadService : IAsyncDisposable
 
         try
         {
-            _personDetectionQueue.Enqueue(sessionId.Value, imagePath, finalPath);
+            _personDetectionQueue.Enqueue(
+                sessionId.Value,
+                imagePath,
+                finalPath,
+                confidence);
             RaiseLog($"已加入后台人像检测队列：{Path.GetFileName(finalPath)}");
         }
         catch (Exception ex)
