@@ -4,7 +4,8 @@ public sealed record FfmpegInstallProgress(
     string Message,
     long BytesReceived = 0,
     long? TotalBytes = null,
-    double BytesPerSecond = 0)
+    double BytesPerSecond = 0,
+    string? DownloadUrl = null)
 {
     public int? Percentage => TotalBytes is > 0
         ? (int)Math.Clamp(BytesReceived * 100L / TotalBytes.Value, 0, 100)

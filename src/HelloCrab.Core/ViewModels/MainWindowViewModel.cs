@@ -754,6 +754,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
             "正在准备 Chromium 下载…");
 
         var startedAt = DateTimeOffset.Now;
+        var loggedDownloadUrls = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var progress = new Progress<ChromiumInstallProgress>(item =>
         {
             IsChromiumInstallProgressIndeterminate = item.Percent is null;
@@ -761,6 +762,12 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
                 ChromiumInstallProgressPercent = Math.Clamp(percent, 0d, 100d);
 
             ChromiumInstallProgressText = BuildChromiumInstallProgressText(item);
+
+            if (!string.IsNullOrWhiteSpace(item.DownloadUrl)
+                && loggedDownloadUrls.Add(item.DownloadUrl))
+            {
+                AddLog($"{item.Stage} 下载地址：{item.DownloadUrl}");
+            }
         });
 
         try
@@ -933,11 +940,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
             StatusText = "正在后台下载并安装 FFmpeg…";
             AddLog("开始访问 gyan.dev FFmpeg Windows 构建页，并下载 release essentials ZIP。界面会实时显示下载百分比、大小和速度。");
 
+            var loggedDownloadUrls = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var progress = new Progress<FfmpegInstallProgress>(item =>
             {
-                var isDownloading = item.BytesReceived > 0;
-                IsFfmpegInstallProgressIndeterminate =
-                    !isDownloading || item.Percentage is null;
+                IsFfmpegInstallProgressIndeterminate = item.TotalBytes is not > 0;
 
                 if (item.Percentage is { } percentage)
                 {
@@ -948,6 +954,12 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
                 FfmpegInstallProgressText =
                     BuildFfmpegInstallProgressText(item);
                 FfmpegInstallStatusText = item.Message;
+
+                if (!string.IsNullOrWhiteSpace(item.DownloadUrl)
+                    && loggedDownloadUrls.Add(item.DownloadUrl))
+                {
+                    AddLog($"FFmpeg 下载地址：{item.DownloadUrl}");
+                }
             });
 
             var result = await _ffmpegInstaller.InstallAsync(progress);
