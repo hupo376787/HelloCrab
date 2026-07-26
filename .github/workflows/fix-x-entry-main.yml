@@ -1,0 +1,43 @@
+name: Fix X entry scope on main
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Fix duplicate local variable
+        shell: python
+        run: |
+          from pathlib import Path
+
+          path = Path('src/HelloCrab.Core/Sites/X/XSiteAdapter.cs')
+          text = path.read_text(encoding='utf-8')
+          old = '''                    if (TryObject(instruction, "entry", out var entry))
+                        ProcessEntry(entry, tweets, ref bottomCursor);'''
+          new = '''                    if (TryObject(instruction, "entry", out var singleEntry))
+                        ProcessEntry(singleEntry, tweets, ref bottomCursor);'''
+          if old not in text:
+              raise SystemExit('Target code was not found.')
+          path.write_text(text.replace(old, new, 1), encoding='utf-8')
+
+      - name: Commit fix and clean up
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/fix-x-entry-main.yml
+          git add src/HelloCrab.Core/Sites/X/XSiteAdapter.cs
+          git commit -m "Fix X timeline entry variable scope"
+          git push origin HEAD:main
