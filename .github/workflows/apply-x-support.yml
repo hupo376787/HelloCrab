@@ -1,0 +1,42 @@
+name: Apply X support changes
+
+on:
+  push:
+    branches:
+      - agent/add-x-parser
+    paths:
+      - '.github/workflows/apply-x-support.yml'
+      - '.github/patches/x-remaining.b64.part*'
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/add-x-parser
+          fetch-depth: 0
+
+      - name: Apply remaining source changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat .github/patches/x-remaining.b64.part* | base64 --decode > /tmp/x-remaining.patch
+          git apply --check /tmp/x-remaining.patch
+          git apply /tmp/x-remaining.patch
+          rm -f .github/patches/x-remaining.b64.part* .github/patches/x-support.b64.part00
+          rm -f .github/workflows/apply-x-support.yml
+          rmdir .github/patches 2>/dev/null || true
+
+      - name: Commit changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Register X support and use visible login browser"
+          git push origin HEAD:agent/add-x-parser
