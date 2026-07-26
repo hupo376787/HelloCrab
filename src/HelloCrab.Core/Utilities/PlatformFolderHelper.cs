@@ -57,6 +57,13 @@ public static class PlatformFolderHelper
             return "weibo";
         }
 
+        if (value.Equals("x", StringComparison.OrdinalIgnoreCase)
+            || value.Equals("twitter", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("Twitter", StringComparison.OrdinalIgnoreCase))
+        {
+            return "x";
+        }
+
         if (value.Equals("meipian", StringComparison.OrdinalIgnoreCase)
             || value.Contains("美篇", StringComparison.Ordinal))
         {

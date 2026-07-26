@@ -1,4 +1,4 @@
-﻿{
+{
   "code": "ja-JP",
   "displayName": "日本語",
   "sortOrder": 20,
@@ -127,6 +127,7 @@
     "Platform.pinterest": "Pinterest",
     "Platform.kuaishou": "Kuaishou Web",
     "Platform.xiaohongshu": "Xiaohongshu Web",
+    "Platform.x": "X (Twitter)",
     "Platform.weibo": "Weibo Web",
     "Platform.meipian": "Meipian Web",
     "Download.SelectFolderDialog": "ダウンロード先を選択",

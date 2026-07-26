@@ -1,4 +1,4 @@
-﻿{
+{
   "code": "zh-CN",
   "displayName": "简体中文",
   "sortOrder": 0,
@@ -127,6 +127,7 @@
     "Platform.pinterest": "Pinterest",
     "Platform.kuaishou": "快手网页版",
     "Platform.xiaohongshu": "小红书网页版",
+    "Platform.x": "X（Twitter）",
     "Platform.weibo": "微博网页版",
     "Platform.meipian": "美篇网页版",
     "Download.SelectFolderDialog": "选择下载目录",
