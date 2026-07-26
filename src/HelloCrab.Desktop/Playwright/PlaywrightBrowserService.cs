@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using HelloCrab.Core.Services.Browser;
 using HelloCrab.Desktop.Chromium;
@@ -67,17 +68,23 @@ public sealed class PlaywrightBrowserService : IBrowserAutomationService
         try
         {
             StopAuthenticationMonitorCore();
-            _requestedHeadless = headless;
+            var forceVisible = RequiresVisibleBrowser(normalizedUrl);
+            var effectiveHeadless = headless && !forceVisible;
+            _requestedHeadless = effectiveHeadless;
             _loginRecoveryActive = false;
             _targetUrl = normalizedUrl;
 
-            await EnsureContextCoreAsync(headless, cancellationToken);
+            await EnsureContextCoreAsync(effectiveHeadless, cancellationToken);
             await NavigateCoreAsync(
                 normalizedUrl,
-                headless ? "无头浏览器已启动" : "浏览器已启动，请扫码登录并进入作者主页",
+                forceVisible && headless
+                    ? "X 登录与采集使用显示浏览器，以保留正常登录流程和持久化会话"
+                    : effectiveHeadless
+                        ? "无头浏览器已启动"
+                        : "浏览器已启动，请登录并进入作者主页",
                 cancellationToken);
 
-            if (headless && await IsLoginRequiredAsync(GetActivePage(), cancellationToken))
+            if (effectiveHeadless && await IsLoginRequiredAsync(GetActivePage(), cancellationToken))
                 await EnterVisibleLoginRecoveryCoreAsync(cancellationToken);
 
             StartAuthenticationMonitorCore();
@@ -98,8 +105,21 @@ public sealed class PlaywrightBrowserService : IBrowserAutomationService
             if (_context is null)
                 throw new InvalidOperationException("浏览器尚未启动。");
 
+            var forceVisible = RequiresVisibleBrowser(normalizedUrl);
+            if (forceVisible)
+            {
+                StopAuthenticationMonitorCore();
+                _requestedHeadless = false;
+                _loginRecoveryActive = false;
+                if (_actualHeadless)
+                    await RestartContextCoreAsync(false, cancellationToken);
+            }
+
             _targetUrl = normalizedUrl;
-            await NavigateCoreAsync(normalizedUrl, "页面已打开", cancellationToken);
+            await NavigateCoreAsync(
+                normalizedUrl,
+                forceVisible ? "X 已使用显示浏览器打开" : "页面已打开",
+                cancellationToken);
 
             if (_requestedHeadless
                 && _actualHeadless
@@ -468,7 +488,7 @@ public sealed class PlaywrightBrowserService : IBrowserAutomationService
             {
                 Headless = headless,
                 ExecutablePath = chromiumExecutablePath,
-                Locale = "zh-CN",
+                Locale = ResolveBrowserLocale(),
                 AcceptDownloads = true,
                 ViewportSize = headless
                     ? new ViewportSize { Width = 1440, Height = 900 }
@@ -1209,6 +1229,21 @@ public sealed class PlaywrightBrowserService : IBrowserAutomationService
            && (uri.Host.Equals("douyin.com", StringComparison.OrdinalIgnoreCase)
                || uri.Host.EndsWith(".douyin.com", StringComparison.OrdinalIgnoreCase));
 
+
+    private static bool RequiresVisibleBrowser(string? url)
+        => Uri.TryCreate(url, UriKind.Absolute, out var uri)
+           && (uri.Host.Equals("x.com", StringComparison.OrdinalIgnoreCase)
+               || uri.Host.EndsWith(".x.com", StringComparison.OrdinalIgnoreCase)
+               || uri.Host.Equals("twitter.com", StringComparison.OrdinalIgnoreCase)
+               || uri.Host.EndsWith(".twitter.com", StringComparison.OrdinalIgnoreCase));
+
+    private static string ResolveBrowserLocale()
+    {
+        var locale = CultureInfo.CurrentUICulture.Name;
+        return string.IsNullOrWhiteSpace(locale)
+            ? "zh-CN"
+            : locale.Replace('_', '-');
+    }
 
     private static bool IsTargetClosedError(string? message)
     {
