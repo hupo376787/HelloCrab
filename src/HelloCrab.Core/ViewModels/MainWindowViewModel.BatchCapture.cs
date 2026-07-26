@@ -15,6 +15,7 @@ public sealed partial class MainWindowViewModel
             if (SetProperty(ref _isManualBatchRunning, value))
             {
                 OnPropertyChanged(nameof(CanStopCurrentTask));
+                OnPropertyChanged(nameof(CanStartManualBatchCapture));
                 RefreshCommands();
             }
         }
@@ -30,9 +31,7 @@ public sealed partial class MainWindowViewModel
     {
         if (!CanStartManualBatchCapture)
         {
-            AddLog(_localization.Get(
-                "Batch.Log.Busy",
-                "当前已有任务运行，无法开始批量采集。"));
+            AddLog(_localization.Get("Batch.Log.Busy", "当前已有任务运行，无法开始批量采集。"));
             return;
         }
 
@@ -44,9 +43,7 @@ public sealed partial class MainWindowViewModel
 
         if (lines.Length == 0)
         {
-            AddLog(_localization.Get(
-                "Batch.Log.Empty",
-                "导入的文本文件没有有效地址；空行会被自动忽略。"));
+            AddLog(_localization.Get("Batch.Log.Empty", "导入的文本文件没有有效地址；空行会被自动忽略。"));
             return;
         }
 
@@ -61,9 +58,7 @@ public sealed partial class MainWindowViewModel
 
         try
         {
-            AddLog(_localization.Format(
-                "Batch.Log.Started",
-                lines.Length));
+            AddLog(_localization.Format("Batch.Log.Started", lines.Length));
 
             for (var index = 0; index < lines.Length; index++)
             {
@@ -73,10 +68,7 @@ public sealed partial class MainWindowViewModel
                 if (string.IsNullOrWhiteSpace(url))
                 {
                     failedCount++;
-                    AddLog(_localization.Format(
-                        "Batch.Log.InvalidUrl",
-                        index + 1,
-                        sourceLine));
+                    AddLog(_localization.Format("Batch.Log.InvalidUrl", index + 1, sourceLine));
                     continue;
                 }
 
@@ -84,10 +76,7 @@ public sealed partial class MainWindowViewModel
                 if (platform is null)
                 {
                     failedCount++;
-                    AddLog(_localization.Format(
-                        "Batch.Log.UnsupportedUrl",
-                        index + 1,
-                        url));
+                    AddLog(_localization.Format("Batch.Log.UnsupportedUrl", index + 1, url));
                     continue;
                 }
 
@@ -105,10 +94,7 @@ public sealed partial class MainWindowViewModel
                     await _browser.StartAsync(url, IsHeadlessMode, cts.Token);
                     if (_browser.IsLoginRecoveryActive)
                     {
-                        AddLog(_localization.Format(
-                            "Batch.Log.LoginRequired",
-                            index + 1,
-                            platform.DisplayName));
+                        AddLog(_localization.Format("Batch.Log.LoginRequired", index + 1, platform.DisplayName));
                         break;
                     }
 
@@ -123,25 +109,22 @@ public sealed partial class MainWindowViewModel
                 catch (Exception ex)
                 {
                     failedCount++;
-                    AddLog(_localization.Format(
-                        "Batch.Log.ItemFailed",
-                        index + 1,
-                        ex.Message));
+                    AddLog(_localization.Format("Batch.Log.ItemFailed", index + 1, ex.Message));
                 }
             }
 
-            AddLog(_localization.Format(
-                "Batch.Log.Completed",
-                completedCount,
-                failedCount,
-                lines.Length));
+            if (!cts.IsCancellationRequested)
+            {
+                AddLog(_localization.Format(
+                    "Batch.Log.Completed",
+                    completedCount,
+                    failedCount,
+                    lines.Length));
+            }
         }
         catch (OperationCanceledException)
         {
-            AddLog(_localization.Format(
-                "Batch.Log.Canceled",
-                completedCount,
-                lines.Length));
+            AddLog(_localization.Format("Batch.Log.Canceled", completedCount, lines.Length));
         }
         finally
         {
@@ -169,7 +152,7 @@ public sealed partial class MainWindowViewModel
         });
     }
 
-    private void StopManualBatchCapture()
+    public void CancelManualBatchCapture()
     {
         if (!IsManualBatchRunning)
             return;
