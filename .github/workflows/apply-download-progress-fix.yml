@@ -1,0 +1,50 @@
+name: Apply download progress fix
+
+on:
+  push:
+    branches:
+      - agent/real-download-progress
+    paths:
+      - scripts/download-progress-1.patch
+      - scripts/download-progress-2.patch
+      - scripts/download-progress-3.patch
+      - .github/workflows/apply-download-progress-fix.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Apply source patches
+        shell: bash
+        run: |
+          set -euo pipefail
+          git apply --check scripts/download-progress-1.patch
+          git apply --check scripts/download-progress-2.patch
+          git apply --check scripts/download-progress-3.patch
+          git apply scripts/download-progress-1.patch
+          git apply scripts/download-progress-2.patch
+          git apply scripts/download-progress-3.patch
+
+      - name: Remove temporary patch workflow
+        shell: bash
+        run: |
+          rm scripts/download-progress-1.patch
+          rm scripts/download-progress-2.patch
+          rm scripts/download-progress-3.patch
+          rm .github/workflows/apply-download-progress-fix.yml
+
+      - name: Commit source changes
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Show real dependency download progress"
+          git push origin HEAD:agent/real-download-progress
