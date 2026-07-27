@@ -1,1 +1,1 @@
-Trigger the validated one-shot workflow for the batch state, glass dialog, and retained author display changes.
+Synchronize the open PR after the validated one-shot workflow exists on main.
