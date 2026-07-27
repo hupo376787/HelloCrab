@@ -240,6 +240,14 @@ public partial class MainWindow
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(10)
         };
+
+        // Fluent TextBox 在悬停和获得焦点时会给模板内部边框设置独立背景，
+        // 因此仅设置 Background=Transparent 不够，需要同时覆盖四种状态资源。
+        editor.Resources["TextControlBackground"] = Brushes.Transparent;
+        editor.Resources["TextControlBackgroundPointerOver"] = Brushes.Transparent;
+        editor.Resources["TextControlBackgroundFocused"] = Brushes.Transparent;
+        editor.Resources["TextControlBackgroundDisabled"] = Brushes.Transparent;
+
         ScrollViewer.SetHorizontalScrollBarVisibility(editor, ScrollBarVisibility.Disabled);
         ScrollViewer.SetVerticalScrollBarVisibility(editor, ScrollBarVisibility.Auto);
 
@@ -252,7 +260,8 @@ public partial class MainWindow
         };
         var titleHint = new TextBlock
         {
-            Text = "HelloCrab · Batch Capture",
+            Text = localization?.Get("Batch.Dialog.Subtitle", "HelloCrab · 批量采集")
+                   ?? "HelloCrab · 批量采集",
             FontSize = 11,
             Foreground = titleHintBrush,
             Margin = new Thickness(0, 2, 0, 0)
@@ -322,15 +331,15 @@ public partial class MainWindow
         {
             Text = localization?.Get(
                 "Batch.Dialog.Description",
-                "请检查并编辑待采集文本。点击“确定”解析当前文本，或点击“导入外部txt”读取文件并立即开始解析。")
-                ?? "请检查并编辑待采集文本。点击“确定”解析当前文本，或点击“导入外部txt”读取文件并立即开始解析。",
+                "请检查并编辑待采集文本。点击“确定”解析当前文本，或点击“导入外部 TXT”读取文件并立即开始解析。")
+                ?? "请检查并编辑待采集文本。点击“确定”解析当前文本，或点击“导入外部 TXT”读取文件并立即开始解析。",
             TextWrapping = TextWrapping.Wrap,
             Foreground = textSecondary
         };
 
         var importButton = new Button
         {
-            Content = localization?.Get("Batch.Dialog.Import", "导入外部txt") ?? "导入外部txt",
+            Content = localization?.Get("Batch.Dialog.Import", "导入外部 TXT") ?? "导入外部 TXT",
             MinWidth = 132,
             Height = 42,
             Padding = new Thickness(14, 0),
@@ -446,7 +455,8 @@ public partial class MainWindow
                 AllowMultiple = false,
                 FileTypeFilter = new[]
                 {
-                    new FilePickerFileType("Text files")
+                    new FilePickerFileType(
+                        localization?.Get("Batch.FileType.Text", "文本文件") ?? "文本文件")
                     {
                         Patterns = new[] { "*.txt" },
                         MimeTypes = new[] { "text/plain" }
