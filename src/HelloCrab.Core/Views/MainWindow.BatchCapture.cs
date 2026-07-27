@@ -202,15 +202,28 @@ public partial class MainWindow
         var contentBackground = new SolidColorBrush(Color.Parse(isDark ? "#C9232131" : "#D9F8F7FC"));
         var inputBackground = new SolidColorBrush(Color.Parse(isDark ? "#B52D2A3B" : "#DFFFFFFF"));
         var borderBrush = new SolidColorBrush(Color.Parse(isDark ? "#55FFFFFF" : "#331B1D2A"));
+        var titleTextBrush = new SolidColorBrush(Color.Parse(isDark ? "#FFF7F7FB" : "#FF4A355E"));
+        var titleHintBrush = new SolidColorBrush(Color.Parse(isDark ? "#D9FFFFFF" : "#B85B4770"));
 
+        // 浅色主题使用与主窗体接近的浅紫、浅粉、浅蓝半透明标题栏。
+        // 深色主题保留较深的色调，避免和正文区域失去层次。
         var titleBrush = new LinearGradientBrush
         {
             StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
             EndPoint = new RelativePoint(1, 1, RelativeUnit.Relative)
         };
-        titleBrush.GradientStops.Add(new GradientStop(Color.Parse("#D35B21B6"), 0));
-        titleBrush.GradientStops.Add(new GradientStop(Color.Parse("#D9BE185D"), 0.52));
-        titleBrush.GradientStops.Add(new GradientStop(Color.Parse("#C90369A1"), 1));
+        if (isDark)
+        {
+            titleBrush.GradientStops.Add(new GradientStop(Color.Parse("#B55B21B6"), 0));
+            titleBrush.GradientStops.Add(new GradientStop(Color.Parse("#B9BE185D"), 0.52));
+            titleBrush.GradientStops.Add(new GradientStop(Color.Parse("#AD0369A1"), 1));
+        }
+        else
+        {
+            titleBrush.GradientStops.Add(new GradientStop(Color.Parse("#F3DECDF4"), 0));
+            titleBrush.GradientStops.Add(new GradientStop(Color.Parse("#F3F0D3E5"), 0.52));
+            titleBrush.GradientStops.Add(new GradientStop(Color.Parse("#F3D5E6F4"), 1));
+        }
 
         var editor = new TextBox
         {
@@ -236,13 +249,13 @@ public partial class MainWindow
             Text = titleText,
             FontSize = 20,
             FontWeight = FontWeight.SemiBold,
-            Foreground = Brushes.White
+            Foreground = titleTextBrush
         };
         var titleHint = new TextBlock
         {
             Text = "HelloCrab · Batch Capture",
             FontSize = 11,
-            Foreground = new SolidColorBrush(Color.Parse("#D9FFFFFF")),
+            Foreground = titleHintBrush,
             Margin = new Thickness(0, 2, 0, 0)
         };
         var titlePanel = new StackPanel
@@ -266,7 +279,7 @@ public partial class MainWindow
             Padding = new Thickness(0),
             FontSize = 22,
             Background = Brushes.Transparent,
-            Foreground = Brushes.White,
+            Foreground = titleTextBrush,
             BorderThickness = new Thickness(0),
             CornerRadius = new CornerRadius(7),
             HorizontalContentAlignment = HorizontalAlignment.Center,
@@ -320,8 +333,10 @@ public partial class MainWindow
         {
             Content = localization?.Get("Batch.Dialog.Import", "导入外部txt") ?? "导入外部txt",
             MinWidth = 132,
-            Height = 40,
+            Height = 42,
+            Padding = new Thickness(14, 0),
             HorizontalContentAlignment = HorizontalAlignment.Center,
+            VerticalContentAlignment = VerticalAlignment.Center,
             Background = new SolidColorBrush(Color.Parse(isDark ? "#554A465D" : "#66FFFFFF")),
             Foreground = textPrimary,
             BorderBrush = borderBrush,
@@ -332,8 +347,10 @@ public partial class MainWindow
         {
             Content = localization?.Get("Batch.Dialog.Confirm", "确定") ?? "确定",
             MinWidth = 100,
-            Height = 40,
+            Height = 42,
+            Padding = new Thickness(14, 0),
             HorizontalContentAlignment = HorizontalAlignment.Center,
+            VerticalContentAlignment = VerticalAlignment.Center,
             Background = new SolidColorBrush(Color.Parse("#7C3AED")),
             Foreground = Brushes.White,
             BorderThickness = new Thickness(0),
