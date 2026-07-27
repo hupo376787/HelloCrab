@@ -72,7 +72,7 @@ public partial class MainWindow
 
         var button = new Button
         {
-            Classes = { "primary", "sectionAction" },
+            Classes = { "coral", "sectionAction" },
             HorizontalAlignment = HorizontalAlignment.Stretch,
             HorizontalContentAlignment = HorizontalAlignment.Center
         };
@@ -200,7 +200,6 @@ public partial class MainWindow
         var textSecondary = new SolidColorBrush(Color.Parse(isDark ? "#C3C7D4" : "#62687A"));
         var frameBackground = new SolidColorBrush(Color.Parse(isDark ? "#D91B1927" : "#E8FFFFFF"));
         var contentBackground = new SolidColorBrush(Color.Parse(isDark ? "#C9232131" : "#D9F8F7FC"));
-        var inputBackground = new SolidColorBrush(Color.Parse(isDark ? "#B52D2A3B" : "#DFFFFFFF"));
         var borderBrush = new SolidColorBrush(Color.Parse(isDark ? "#55FFFFFF" : "#331B1D2A"));
         var titleTextBrush = new SolidColorBrush(Color.Parse(isDark ? "#FFF7F7FB" : "#FF4A355E"));
         var titleHintBrush = new SolidColorBrush(Color.Parse(isDark ? "#D9FFFFFF" : "#B85B4770"));
@@ -235,7 +234,7 @@ public partial class MainWindow
                 ?? "在这里粘贴或编辑作者地址，每行一条。允许包含分享文案，程序会自动提取每行中的第一个网址。",
             MinHeight = 300,
             Padding = new Thickness(14),
-            Background = inputBackground,
+            Background = Brushes.Transparent,
             Foreground = textPrimary,
             BorderBrush = borderBrush,
             BorderThickness = new Thickness(1),
@@ -351,7 +350,7 @@ public partial class MainWindow
             Padding = new Thickness(14, 0),
             HorizontalContentAlignment = HorizontalAlignment.Center,
             VerticalContentAlignment = VerticalAlignment.Center,
-            Background = new SolidColorBrush(Color.Parse("#7C3AED")),
+            Background = new SolidColorBrush(Color.Parse("#FD6F71")),
             Foreground = Brushes.White,
             BorderThickness = new Thickness(0),
             CornerRadius = new CornerRadius(8),
