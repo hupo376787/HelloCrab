@@ -1,3 +1,5 @@
+using Avalonia.Media;
+using Avalonia.Threading;
 using HelloCrab.Core.Models;
 
 namespace HelloCrab.Core.ViewModels;
@@ -6,6 +8,9 @@ public sealed partial class MainWindowViewModel
 {
     private CancellationTokenSource? _manualBatchCts;
     private bool _isManualBatchRunning;
+    private string? _retainedAuthorName;
+    private string? _retainedAuthorAvatarUrl;
+    private IImage? _retainedAuthorAvatarImage;
 
     public bool IsManualBatchRunning
     {
@@ -53,6 +58,7 @@ public sealed partial class MainWindowViewModel
 
         IsManualBatchRunning = true;
         IsBusy = true;
+        ClearCurrentAuthorDisplayForNextCapture();
         var completedCount = 0;
         var failedCount = 0;
 
@@ -159,9 +165,23 @@ public sealed partial class MainWindowViewModel
         finally
         {
             _manualBatchCts = null;
-            IsManualBatchRunning = false;
+
+            // 先释放通用忙碌状态，再结束批量状态，确保最后一次属性通知
+            // 读取到的是最终可用状态，而不是 IsBusy=true 的中间状态。
             IsBusy = false;
+            IsManualBatchRunning = false;
+            OnPropertyChanged(nameof(CanStartManualBatchCapture));
+            OnPropertyChanged(nameof(CanStopCurrentTask));
             RefreshCommands();
+
+            // 命令和绑定可能在当前异步调用栈结束后才重新求值，
+            // 在 UI 队列尾部再刷新一次，确保两个开始按钮立即恢复。
+            Dispatcher.UIThread.Post(() =>
+            {
+                OnPropertyChanged(nameof(CanStartManualBatchCapture));
+                OnPropertyChanged(nameof(CanStopCurrentTask));
+                RefreshCommands();
+            }, DispatcherPriority.Background);
         }
     }
 
@@ -184,13 +204,58 @@ public sealed partial class MainWindowViewModel
 
     public void CancelManualBatchCapture()
     {
-        if (!IsManualBatchRunning)
+        if (!IsManualBatchRunning
+            || _manualBatchCts is not { } cts
+            || cts.IsCancellationRequested)
+        {
             return;
+        }
 
-        _manualBatchCts?.Cancel();
+        cts.Cancel();
+        _coordinator.Stop();
         AddLog(BatchText(
             "Batch.Log.CancelRequested",
             "已请求停止批量采集；当前作者停止后不会继续处理后续地址。"));
+    }
+
+    internal void ClearCurrentAuthorDisplayForNextCapture()
+    {
+        _retainedAuthorName = null;
+        _retainedAuthorAvatarUrl = null;
+        _retainedAuthorAvatarImage = null;
+        ClearCurrentAuthorAvatar();
+        CurrentAuthorName = null;
+        CurrentAuthorId = null;
+        CurrentAuthorDirectory = null;
+    }
+
+    internal void RememberCurrentAuthorDisplayBeforeCleanup()
+    {
+        _retainedAuthorName = CurrentAuthorName;
+        _retainedAuthorAvatarUrl = _currentAuthorAvatarUrl;
+        _retainedAuthorAvatarImage = CurrentAuthorAvatarImage;
+    }
+
+    internal void RestoreCurrentAuthorDisplayAfterCleanup()
+    {
+        if (string.IsNullOrWhiteSpace(_retainedAuthorName)
+            && string.IsNullOrWhiteSpace(_retainedAuthorAvatarUrl)
+            && _retainedAuthorAvatarImage is null)
+        {
+            return;
+        }
+
+        CurrentAuthorName = _retainedAuthorName;
+        _currentAuthorAvatarUrl = _retainedAuthorAvatarUrl;
+
+        if (_retainedAuthorAvatarImage is not null)
+        {
+            CurrentAuthorAvatarImage = _retainedAuthorAvatarImage;
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(_retainedAuthorAvatarUrl))
+            _ = LoadCurrentAuthorAvatarAsync(_retainedAuthorAvatarUrl);
     }
 
     private string BatchText(string key, string fallback, params object?[] arguments)
