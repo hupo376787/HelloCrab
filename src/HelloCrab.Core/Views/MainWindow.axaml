@@ -1,4 +1,4 @@
-﻿<Window
+<Window
     x:Class="HelloCrab.Core.Views.MainWindow"
     xmlns="https://github.com/avaloniaui"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -653,17 +653,32 @@
 
           <Border Grid.Row="1" Classes="card">
             <Grid ColumnDefinitions="88,8,*" ColumnSpacing="12">
-              <Border Width="88"
-                      Height="88"
-                      CornerRadius="44"
-                      Background="#22FFFFFF"
-                      BorderBrush="#40FFFFFF"
-                      BorderThickness="1"
-                      ClipToBounds="True"
-                      VerticalAlignment="Center">
-                <Image Source="{Binding CurrentAuthorAvatarImage}"
-                       Stretch="UniformToFill" />
-              </Border>
+              <StackPanel Width="88"
+                          Spacing="6"
+                          HorizontalAlignment="Center"
+                          VerticalAlignment="Center">
+                <Grid Width="88" Height="88">
+                  <Ellipse Fill="#22FFFFFF"
+                           Stroke="#40FFFFFF"
+                           StrokeThickness="1" />
+                  <Image Margin="1"
+                         Width="86"
+                         Height="86"
+                         Source="{Binding CurrentAuthorAvatarImage}"
+                         Stretch="UniformToFill"
+                         RenderOptions.BitmapInterpolationMode="HighQuality">
+                    <Image.Clip>
+                      <EllipseGeometry Rect="0,0,86,86" />
+                    </Image.Clip>
+                  </Image>
+                </Grid>
+                <TextBlock Classes="caption emojiText"
+                           Text="{Binding CurrentAuthorName}"
+                           MaxWidth="88"
+                           HorizontalAlignment="Stretch"
+                           TextAlignment="Center"
+                           TextWrapping="Wrap" />
+              </StackPanel>
               <Border Grid.Column="1" Width="8" CornerRadius="3" Background="#A78BFA" />
               <StackPanel Grid.Column="2" Spacing="5">
                 <TextBlock Classes="caption" Text="{DynamicResource Lang.Metrics.CurrentWork}" />
@@ -679,7 +694,6 @@
                            Classes="caption"
                            Text="{Binding DownloadProgressText}"
                            TextWrapping="Wrap" />
-                <TextBlock Classes="caption emojiText" Text="{Binding CurrentAuthorName}" />
               </StackPanel>
             </Grid>
           </Border>
