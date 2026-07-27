@@ -195,12 +195,14 @@ public partial class MainWindow
             LogCurrentCaptureUrl(viewModel);
             _awaitingBatchOriginalUrl = false;
         }
-        else if (!viewModel.IsCapturing
-                 && _wasCapturingForUrlLog
-                 && viewModel.IsManualBatchRunning)
+        else if (!viewModel.IsCapturing && _wasCapturingForUrlLog)
         {
-            _awaitingBatchOriginalUrl = true;
-            _lastLoggedBatchOriginalUrl = null;
+            _lastLoggedCaptureUrl = null;
+            if (viewModel.IsManualBatchRunning)
+            {
+                _awaitingBatchOriginalUrl = true;
+                _lastLoggedBatchOriginalUrl = null;
+            }
         }
 
         _wasCapturingForUrlLog = viewModel.IsCapturing;
