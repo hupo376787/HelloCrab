@@ -123,8 +123,6 @@ public partial class MainWindow
         {
             AcceptsReturn = true,
             TextWrapping = TextWrapping.Wrap,
-            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
             PlaceholderText = localization?.Get(
                 "Batch.Dialog.Placeholder",
                 "在这里粘贴或编辑作者地址，每行一条。允许包含分享文案，程序会自动提取每行中的第一个网址。")
@@ -132,6 +130,8 @@ public partial class MainWindow
             MinHeight = 300,
             Padding = new Thickness(12)
         };
+        ScrollViewer.SetHorizontalScrollBarVisibility(editor, ScrollBarVisibility.Disabled);
+        ScrollViewer.SetVerticalScrollBarVisibility(editor, ScrollBarVisibility.Auto);
 
         var title = new TextBlock
         {
