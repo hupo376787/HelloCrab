@@ -99,6 +99,14 @@ public sealed partial class MainWindowViewModel
                     }
 
                     await StartCaptureAsync();
+                    if (string.Equals(
+                            _lastCoordinatorCompletionMessage,
+                            "采集已停止",
+                            StringComparison.Ordinal))
+                    {
+                        cts.Cancel();
+                    }
+
                     cts.Token.ThrowIfCancellationRequested();
                     completedCount++;
                 }
