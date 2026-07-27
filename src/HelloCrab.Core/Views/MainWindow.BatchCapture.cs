@@ -13,6 +13,7 @@ public partial class MainWindow
 {
     private Button? _batchCaptureButton;
     private TextBlock? _batchCaptureDescription;
+    private Button? _autopilotButton;
 
     protected override void OnOpened(EventArgs e)
     {
@@ -28,15 +29,21 @@ public partial class MainWindow
             return;
         }
 
-        var startButton = this.GetVisualDescendants()
+        var buttons = this.GetVisualDescendants()
             .OfType<Button>()
-            .FirstOrDefault(button => ReferenceEquals(button.Command, viewModel.StartCaptureCommand));
+            .ToArray();
+        var startButton = buttons.FirstOrDefault(button =>
+            ReferenceEquals(button.Command, viewModel.StartCaptureCommand));
         if (startButton?.Parent is not Grid actionGrid
             || actionGrid.Parent is not StackPanel capturePanel)
         {
             Dispatcher.UIThread.Post(EnsureBatchCaptureControls, DispatcherPriority.Background);
             return;
         }
+
+        _autopilotButton = buttons.FirstOrDefault(button =>
+            ReferenceEquals(button.Command, viewModel.OpenScheduledDownloadEditorCommand));
+        viewModel.ApplyAutopilotBranding();
 
         var button = new Button
         {
@@ -86,6 +93,9 @@ public partial class MainWindow
                 "导入 TXT 文本文件，每行一个作者地址；允许空行。程序会按文件顺序逐个采集并自动下载。")
                 ?? "导入 TXT 文本文件，每行一个作者地址；允许空行。程序会按文件顺序逐个采集并自动下载。";
         }
+
+        if (_autopilotButton is not null)
+            _autopilotButton.Content = "Autopilot";
     }
 
     private async void BatchCaptureButton_Click(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
