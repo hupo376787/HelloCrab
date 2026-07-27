@@ -1,1 +1,1 @@
-Retry the temporary pull_request workflow after fixing the patch script extraction.
+Trigger the validated one-shot workflow for the batch state, glass dialog, and retained author display changes.
