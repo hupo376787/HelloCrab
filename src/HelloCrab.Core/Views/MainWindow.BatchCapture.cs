@@ -1,7 +1,9 @@
+using System.ComponentModel;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Data;
+using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
@@ -17,6 +19,9 @@ public partial class MainWindow
     private Button? _batchCaptureButton;
     private TextBlock? _batchCaptureDescription;
     private Button? _autopilotButton;
+    private Button? _batchStopButton;
+    private Button? _batchStopConfirmButton;
+    private MainWindowViewModel? _batchCaptureViewModel;
 
     protected override void OnOpened(EventArgs e)
     {
@@ -48,6 +53,23 @@ public partial class MainWindow
             ReferenceEquals(button.Command, viewModel.OpenScheduledDownloadEditorCommand));
         viewModel.ApplyAutopilotBranding();
 
+        _batchStopButton = actionGrid.Children
+            .OfType<Button>()
+            .FirstOrDefault(button => !ReferenceEquals(button, startButton));
+        if (_batchStopButton is not null)
+            _batchStopButton.Click += BatchStopButton_Click;
+
+        _batchStopConfirmButton = StopCaptureConfirmOverlay
+            .GetVisualDescendants()
+            .OfType<Button>()
+            .FirstOrDefault(button => button.Classes.Contains("coral"));
+        if (_batchStopConfirmButton is not null)
+            _batchStopConfirmButton.Click += BatchStopConfirmButton_Click;
+
+        _batchCaptureViewModel = viewModel;
+        viewModel.PropertyChanged += BatchCaptureViewModel_PropertyChanged;
+        Closed += BatchCaptureWindow_Closed;
+
         var button = new Button
         {
             Classes = { "primary", "sectionAction" },
@@ -74,6 +96,58 @@ public partial class MainWindow
 
         if (LocalizationService.Current is { } localization)
             localization.LanguageChanged += OnBatchCaptureLanguageChanged;
+    }
+
+    private void BatchCaptureWindow_Closed(object? sender, EventArgs e)
+    {
+        if (_batchCaptureViewModel is not null)
+            _batchCaptureViewModel.PropertyChanged -= BatchCaptureViewModel_PropertyChanged;
+        if (_batchStopButton is not null)
+            _batchStopButton.Click -= BatchStopButton_Click;
+        if (_batchStopConfirmButton is not null)
+            _batchStopConfirmButton.Click -= BatchStopConfirmButton_Click;
+        if (LocalizationService.Current is { } localization)
+            localization.LanguageChanged -= OnBatchCaptureLanguageChanged;
+    }
+
+    private void BatchCaptureViewModel_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName != nameof(MainWindowViewModel.IsCapturing)
+            || sender is not MainWindowViewModel viewModel)
+        {
+            return;
+        }
+
+        if (viewModel.IsCapturing)
+        {
+            // 新一轮采集真正开始时再清空上一位作者。
+            viewModel.ClearCurrentAuthorDisplayForNextCapture();
+            return;
+        }
+
+        // MainWindowViewModel 现有 finally 会紧接着清空头像。先保存显示内容，
+        // 等 finally 执行完后恢复，让用户在本次任务结束后仍能看到作者信息。
+        viewModel.RememberCurrentAuthorDisplayBeforeCleanup();
+        Dispatcher.UIThread.Post(
+            viewModel.RestoreCurrentAuthorDisplayAfterCleanup,
+            DispatcherPriority.Background);
+    }
+
+    private void BatchStopButton_Click(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        if (_batchCaptureViewModel is not { IsManualBatchRunning: true } viewModel)
+            return;
+
+        // 当前作者之间的短暂间隔里 IsCapturing=false，原 StopCaptureCommand
+        // 不可执行；此时仍允许用户打开确认框并停止剩余批量任务。
+        if (!viewModel.IsCapturing && !viewModel.IsScheduledBatchRunning)
+            StopCaptureConfirmOverlay.IsVisible = true;
+    }
+
+    private void BatchStopConfirmButton_Click(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        if (_batchCaptureViewModel is { IsManualBatchRunning: true } viewModel)
+            viewModel.CancelManualBatchCapture();
     }
 
     private void OnBatchCaptureLanguageChanged(object? sender, EventArgs e)
@@ -119,6 +193,25 @@ public partial class MainWindow
     private async Task<string?> ShowBatchCaptureDialogAsync(MainWindowViewModel viewModel)
     {
         var localization = LocalizationService.Current;
+        var isDark = viewModel.IsDarkTheme;
+        var titleText = localization?.Get("Batch.Dialog.Title", "批量采集") ?? "批量采集";
+
+        var textPrimary = new SolidColorBrush(Color.Parse(isDark ? "#F7F7FB" : "#202231"));
+        var textSecondary = new SolidColorBrush(Color.Parse(isDark ? "#C3C7D4" : "#62687A"));
+        var frameBackground = new SolidColorBrush(Color.Parse(isDark ? "#D91B1927" : "#E8FFFFFF"));
+        var contentBackground = new SolidColorBrush(Color.Parse(isDark ? "#C9232131" : "#D9F8F7FC"));
+        var inputBackground = new SolidColorBrush(Color.Parse(isDark ? "#B52D2A3B" : "#DFFFFFFF"));
+        var borderBrush = new SolidColorBrush(Color.Parse(isDark ? "#55FFFFFF" : "#331B1D2A"));
+
+        var titleBrush = new LinearGradientBrush
+        {
+            StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
+            EndPoint = new RelativePoint(1, 1, RelativeUnit.Relative)
+        };
+        titleBrush.GradientStops.Add(new GradientStop(Color.Parse("#D35B21B6"), 0));
+        titleBrush.GradientStops.Add(new GradientStop(Color.Parse("#D9BE185D"), 0.52));
+        titleBrush.GradientStops.Add(new GradientStop(Color.Parse("#C90369A1"), 1));
+
         var editor = new TextBox
         {
             AcceptsReturn = true,
@@ -128,17 +221,91 @@ public partial class MainWindow
                 "在这里粘贴或编辑作者地址，每行一条。允许包含分享文案，程序会自动提取每行中的第一个网址。")
                 ?? "在这里粘贴或编辑作者地址，每行一条。允许包含分享文案，程序会自动提取每行中的第一个网址。",
             MinHeight = 300,
-            Padding = new Thickness(12)
+            Padding = new Thickness(14),
+            Background = inputBackground,
+            Foreground = textPrimary,
+            BorderBrush = borderBrush,
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(10)
         };
         ScrollViewer.SetHorizontalScrollBarVisibility(editor, ScrollBarVisibility.Disabled);
         ScrollViewer.SetVerticalScrollBarVisibility(editor, ScrollBarVisibility.Auto);
 
         var title = new TextBlock
         {
-            Text = localization?.Get("Batch.Dialog.Title", "批量采集") ?? "批量采集",
-            FontSize = 22,
-            FontWeight = FontWeight.SemiBold
+            Text = titleText,
+            FontSize = 20,
+            FontWeight = FontWeight.SemiBold,
+            Foreground = Brushes.White
         };
+        var titleHint = new TextBlock
+        {
+            Text = "HelloCrab · Batch Capture",
+            FontSize = 11,
+            Foreground = new SolidColorBrush(Color.Parse("#D9FFFFFF")),
+            Margin = new Thickness(0, 2, 0, 0)
+        };
+        var titlePanel = new StackPanel
+        {
+            Margin = new Thickness(18, 0, 0, 0),
+            Spacing = 0,
+            VerticalAlignment = VerticalAlignment.Center,
+            Children =
+            {
+                title,
+                titleHint
+            }
+        };
+
+        var closeButton = new Button
+        {
+            Content = "×",
+            Width = 44,
+            Height = 40,
+            Margin = new Thickness(0, 0, 8, 0),
+            Padding = new Thickness(0),
+            FontSize = 22,
+            Background = Brushes.Transparent,
+            Foreground = Brushes.White,
+            BorderThickness = new Thickness(0),
+            CornerRadius = new CornerRadius(7),
+            HorizontalContentAlignment = HorizontalAlignment.Center,
+            VerticalContentAlignment = VerticalAlignment.Center
+        };
+
+        Window? dialog = null;
+        var dragRegion = new Border
+        {
+            Background = Brushes.Transparent,
+            Child = titlePanel
+        };
+        dragRegion.PointerPressed += (_, pointerEvent) =>
+        {
+            if (dialog is null)
+                return;
+
+            var point = pointerEvent.GetCurrentPoint(dragRegion);
+            if (!point.Properties.IsLeftButtonPressed)
+                return;
+
+            dialog.BeginMoveDrag(pointerEvent);
+            pointerEvent.Handled = true;
+        };
+
+        var titleBarGrid = new Grid();
+        titleBarGrid.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(1, GridUnitType.Star)));
+        titleBarGrid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
+        titleBarGrid.Children.Add(dragRegion);
+        Grid.SetColumn(closeButton, 1);
+        titleBarGrid.Children.Add(closeButton);
+
+        var titleBar = new Border
+        {
+            Height = 66,
+            Background = titleBrush,
+            Child = titleBarGrid
+        };
+
         var description = new TextBlock
         {
             Text = localization?.Get(
@@ -146,16 +313,7 @@ public partial class MainWindow
                 "请检查并编辑待采集文本。点击“确定”解析当前文本，或点击“导入外部txt”读取文件并立即开始解析。")
                 ?? "请检查并编辑待采集文本。点击“确定”解析当前文本，或点击“导入外部txt”读取文件并立即开始解析。",
             TextWrapping = TextWrapping.Wrap,
-            Foreground = new SolidColorBrush(Color.Parse("#8B95A7"))
-        };
-        var header = new StackPanel
-        {
-            Spacing = 6,
-            Children =
-            {
-                title,
-                description
-            }
+            Foreground = textSecondary
         };
 
         var importButton = new Button
@@ -163,7 +321,12 @@ public partial class MainWindow
             Content = localization?.Get("Batch.Dialog.Import", "导入外部txt") ?? "导入外部txt",
             MinWidth = 132,
             Height = 40,
-            HorizontalContentAlignment = HorizontalAlignment.Center
+            HorizontalContentAlignment = HorizontalAlignment.Center,
+            Background = new SolidColorBrush(Color.Parse(isDark ? "#554A465D" : "#66FFFFFF")),
+            Foreground = textPrimary,
+            BorderBrush = borderBrush,
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(8)
         };
         var confirmButton = new Button
         {
@@ -173,6 +336,8 @@ public partial class MainWindow
             HorizontalContentAlignment = HorizontalAlignment.Center,
             Background = new SolidColorBrush(Color.Parse("#7C3AED")),
             Foreground = Brushes.White,
+            BorderThickness = new Thickness(0),
+            CornerRadius = new CornerRadius(8),
             FontWeight = FontWeight.SemiBold
         };
         var buttons = new StackPanel
@@ -194,30 +359,66 @@ public partial class MainWindow
         contentGrid.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
         contentGrid.RowDefinitions.Add(new RowDefinition(new GridLength(1, GridUnitType.Star)));
         contentGrid.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
-        contentGrid.Children.Add(header);
+        contentGrid.Children.Add(description);
         Grid.SetRow(editor, 1);
         contentGrid.Children.Add(editor);
         Grid.SetRow(buttons, 2);
         contentGrid.Children.Add(buttons);
 
-        var dialog = new Window
+        var contentBorder = new Border
         {
-            Title = localization?.Get("Batch.Dialog.Title", "批量采集") ?? "批量采集",
-            Width = 760,
-            Height = 560,
-            MinWidth = 560,
-            MinHeight = 420,
+            Padding = new Thickness(24),
+            Background = contentBackground,
+            Child = contentGrid
+        };
+
+        var rootGrid = new Grid();
+        rootGrid.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
+        rootGrid.RowDefinitions.Add(new RowDefinition(new GridLength(1, GridUnitType.Star)));
+        rootGrid.Children.Add(titleBar);
+        Grid.SetRow(contentBorder, 1);
+        rootGrid.Children.Add(contentBorder);
+
+        var frame = new Border
+        {
+            Margin = new Thickness(1),
+            CornerRadius = new CornerRadius(14),
+            ClipToBounds = true,
+            Background = frameBackground,
+            BorderBrush = borderBrush,
+            BorderThickness = new Thickness(1),
+            Child = rootGrid
+        };
+
+        dialog = new Window
+        {
+            Title = titleText,
+            Width = 780,
+            Height = 580,
+            MinWidth = 620,
+            MinHeight = 460,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            CanResize = true,
+            CanResize = false,
             ShowInTaskbar = false,
-            Content = new Border
+            WindowDecorations = WindowDecorations.None,
+            ExtendClientAreaToDecorationsHint = true,
+            Background = Brushes.Transparent,
+            TransparencyLevelHint = new[]
             {
-                Padding = new Thickness(24),
-                Child = contentGrid
-            }
+                WindowTransparencyLevel.AcrylicBlur,
+                WindowTransparencyLevel.Blur,
+                WindowTransparencyLevel.Transparent
+            },
+            Content = frame
         };
 
         dialog.Opened += (_, _) => editor.Focus();
+        dialog.KeyDown += (_, keyEvent) =>
+        {
+            if (keyEvent.Key == Key.Escape)
+                dialog.Close((string?)null);
+        };
+        closeButton.Click += (_, _) => dialog.Close((string?)null);
         confirmButton.Click += (_, _) => dialog.Close(editor.Text ?? string.Empty);
         importButton.Click += async (_, _) =>
         {
