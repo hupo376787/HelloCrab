@@ -1,7 +1,6 @@
 using System.Collections.Specialized;
 using Avalonia;
 using Avalonia.Threading;
-using HelloCrab.Core.Models;
 using HelloCrab.Core.ViewModels;
 
 namespace HelloCrab.Core.Views;
@@ -108,17 +107,17 @@ public partial class MainWindow
         _isRestoringHistoryOrder = true;
         try
         {
-            for (var targetIndex = 0; targetIndex < desiredIds.Length; targetIndex++)
-            {
-                var desiredId = desiredIds[targetIndex];
-                var currentIndex = viewModel.DownloadHistory
-                    .Select((item, index) => (item.Id, index))
-                    .FirstOrDefault(pair => pair.Id == desiredId)
-                    .index;
+            ReorderHistoryCollection(viewModel.DownloadHistory, desiredIds);
 
-                if (currentIndex != targetIndex)
-                    viewModel.DownloadHistory.Move(currentIndex, targetIndex);
-            }
+            // 历史列表实际绑定 FilteredDownloadHistory。同步调整当前可见项目，
+            // 避免完整集合已经恢复但搜索/收藏结果仍短暂显示“最近作者置顶”。
+            var visibleIds = viewModel.FilteredDownloadHistory
+                .Select(item => item.Id)
+                .ToHashSet();
+            var desiredVisibleIds = desiredIds
+                .Where(visibleIds.Contains)
+                .ToArray();
+            ReorderHistoryCollection(viewModel.FilteredDownloadHistory, desiredVisibleIds);
 
             for (var index = 0; index < viewModel.DownloadHistory.Count; index++)
                 viewModel.DownloadHistory[index].SortOrder = index;
@@ -134,6 +133,36 @@ public partial class MainWindow
         // 覆盖下载服务刚才自动写入的“最近作者置顶”顺序。
         // 此后只有用户拖动、添加新作者或删除作者才会真正改变持久化顺序。
         _ = viewModel.PersistHistoryOrderAsync();
+    }
+
+    private static void ReorderHistoryCollection(
+        IList<HelloCrab.Core.Models.DownloadHistoryItem> collection,
+        IReadOnlyList<int> desiredIds)
+    {
+        for (var targetIndex = 0; targetIndex < desiredIds.Count; targetIndex++)
+        {
+            var currentIndex = -1;
+            for (var index = targetIndex; index < collection.Count; index++)
+            {
+                if (collection[index].Id != desiredIds[targetIndex])
+                    continue;
+
+                currentIndex = index;
+                break;
+            }
+
+            if (currentIndex >= 0 && currentIndex != targetIndex)
+            {
+                if (collection is System.Collections.ObjectModel.ObservableCollection<HelloCrab.Core.Models.DownloadHistoryItem> observable)
+                    observable.Move(currentIndex, targetIndex);
+                else
+                {
+                    var item = collection[currentIndex];
+                    collection.RemoveAt(currentIndex);
+                    collection.Insert(targetIndex, item);
+                }
+            }
+        }
     }
 
     private void RememberCurrentHistoryOrder()
