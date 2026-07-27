@@ -1,0 +1,44 @@
+name: Apply batch state and glass fixes fast
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 0
+          token: ${{ github.token }}
+
+      - name: Reuse patch script from validation workflow
+        shell: bash
+        run: |
+          awk '
+            /python3 - <<'"'"'PY'"'"'/ { capture=1; next }
+            capture && /^          PY$/ { exit }
+            capture { sub(/^          /, ""); print }
+          ' .github/workflows/apply-batch-state-glass-fix.yml > "$RUNNER_TEMP/apply-fix.py"
+          python3 "$RUNNER_TEMP/apply-fix.py"
+
+      - name: Commit fixes
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/apply-batch-state-glass-fix.yml
+          git rm .github/workflows/apply-batch-state-glass-fast.yml
+          git add src/HelloCrab.Core/ViewModels/MainWindowViewModel.cs
+          git add src/HelloCrab.Core/ViewModels/MainWindowViewModel.BatchCapture.cs
+          git add src/HelloCrab.Core/ViewModels/MainWindowViewModel.Scheduling.cs
+          git add src/HelloCrab.Core/Views/MainWindow.BatchCapture.cs
+          git commit -m "Fix batch stop state and style batch dialog"
+          git push origin HEAD:main
