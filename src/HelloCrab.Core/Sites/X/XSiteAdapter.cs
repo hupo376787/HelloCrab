@@ -391,8 +391,8 @@ public sealed partial class XSiteAdapter : ISiteAdapter
                         foreach (var entry in entries.EnumerateArray())
                             ProcessEntry(entry, tweets, ref bottomCursor);
                     }
-                    if (TryObject(instruction, "entry", out var entry))
-                        ProcessEntry(entry, tweets, ref bottomCursor);
+                    if (TryObject(instruction, "entry", out var singleEntry))
+                        ProcessEntry(singleEntry, tweets, ref bottomCursor);
                 }
             }
 
