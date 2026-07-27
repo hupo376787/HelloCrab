@@ -24,12 +24,21 @@ jobs:
       - name: Reuse patch script from validation workflow
         shell: bash
         run: |
-          awk '
-            /python3 - <<'"'"'PY'"'"'/ { capture=1; next }
-            capture && /^          PY$/ { exit }
-            capture { sub(/^          /, ""); print }
-          ' .github/workflows/apply-batch-state-glass-fix.yml > "$RUNNER_TEMP/apply-fix.py"
-          python3 "$RUNNER_TEMP/apply-fix.py"
+          python3 - <<'EXTRACT'
+          from pathlib import Path
+
+          source = Path('.github/workflows/apply-batch-state-glass-fix.yml').read_text(encoding='utf-8')
+          start_marker = "          python3 - <<'PY'\n"
+          end_marker = "\n          PY\n"
+          start = source.index(start_marker) + len(start_marker)
+          end = source.index(end_marker, start)
+          lines = source[start:end].splitlines()
+          script = '\n'.join(line[10:] if line.startswith('          ') else line for line in lines) + '\n'
+          output = Path('/tmp/apply-batch-state-glass-fix.py')
+          output.write_text(script, encoding='utf-8')
+          print(f'Extracted {len(script.splitlines())} Python lines to {output}.')
+          EXTRACT
+          python3 /tmp/apply-batch-state-glass-fix.py
 
       - name: Commit fixes
         shell: bash
