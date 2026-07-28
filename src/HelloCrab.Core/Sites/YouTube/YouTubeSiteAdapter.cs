@@ -526,19 +526,7 @@ public sealed class YouTubeSiteAdapter : ISiteAdapter, ISiteManagedDownloadAdapt
             return;
         }
 
-        using var request = new HttpRequestMessage(HttpMethod.Get, coverUrl);
-        request.Headers.UserAgent.ParseAdd(
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/150 Safari/537.36");
-        request.Headers.Referrer = new Uri(work.SourceUrl);
-        using var response = await ImageHttpClient.SendAsync(
-            request,
-            HttpCompletionOption.ResponseHeadersRead,
-            cancellationToken);
-        response.EnsureSuccessStatusCode();
-
-        var extension = ResolveImageExtension(
-            response.Content.Headers.ContentType,
-            coverUrl);
+        var extension = ResolveImageExtensionFromUrl(coverUrl);
         var coverPath = Path.Combine(authorFolder, baseName + "_cover" + extension);
         if (IsUsableFile(coverPath))
         {
@@ -550,16 +538,35 @@ public sealed class YouTubeSiteAdapter : ISiteAdapter, ISiteManagedDownloadAdapt
         var partPath = coverPath + ".part";
         try
         {
-            await using var input = await response.Content.ReadAsStreamAsync(cancellationToken);
-            await using var output = new FileStream(
-                partPath,
-                FileMode.Create,
-                FileAccess.Write,
-                FileShare.None,
-                128 * 1024,
-                FileOptions.Asynchronous | FileOptions.SequentialScan);
-            await input.CopyToAsync(output, cancellationToken);
-            await output.FlushAsync(cancellationToken);
+            using var request = new HttpRequestMessage(HttpMethod.Get, coverUrl);
+            request.Headers.UserAgent.ParseAdd(
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/150 Safari/537.36");
+            request.Headers.Referrer = new Uri(work.SourceUrl);
+            using var response = await ImageHttpClient.SendAsync(
+                request,
+                HttpCompletionOption.ResponseHeadersRead,
+                cancellationToken);
+            response.EnsureSuccessStatusCode();
+
+            extension = ResolveImageExtension(
+                response.Content.Headers.ContentType,
+                coverUrl);
+            coverPath = Path.Combine(authorFolder, baseName + "_cover" + extension);
+            partPath = coverPath + ".part";
+
+            await using (var input = await response.Content.ReadAsStreamAsync(cancellationToken))
+            await using (var output = new FileStream(
+                             partPath,
+                             FileMode.Create,
+                             FileAccess.Write,
+                             FileShare.None,
+                             128 * 1024,
+                             FileOptions.Asynchronous | FileOptions.SequentialScan))
+            {
+                await input.CopyToAsync(output, cancellationToken);
+                await output.FlushAsync(cancellationToken);
+            }
+
             File.Move(partPath, coverPath, true);
             ApplyPublishedTimestamp(coverPath, publishedAt);
             log($"封面下载完成：{Path.GetFileName(coverPath)}");
@@ -600,7 +607,11 @@ public sealed class YouTubeSiteAdapter : ISiteAdapter, ISiteManagedDownloadAdapt
         if (mediaType == "image/webp") return ".webp";
         if (mediaType == "image/gif") return ".gif";
         if (mediaType is "image/avif" or "image/avif-sequence") return ".avif";
+        return ResolveImageExtensionFromUrl(url);
+    }
 
+    private static string ResolveImageExtensionFromUrl(string url)
+    {
         if (Uri.TryCreate(url, UriKind.Absolute, out var uri))
         {
             var extension = Path.GetExtension(uri.AbsolutePath).ToLowerInvariant();
