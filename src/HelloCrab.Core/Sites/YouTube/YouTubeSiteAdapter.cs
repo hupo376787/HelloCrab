@@ -15,8 +15,8 @@ namespace HelloCrab.Core.Sites.YouTube;
 /// <summary>
 /// YouTube 公开频道视频适配器。
 ///
-/// 频道作品列表和视频元数据由 YoutubeExplode 获取；下载时分别选择最高质量的
-/// video-only 与 audio-only 流，再复用 HelloCrab 已有的 FFmpeg 处理器进行无损封装。
+/// 频道上传列表和作品元数据由 YoutubeExplode 获取；下载时分别选择最高质量的
+/// video-only 与 audio-only 流，再复用 HelloCrab 已有的 FFmpeg 处理器进行封装。
 /// </summary>
 public sealed class YouTubeSiteAdapter : ISiteAdapter, ISiteManagedDownloadAdapter
 {
@@ -79,7 +79,10 @@ public sealed class YouTubeSiteAdapter : ISiteAdapter, ISiteManagedDownloadAdapt
         try
         {
             using var youtube = new YoutubeClient();
-            var channel = ResolveChannelAsync(youtube, channelRootUrl)
+            var channel = ResolveChannelAsync(
+                    youtube,
+                    channelRootUrl,
+                    CancellationToken.None)
                 .GetAwaiter()
                 .GetResult();
             var channelId = channel.Id.ToString();
@@ -104,15 +107,6 @@ public sealed class YouTubeSiteAdapter : ISiteAdapter, ISiteManagedDownloadAdapt
 
                 var videoId = video.Id.ToString();
                 var coverUrl = video.Thumbnails.LastOrDefault()?.Url;
-                var assets = new List<MediaAsset>
-                {
-                    // 实际流由 ISiteManagedDownloadAdapter 下载；该占位项用于复用
-                    // CrawlCoordinator 的“作品包含视频”校验和完成索引逻辑。
-                    new(MediaAssetType.Video, 0, new[] { $"youtube://{videoId}" })
-                };
-                if (!string.IsNullOrWhiteSpace(coverUrl))
-                    assets.Add(new MediaAsset(MediaAssetType.Cover, 0, new[] { coverUrl }));
-
                 works.Add(new WorkItem(
                     Id,
                     videoId,
@@ -122,13 +116,13 @@ public sealed class YouTubeSiteAdapter : ISiteAdapter, ISiteManagedDownloadAdapt
                         : video.Author.ChannelTitle,
                     channelAvatarUrl,
                     string.IsNullOrWhiteSpace(video.Title) ? videoId : video.Title,
-                    video.UploadDate.ToUnixTimeSeconds(),
-                    assets,
+                    0,
+                    BuildPlaceholderAssets(videoId, coverUrl),
                     video.Url)
                 {
                     AuthorPageUrl = $"https://www.youtube.com/channel/{channelId}/videos",
                     MediaRefererUrl = video.Url,
-                    RequiresDetailResolution = false
+                    RequiresDetailResolution = true
                 });
             }
 
@@ -152,6 +146,41 @@ public sealed class YouTubeSiteAdapter : ISiteAdapter, ISiteManagedDownloadAdapt
                 null,
                 $"读取 YouTube 频道视频失败：{ex.Message}");
         }
+    }
+
+    public async Task<WorkItem?> ResolveWorkAsync(
+        WorkItem work,
+        IBrowserAutomationService browser,
+        CancellationToken cancellationToken)
+    {
+        using var youtube = new YoutubeClient();
+        var video = await youtube.Videos.GetAsync(work.WorkId, cancellationToken);
+        var authorId = video.Author.ChannelId.ToString();
+        if (!authorId.Equals(work.AuthorId, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                $"YouTube 视频作者不一致：视频作者 {authorId}，目标频道 {work.AuthorId}。");
+        }
+
+        var coverUrl = video.Thumbnails.LastOrDefault()?.Url
+                       ?? work.Assets
+                           .FirstOrDefault(asset => asset.Type == MediaAssetType.Cover)?
+                           .CandidateUrls.FirstOrDefault();
+        var sourceUrl = video.Url;
+        return work with
+        {
+            AuthorName = string.IsNullOrWhiteSpace(video.Author.ChannelTitle)
+                ? work.AuthorName
+                : video.Author.ChannelTitle,
+            Description = string.IsNullOrWhiteSpace(video.Title)
+                ? work.Description
+                : video.Title,
+            CreateTime = video.UploadDate.ToUnixTimeSeconds(),
+            Assets = BuildPlaceholderAssets(work.WorkId, coverUrl),
+            SourceUrl = sourceUrl,
+            MediaRefererUrl = sourceUrl,
+            RequiresDetailResolution = false
+        };
     }
 
     public Task ScrollNextAsync(
@@ -216,94 +245,40 @@ public sealed class YouTubeSiteAdapter : ISiteAdapter, ISiteManagedDownloadAdapt
         var manifest = await youtube.Videos.Streams.GetManifestAsync(
             work.WorkId,
             cancellationToken);
-
         var videoOnlyStreams = manifest.GetVideoOnlyStreams().ToArray();
         var audioOnlyStreams = manifest.GetAudioOnlyStreams().ToArray();
 
         if (videoOnlyStreams.Length == 0 || audioOnlyStreams.Length == 0)
         {
-            var muxedStreams = manifest.GetMuxedStreams().ToArray();
-            if (muxedStreams.Length == 0)
-                throw new InvalidOperationException("YouTube 未返回可用的视频流或音频流。");
-
-            var preferredMuxed = muxedStreams
-                .Where(stream => stream.Container == Container.Mp4)
-                .ToArray();
-            var muxed = (preferredMuxed.Length > 0 ? preferredMuxed : muxedStreams)
-                .GetWithHighestVideoQuality();
-            var extension = GetContainerExtension(muxed.Container);
-            var finalPath = Path.Combine(authorFolder, baseName + extension);
-            if (IsUsableFile(finalPath))
-            {
-                ApplyPublishedTimestamp(finalPath, publishedAt);
-                log($"文件已存在，跳过：{Path.GetFileName(finalPath)}");
-                await DownloadCoverIfRequestedAsync(
-                    work,
-                    authorFolder,
-                    baseName,
-                    publishedAt,
-                    options,
-                    log,
-                    cancellationToken);
-                return;
-            }
-
-            log($"YouTube 仅返回兼容合并流，正在下载：{work.Description}");
-            var progress = new InlineProgress<double>(value =>
-                ReportDownloadProgress(
-                    reportProgress,
-                    Path.GetFileName(finalPath),
-                    Math.Clamp(value * 100, 0, 100),
-                    "正在下载 YouTube 视频"));
-            try
-            {
-                await youtube.Videos.Streams.DownloadAsync(
-                    muxed,
-                    finalPath + ".part",
-                    progress,
-                    cancellationToken);
-                File.Move(finalPath + ".part", finalPath, true);
-                ApplyPublishedTimestamp(finalPath, publishedAt);
-                log($"下载完成：{Path.GetFileName(finalPath)}");
-            }
-            finally
-            {
-                TryDelete(finalPath + ".part");
-                reportProgress(new MediaTransferProgress(
-                    false,
-                    Path.GetFileName(finalPath),
-                    MediaAssetType.Video,
-                    0,
-                    null,
-                    0,
-                    null));
-            }
-
-            await DownloadCoverIfRequestedAsync(
+            await DownloadMuxedFallbackAsync(
+                youtube,
+                manifest,
                 work,
                 authorFolder,
                 baseName,
                 publishedAt,
                 options,
                 log,
+                reportProgress,
                 cancellationToken);
             return;
         }
 
-        var mp4VideoStreams = videoOnlyStreams
-            .Where(stream => stream.Container == Container.Mp4)
-            .ToArray();
-        var videoStream = (mp4VideoStreams.Length > 0 ? mp4VideoStreams : videoOnlyStreams)
-            .GetWithHighestVideoQuality();
-
+        var videoStream = videoOnlyStreams.GetWithHighestVideoQuality();
         var matchingAudioStreams = audioOnlyStreams
             .Where(stream => stream.Container == videoStream.Container)
+            .Cast<IStreamInfo>()
             .ToArray();
-        var preferredAudioStreams = matchingAudioStreams.Length > 0
+        var mp4AudioStreams = audioOnlyStreams
+            .Where(stream => stream.Container == Container.Mp4)
+            .Cast<IStreamInfo>()
+            .ToArray();
+        var audioCandidates = matchingAudioStreams.Length > 0
             ? matchingAudioStreams
-            : audioOnlyStreams.Where(stream => stream.Container == Container.Mp4).ToArray();
-        var audioStream = (preferredAudioStreams.Length > 0 ? preferredAudioStreams : audioOnlyStreams)
-            .GetWithHighestBitrate();
+            : mp4AudioStreams.Length > 0
+                ? mp4AudioStreams
+                : audioOnlyStreams.Cast<IStreamInfo>().ToArray();
+        var audioStream = audioCandidates.GetWithHighestBitrate();
 
         var outputExtension = GetContainerExtension(videoStream.Container);
         var finalOutputPath = Path.Combine(authorFolder, baseName + outputExtension);
@@ -325,7 +300,7 @@ public sealed class YouTubeSiteAdapter : ISiteAdapter, ISiteManagedDownloadAdapt
         var tempPrefix = Path.Combine(authorFolder, $".{baseName}.{Guid.NewGuid():N}");
         var tempVideoPath = tempPrefix + ".video" + GetContainerExtension(videoStream.Container);
         var tempAudioPath = tempPrefix + ".audio" + GetContainerExtension(audioStream.Container);
-        var mergedPartPath = finalOutputPath + ".part" + outputExtension;
+        var mergedPartPath = tempPrefix + ".merged" + outputExtension;
         var displayFileName = Path.GetFileName(finalOutputPath);
 
         try
@@ -379,14 +354,78 @@ public sealed class YouTubeSiteAdapter : ISiteAdapter, ISiteManagedDownloadAdapt
             TryDelete(tempVideoPath);
             TryDelete(tempAudioPath);
             TryDelete(mergedPartPath);
-            reportProgress(new MediaTransferProgress(
-                false,
-                displayFileName,
-                MediaAssetType.Video,
-                0,
-                null,
-                0,
-                null));
+            ClearProgress(reportProgress, displayFileName);
+        }
+
+        await DownloadCoverIfRequestedAsync(
+            work,
+            authorFolder,
+            baseName,
+            publishedAt,
+            options,
+            log,
+            cancellationToken);
+    }
+
+    private static async Task DownloadMuxedFallbackAsync(
+        YoutubeClient youtube,
+        StreamManifest manifest,
+        WorkItem work,
+        string authorFolder,
+        string baseName,
+        DateTimeOffset publishedAt,
+        CrawlerDownloadOptions options,
+        Action<string> log,
+        Action<MediaTransferProgress> reportProgress,
+        CancellationToken cancellationToken)
+    {
+        var muxedStreams = manifest.GetMuxedStreams().ToArray();
+        if (muxedStreams.Length == 0)
+            throw new InvalidOperationException("YouTube 未返回可用的视频流或音频流。");
+
+        var muxed = muxedStreams.GetWithHighestVideoQuality();
+        var extension = GetContainerExtension(muxed.Container);
+        var finalPath = Path.Combine(authorFolder, baseName + extension);
+        if (IsUsableFile(finalPath))
+        {
+            ApplyPublishedTimestamp(finalPath, publishedAt);
+            log($"文件已存在，跳过：{Path.GetFileName(finalPath)}");
+            await DownloadCoverIfRequestedAsync(
+                work,
+                authorFolder,
+                baseName,
+                publishedAt,
+                options,
+                log,
+                cancellationToken);
+            return;
+        }
+
+        var partPath = Path.Combine(
+            authorFolder,
+            $".{baseName}.{Guid.NewGuid():N}.part{extension}");
+        var displayFileName = Path.GetFileName(finalPath);
+        try
+        {
+            log($"YouTube 仅返回兼容合并流，正在下载：{work.Description}");
+            await youtube.Videos.Streams.DownloadAsync(
+                muxed,
+                partPath,
+                new InlineProgress<double>(value =>
+                    ReportDownloadProgress(
+                        reportProgress,
+                        displayFileName,
+                        Math.Clamp(value * 100, 0, 100),
+                        "正在下载 YouTube 视频")),
+                cancellationToken);
+            File.Move(partPath, finalPath, true);
+            ApplyPublishedTimestamp(finalPath, publishedAt);
+            log($"下载完成：{displayFileName}");
+        }
+        finally
+        {
+            TryDelete(partPath);
+            ClearProgress(reportProgress, displayFileName);
         }
 
         await DownloadCoverIfRequestedAsync(
@@ -401,16 +440,17 @@ public sealed class YouTubeSiteAdapter : ISiteAdapter, ISiteManagedDownloadAdapt
 
     private static async Task<Channel> ResolveChannelAsync(
         YoutubeClient youtube,
-        string channelRootUrl)
+        string channelRootUrl,
+        CancellationToken cancellationToken)
     {
         var path = new Uri(channelRootUrl).AbsolutePath;
         if (path.StartsWith("/@", StringComparison.OrdinalIgnoreCase))
-            return await youtube.Channels.GetByHandleAsync(channelRootUrl);
+            return await youtube.Channels.GetByHandleAsync(channelRootUrl, cancellationToken);
         if (path.StartsWith("/c/", StringComparison.OrdinalIgnoreCase))
-            return await youtube.Channels.GetBySlugAsync(channelRootUrl);
+            return await youtube.Channels.GetBySlugAsync(channelRootUrl, cancellationToken);
         if (path.StartsWith("/user/", StringComparison.OrdinalIgnoreCase))
-            return await youtube.Channels.GetByUserAsync(channelRootUrl);
-        return await youtube.Channels.GetAsync(channelRootUrl);
+            return await youtube.Channels.GetByUserAsync(channelRootUrl, cancellationToken);
+        return await youtube.Channels.GetAsync(channelRootUrl, cancellationToken);
     }
 
     private static bool TryGetChannelRootUrl(string pageUrl, out string channelRootUrl)
@@ -448,6 +488,21 @@ public sealed class YouTubeSiteAdapter : ISiteAdapter, ISiteManagedDownloadAdapt
 
         channelRootUrl = "https://www.youtube.com" + rootPath;
         return true;
+    }
+
+    private static IReadOnlyList<MediaAsset> BuildPlaceholderAssets(
+        string videoId,
+        string? coverUrl)
+    {
+        var assets = new List<MediaAsset>
+        {
+            // 实际流由 ISiteManagedDownloadAdapter 下载；占位项用于复用通用的
+            // 作品有效性检查和完成索引，不会作为普通 HTTP 地址访问。
+            new(MediaAssetType.Video, 0, new[] { $"youtube://{videoId}" })
+        };
+        if (!string.IsNullOrWhiteSpace(coverUrl))
+            assets.Add(new MediaAsset(MediaAssetType.Cover, 0, new[] { coverUrl }));
+        return assets;
     }
 
     private static async Task DownloadCoverIfRequestedAsync(
@@ -557,7 +612,11 @@ public sealed class YouTubeSiteAdapter : ISiteAdapter, ISiteManagedDownloadAdapt
     }
 
     private static string GetContainerExtension(Container container)
-        => container == Container.WebM ? ".webm" : ".mp4";
+        => container == Container.WebM
+            ? ".webm"
+            : container == Container.Tgpp
+                ? ".3gp"
+                : ".mp4";
 
     private static void ReportDownloadProgress(
         Action<MediaTransferProgress> reportProgress,
@@ -573,6 +632,18 @@ public sealed class YouTubeSiteAdapter : ISiteAdapter, ISiteManagedDownloadAdapt
             0,
             Math.Clamp(percent, 0, 100),
             stage));
+
+    private static void ClearProgress(
+        Action<MediaTransferProgress> reportProgress,
+        string fileName)
+        => reportProgress(new MediaTransferProgress(
+            false,
+            fileName,
+            MediaAssetType.Video,
+            0,
+            null,
+            0,
+            null));
 
     private static bool IsUsableFile(string path)
         => File.Exists(path) && new FileInfo(path).Length > 0;
