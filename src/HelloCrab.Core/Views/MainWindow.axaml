@@ -580,8 +580,36 @@
                 <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto" ColumnSpacing="10" RowSpacing="7">
                   <TextBlock Text="{DynamicResource Lang.Remote.Status}" Classes="caption" />
                   <TextBlock Grid.Column="1" Text="{Binding RemoteApiStatusText}" TextWrapping="Wrap" />
-                  <TextBlock Grid.Row="1" Text="{DynamicResource Lang.Remote.Port}" Classes="caption" />
-                  <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding RemoteApiPort}" />
+                  <TextBlock Grid.Row="1"
+                             Text="{DynamicResource Lang.Remote.Port}"
+                             Classes="caption"
+                             VerticalAlignment="Center" />
+                  <Grid Grid.Row="1" Grid.Column="1" ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                    <TextBox Text="{Binding RemoteApiPortDraft, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                             MaxLength="5"
+                             Watermark="1024–65535"
+                             FontFamily="Consolas,Menlo,Monospace"
+                             MinHeight="38"
+                             VerticalAlignment="Center"
+                             VerticalContentAlignment="Center" />
+                    <Button Grid.Column="1"
+                            Width="36"
+                            Height="34"
+                            MinWidth="36"
+                            MinHeight="34"
+                            Padding="0"
+                            VerticalAlignment="Center"
+                            HorizontalContentAlignment="Center"
+                            VerticalContentAlignment="Center"
+                            Command="{Binding ApplyRemoteApiPortCommand}"
+                            ToolTip.Tip="{DynamicResource Lang.Remote.Port}">
+                      <TextBlock Text="&#xE74E;"
+                                 FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+                                 FontSize="16"
+                                 HorizontalAlignment="Center"
+                                 VerticalAlignment="Center" />
+                    </Button>
+                  </Grid>
                   <TextBlock Grid.Row="2"
                              Text="{DynamicResource Lang.Remote.Token}"
                              Classes="caption"
