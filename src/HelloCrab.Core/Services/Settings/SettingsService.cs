@@ -39,6 +39,7 @@ public sealed class SettingsService
             {
                 var defaults = new AppSettings();
                 EnsureRemoteToken(defaults);
+                RemoteApiPortState.Set(defaults.RemoteApiPort);
                 return defaults;
             }
 
@@ -73,7 +74,8 @@ public sealed class SettingsService
                 settings.DuplicateStopThreshold,
                 1,
                 10000);
-            settings.RemoteApiPort = Math.Clamp(settings.RemoteApiPort, 1024, 65535);
+            settings.RemoteApiPort = RemoteApiPortState.Normalize(settings.RemoteApiPort);
+            RemoteApiPortState.Set(settings.RemoteApiPort);
             EnsureRemoteToken(settings);
 
             return settings;
@@ -83,6 +85,7 @@ public sealed class SettingsService
             // 设置文件损坏时不阻止程序启动，后续保存会用当前有效设置覆盖它。
             var defaults = new AppSettings();
             EnsureRemoteToken(defaults);
+            RemoteApiPortState.Set(defaults.RemoteApiPort);
             return defaults;
         }
     }
@@ -99,6 +102,10 @@ public sealed class SettingsService
             var directory = Path.GetDirectoryName(SettingsPath);
             if (!string.IsNullOrWhiteSpace(directory))
                 Directory.CreateDirectory(directory);
+
+            // MainWindowViewModel 的其他设置可能在端口修改后继续触发延迟保存。
+            // 每次序列化前都使用当前进程端口，避免旧快照把新端口覆盖回去。
+            settings.RemoteApiPort = RemoteApiPortState.Current;
 
             var json = JsonSerializer.Serialize(settings, JsonOptions);
             var tempPath = SettingsPath + ".tmp";
