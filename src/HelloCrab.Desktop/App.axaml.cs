@@ -18,6 +18,7 @@ using HelloCrab.Core.Sites.TikTok;
 using HelloCrab.Core.Sites.Xiaohongshu;
 using HelloCrab.Core.Sites.Weibo;
 using HelloCrab.Core.Sites.X;
+using HelloCrab.Core.Sites.YouTube;
 using HelloCrab.Core.ViewModels;
 using HelloCrab.Core.Views;
 using HelloCrab.Desktop.Playwright;
@@ -57,7 +58,8 @@ public partial class App : Application
                 new XiaohongshuSiteAdapter(),
                 new WeiboSiteAdapter(),
                 new XSiteAdapter(),
-                new MeipianSiteAdapter()
+                new MeipianSiteAdapter(),
+                new YouTubeSiteAdapter(mediaProcessor)
             });
             var personImageDetector = new YoloPersonImageDetector();
             var downloader = new MediaDownloadService(browser, mediaProcessor, personImageDetector);
