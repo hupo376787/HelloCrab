@@ -53,7 +53,7 @@ public sealed class RemoteApiHostService : IAsyncDisposable
     {
         if (_application is not null)
         {
-            _viewModel.SetRemoteApiStatus($"运行中 · 端口 {_viewModel.RemoteApiPort}");
+            _viewModel.SetRemoteApiStatus($"运行中 · 端口 {_viewModel.EffectiveRemoteApiPort}");
             return;
         }
 
@@ -63,7 +63,7 @@ public sealed class RemoteApiHostService : IAsyncDisposable
             _viewModel.SetRemoteApiStatus("正在启动远程服务器…");
 
             var builder = WebApplication.CreateSlimBuilder();
-            builder.WebHost.UseUrls($"http://0.0.0.0:{_viewModel.RemoteApiPort}");
+            builder.WebHost.UseUrls($"http://0.0.0.0:{_viewModel.EffectiveRemoteApiPort}");
             builder.Services.AddCors(options =>
             {
                 options.AddDefaultPolicy(policy => policy
@@ -159,10 +159,10 @@ public sealed class RemoteApiHostService : IAsyncDisposable
             _application = app;
 
             var addresses = GetLanAddresses()
-                .Select(address => $"http://{address}:{_viewModel.RemoteApiPort}")
+                .Select(address => $"http://{address}:{_viewModel.EffectiveRemoteApiPort}")
                 .ToArray();
             var addressText = addresses.Length == 0
-                ? $"http://127.0.0.1:{_viewModel.RemoteApiPort}"
+                ? $"http://127.0.0.1:{_viewModel.EffectiveRemoteApiPort}"
                 : string.Join("、", addresses);
 
             _viewModel.SetRemoteApiStatus($"运行中 · {addressText}");
@@ -174,8 +174,18 @@ public sealed class RemoteApiHostService : IAsyncDisposable
             if (app is not null)
                 await app.DisposeAsync();
 
-            _viewModel.SetRemoteApiStatus($"启动失败：{ex.Message}");
-            _viewModel.AddRemoteLog($"远程控制服务启动失败：{ex.Message}");
+            if (IsAddressAlreadyInUse(ex))
+            {
+                var message =
+                    $"启动失败：端口 {_viewModel.EffectiveRemoteApiPort} 已被占用，请修改远程端口后保存。";
+                _viewModel.SetRemoteApiStatus(message);
+                _viewModel.AddRemoteLog($"远程控制服务{message}");
+            }
+            else
+            {
+                _viewModel.SetRemoteApiStatus($"启动失败：{ex.Message}");
+                _viewModel.AddRemoteLog($"远程控制服务启动失败：{ex.Message}");
+            }
         }
     }
 
@@ -327,6 +337,23 @@ public sealed class RemoteApiHostService : IAsyncDisposable
         var rightBytes = System.Text.Encoding.UTF8.GetBytes(right);
         return leftBytes.Length == rightBytes.Length
                && System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(leftBytes, rightBytes);
+    }
+
+    private static bool IsAddressAlreadyInUse(Exception exception)
+    {
+        for (Exception? current = exception; current is not null; current = current.InnerException)
+        {
+            if (current is SocketException { SocketErrorCode: SocketError.AddressAlreadyInUse })
+                return true;
+
+            if (current.Message.Contains("address already in use", StringComparison.OrdinalIgnoreCase)
+                || current.Message.Contains("地址已在使用", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static IEnumerable<string> GetLanAddresses()
