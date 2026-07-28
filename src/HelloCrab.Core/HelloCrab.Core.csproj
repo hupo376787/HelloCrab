@@ -24,5 +24,6 @@
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
     <PackageReference Include="FluentScheduler" Version="6.0.0" />
     <PackageReference Include="ScheduleEditor" Version="1.0.0" />
+    <PackageReference Include="YoutubeExplode" Version="6.6.0" />
   </ItemGroup>
 </Project>
