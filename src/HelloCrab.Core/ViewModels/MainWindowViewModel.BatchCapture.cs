@@ -8,6 +8,7 @@ public sealed partial class MainWindowViewModel
 {
     private CancellationTokenSource? _manualBatchCts;
     private bool _isManualBatchRunning;
+    private bool _isManualBatchSkipRequested;
     private string? _retainedAuthorName;
     private string? _retainedAuthorAvatarUrl;
     private IImage? _retainedAuthorAvatarImage;
@@ -19,11 +20,20 @@ public sealed partial class MainWindowViewModel
         {
             if (SetProperty(ref _isManualBatchRunning, value))
             {
+                if (!value)
+                    IsManualBatchSkipRequested = false;
+
                 OnPropertyChanged(nameof(CanStopCurrentTask));
                 OnPropertyChanged(nameof(CanStartManualBatchCapture));
                 RefreshCommands();
             }
         }
+    }
+
+    public bool IsManualBatchSkipRequested
+    {
+        get => _isManualBatchSkipRequested;
+        private set => SetProperty(ref _isManualBatchSkipRequested, value);
     }
 
     public bool CanStartManualBatchCapture
@@ -57,6 +67,7 @@ public sealed partial class MainWindowViewModel
         using var stopRegistration = cts.Token.Register(_coordinator.Stop);
 
         IsManualBatchRunning = true;
+        IsManualBatchSkipRequested = false;
         IsBusy = true;
         ClearCurrentAuthorDisplayForNextCapture();
         var completedCount = 0;
@@ -117,7 +128,25 @@ public sealed partial class MainWindowViewModel
                         break;
                     }
 
+                    IsManualBatchSkipRequested = false;
                     await StartCaptureAsync();
+
+                    // “停止全部”优先级高于“跳过当前作者”。若两者同时发生，必须结束批量任务。
+                    cts.Token.ThrowIfCancellationRequested();
+
+                    if (IsManualBatchSkipRequested)
+                    {
+                        IsManualBatchSkipRequested = false;
+                        failedCount++;
+                        AddLog(BatchLocalizedText(
+                            "Batch.Log.ItemSkipped",
+                            "批量第 {0} 项已跳过，立即继续下一位作者。",
+                            "Batch item {0} was skipped. Moving to the next author immediately.",
+                            "一括処理の第 {0} 件をスキップし、すぐに次の作者へ進みます。",
+                            index + 1));
+                        continue;
+                    }
+
                     if (string.Equals(
                             _lastCoordinatorCompletionMessage,
                             "采集已停止",
@@ -142,6 +171,11 @@ public sealed partial class MainWindowViewModel
                         index + 1,
                         ex.Message));
                 }
+                finally
+                {
+                    IsManualBatchSkipRequested = false;
+                    AddManualBatchLogSeparator();
+                }
             }
 
             if (!cts.IsCancellationRequested)
@@ -165,6 +199,7 @@ public sealed partial class MainWindowViewModel
         finally
         {
             _manualBatchCts = null;
+            IsManualBatchSkipRequested = false;
 
             // 先释放通用忙碌状态，再结束批量状态，确保最后一次属性通知
             // 读取到的是最终可用状态，而不是 IsBusy=true 的中间状态。
@@ -202,6 +237,25 @@ public sealed partial class MainWindowViewModel
         });
     }
 
+    public bool SkipCurrentManualBatchAuthor()
+    {
+        if (!IsManualBatchRunning
+            || !IsCapturing
+            || IsManualBatchSkipRequested)
+        {
+            return false;
+        }
+
+        IsManualBatchSkipRequested = true;
+        AddLog(BatchLocalizedText(
+            "Batch.Log.SkipRequested",
+            "已请求跳过当前作者；正在停止当前采集，完成清理后立即处理下一位作者。",
+            "Skipping the current author. The next author will start as soon as cleanup finishes.",
+            "現在の作者をスキップします。終了処理後、すぐに次の作者を開始します。"));
+        _coordinator.Stop();
+        return true;
+    }
+
     public void CancelManualBatchCapture()
     {
         if (!IsManualBatchRunning
@@ -216,6 +270,12 @@ public sealed partial class MainWindowViewModel
         AddLog(BatchText(
             "Batch.Log.CancelRequested",
             "已请求停止批量采集；当前作者停止后不会继续处理后续地址。"));
+    }
+
+    private void AddManualBatchLogSeparator()
+    {
+        const string line = "────────────────────────────────────────────────────────────";
+        AddLog(string.Join(Environment.NewLine, Enumerable.Repeat(line, 10)));
     }
 
     internal void ClearCurrentAuthorDisplayForNextCapture()
@@ -261,6 +321,35 @@ public sealed partial class MainWindowViewModel
     private string BatchText(string key, string fallback, params object?[] arguments)
     {
         var template = _localization.Get(key, fallback);
+        try
+        {
+            return arguments.Length == 0
+                ? template
+                : string.Format(template, arguments);
+        }
+        catch (FormatException)
+        {
+            return arguments.Length == 0
+                ? fallback
+                : string.Format(fallback, arguments);
+        }
+    }
+
+    private string BatchLocalizedText(
+        string key,
+        string chineseFallback,
+        string englishFallback,
+        string japaneseFallback,
+        params object?[] arguments)
+    {
+        var languageCode = _localization.CurrentLanguageCode;
+        var fallback = languageCode.StartsWith("ja", StringComparison.OrdinalIgnoreCase)
+            ? japaneseFallback
+            : languageCode.StartsWith("en", StringComparison.OrdinalIgnoreCase)
+                ? englishFallback
+                : chineseFallback;
+        var template = _localization.Get(key, fallback);
+
         try
         {
             return arguments.Length == 0
