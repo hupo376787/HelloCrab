@@ -13,7 +13,6 @@ namespace HelloCrab.Core.Views;
 public partial class MainWindow
 {
     private Button? _batchSkipButton;
-    private Grid? _batchCaptureActionRow;
     private int _batchSkipEnsureAttempts;
 
     protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
@@ -53,8 +52,14 @@ public partial class MainWindow
             ColumnSpacing = 8,
             HorizontalAlignment = HorizontalAlignment.Stretch
         };
-        row.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(1, GridUnitType.Star)));
-        row.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
+        row.ColumnDefinitions.Add(new ColumnDefinition
+        {
+            Width = new GridLength(1, GridUnitType.Star)
+        });
+        row.ColumnDefinitions.Add(new ColumnDefinition
+        {
+            Width = GridLength.Auto
+        });
 
         parent.Children.RemoveAt(buttonIndex);
         Grid.SetColumn(_batchCaptureButton, 0);
@@ -74,7 +79,6 @@ public partial class MainWindow
         row.Children.Add(skipButton);
 
         parent.Children.Insert(buttonIndex, row);
-        _batchCaptureActionRow = row;
         _batchSkipButton = skipButton;
 
         _batchCaptureViewModel.PropertyChanged += BatchSkipViewModel_PropertyChanged;
