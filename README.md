@@ -1,7 +1,18 @@
 ﻿# HelloCrab
 
-基于 Avalonia、Playwright、AI与 FFmpeg 的跨平台桌面采集器，以及 Android、iOS、Browser 远程控制端。  
+基于 Avalonia、Playwright、AI与 FFmpeg 的跨平台桌面采集器，支持9大平台，以及 Android、iOS、Browser 远程控制端。  
 **Made By ChatGPT & Vincent with ❤**
+| 平台  |是否接入|
+|---|---|
+|哔哩哔哩|✅|
+|抖音|✅|
+|快手|✅|
+|微博|✅|
+|小红书|✅|
+|Instagram|✅|
+|Pinterest|✅|
+|X(Twitter)|🕘|
+|Youtube|🕘|
 
 ## Screenshot
 ![](Screenshot/Windows.jpg)
