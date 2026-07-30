@@ -47,6 +47,7 @@ public partial class MainWindow
         if (buttonIndex < 0)
             return;
 
+        // 与主界面的“开始采集 / 停止采集”按钮一致：两列等宽。
         var row = new Grid
         {
             ColumnSpacing = 8,
@@ -58,17 +59,17 @@ public partial class MainWindow
         });
         row.ColumnDefinitions.Add(new ColumnDefinition
         {
-            Width = GridLength.Auto
+            Width = new GridLength(1, GridUnitType.Star)
         });
 
         parent.Children.RemoveAt(buttonIndex);
         Grid.SetColumn(_batchCaptureButton, 0);
         row.Children.Add(_batchCaptureButton);
 
+        // 只使用 sectionAction，与“停止采集”保持相同背景和按钮样式。
         var skipButton = new Button
         {
-            Classes = { "coral", "sectionAction" },
-            MinWidth = 156,
+            Classes = { "sectionAction" },
             HorizontalAlignment = HorizontalAlignment.Stretch,
             HorizontalContentAlignment = HorizontalAlignment.Center,
             IsVisible = false,
