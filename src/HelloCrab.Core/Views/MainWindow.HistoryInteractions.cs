@@ -29,6 +29,8 @@ public partial class MainWindow
     private bool _historyInteractionsInstalled;
     private bool _historyFilterSuppressedForDrag;
     private bool _historyScrollRestorePending;
+    private Vector _lastHistoryScrollOffset;
+    private bool _lastHistoryWasAtBottom;
     private Vector _historyScrollOffsetBeforeRefresh;
     private bool _historyWasAtBottomBeforeRefresh;
     private long _historyScrollRestoreVersion;
@@ -270,13 +272,8 @@ public partial class MainWindow
         if (!_historyScrollRestorePending)
         {
             _historyScrollRestorePending = true;
-            _historyScrollOffsetBeforeRefresh = scrollViewer.Offset;
-
-            var maximum = Math.Max(
-                0d,
-                scrollViewer.Extent.Height - scrollViewer.Viewport.Height);
-            _historyWasAtBottomBeforeRefresh =
-                maximum > 0d && maximum - scrollViewer.Offset.Y <= 2d;
+            _historyScrollOffsetBeforeRefresh = _lastHistoryScrollOffset;
+            _historyWasAtBottomBeforeRefresh = _lastHistoryWasAtBottom;
         }
 
         var version = Interlocked.Increment(ref _historyScrollRestoreVersion);
@@ -311,15 +308,42 @@ public partial class MainWindow
             _historyScrollOffsetBeforeRefresh.X,
             targetY);
         _historyScrollRestorePending = false;
+        CaptureHistoryScrollSnapshot(scrollViewer);
     }
 
     private ScrollViewer? GetHistoryListScrollViewer()
     {
-        _historyListScrollViewer ??= HistoryList
+        if (_historyListScrollViewer is not null)
+            return _historyListScrollViewer;
+
+        var scrollViewer = HistoryList
             .GetVisualDescendants()
             .OfType<ScrollViewer>()
             .FirstOrDefault();
-        return _historyListScrollViewer;
+        if (scrollViewer is null)
+            return null;
+
+        _historyListScrollViewer = scrollViewer;
+        scrollViewer.ScrollChanged += HistoryListScrollViewer_ScrollChanged;
+        CaptureHistoryScrollSnapshot(scrollViewer);
+        return scrollViewer;
+    }
+
+    private void HistoryListScrollViewer_ScrollChanged(
+        object? sender,
+        ScrollChangedEventArgs e)
+    {
+        if (!_historyScrollRestorePending && sender is ScrollViewer scrollViewer)
+            CaptureHistoryScrollSnapshot(scrollViewer);
+    }
+
+    private void CaptureHistoryScrollSnapshot(ScrollViewer scrollViewer)
+    {
+        _lastHistoryScrollOffset = scrollViewer.Offset;
+        var maximum = Math.Max(
+            0d,
+            scrollViewer.Extent.Height - scrollViewer.Viewport.Height);
+        _lastHistoryWasAtBottom = maximum - scrollViewer.Offset.Y <= 2d;
     }
 
     private void HistoryInteractionsWindowClosed(object? sender, EventArgs e)
@@ -329,6 +353,8 @@ public partial class MainWindow
 
         if (_historyAutoScrollTimer is not null)
             _historyAutoScrollTimer.Tick -= HistoryAutoScrollTimer_Tick;
+        if (_historyListScrollViewer is not null)
+            _historyListScrollViewer.ScrollChanged -= HistoryListScrollViewer_ScrollChanged;
         if (_historyInteractionsViewModel is not null)
         {
             _historyInteractionsViewModel.FilteredDownloadHistory.CollectionChanged -=
