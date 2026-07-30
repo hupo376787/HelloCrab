@@ -333,8 +333,14 @@ public partial class MainWindow
         object? sender,
         ScrollChangedEventArgs e)
     {
-        if (!_historyScrollRestorePending && sender is ScrollViewer scrollViewer)
+        // Clear() 会先把集合计数变为 0，并可能立刻把 Offset 改成 0。
+        // 这不是用户滚动，不能覆盖刷新前保存的真实位置。
+        if (!_historyScrollRestorePending
+            && _historyInteractionsViewModel?.FilteredDownloadHistory.Count > 0
+            && sender is ScrollViewer scrollViewer)
+        {
             CaptureHistoryScrollSnapshot(scrollViewer);
+        }
     }
 
     private void CaptureHistoryScrollSnapshot(ScrollViewer scrollViewer)
