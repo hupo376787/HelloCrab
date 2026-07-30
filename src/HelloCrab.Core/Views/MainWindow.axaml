@@ -764,7 +764,6 @@
         <Grid RowDefinitions="Auto,Auto,Auto,*">
           <StackPanel>
             <TextBlock Text="{DynamicResource Lang.History.Title}" FontSize="19" FontWeight="SemiBold" />
-            <TextBlock Classes="caption" Text="{DynamicResource Lang.History.Hint}" Margin="0,3,0,0" />
           </StackPanel>
 
           <Border Grid.Row="1"
