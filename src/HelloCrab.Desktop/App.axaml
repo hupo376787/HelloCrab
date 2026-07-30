@@ -62,5 +62,16 @@
     <Style Selector="TextBox[AcceptsReturn=true]:disabled /template/ Border#PART_BorderElement">
       <Setter Property="Background" Value="Transparent" />
     </Style>
+
+    <!-- 下载历史标题下方的旧操作提示不再显示；覆盖内置中、英、日语言。 -->
+    <Style Selector="TextBlock.caption[Text='最近下载优先 · 右击操作 · 拖动调整顺序']">
+      <Setter Property="IsVisible" Value="False" />
+    </Style>
+    <Style Selector="TextBlock.caption[Text='Newest first · Right-click actions · Drag to reorder']">
+      <Setter Property="IsVisible" Value="False" />
+    </Style>
+    <Style Selector="TextBlock.caption[Text='新しい順・右クリック操作・ドラッグで並べ替え']">
+      <Setter Property="IsVisible" Value="False" />
+    </Style>
   </Application.Styles>
 </Application>
