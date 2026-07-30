@@ -47,7 +47,6 @@ public partial class MainWindow
         if (buttonIndex < 0)
             return;
 
-        // 与主界面的“开始采集 / 停止采集”按钮一致：两列等宽。
         var row = new Grid
         {
             ColumnSpacing = 8,
@@ -64,6 +63,8 @@ public partial class MainWindow
 
         parent.Children.RemoveAt(buttonIndex);
         Grid.SetColumn(_batchCaptureButton, 0);
+        // 默认没有批量任务时横跨左右两列，占满整行。
+        Grid.SetColumnSpan(_batchCaptureButton, 2);
         row.Children.Add(_batchCaptureButton);
 
         // 只使用 sectionAction，与“停止采集”保持相同背景和按钮样式。
@@ -113,11 +114,15 @@ public partial class MainWindow
 
     private void UpdateBatchSkipButtonState(MainWindowViewModel viewModel)
     {
-        if (_batchSkipButton is null)
+        if (_batchSkipButton is null || _batchCaptureButton is null)
             return;
 
-        _batchSkipButton.IsVisible = viewModel.IsManualBatchRunning;
-        _batchSkipButton.IsEnabled = viewModel.IsManualBatchRunning
+        var isBatchRunning = viewModel.IsManualBatchRunning;
+
+        // 未运行时主按钮占满两列；批量运行后缩为左半宽，右侧显示跳过按钮。
+        Grid.SetColumnSpan(_batchCaptureButton, isBatchRunning ? 1 : 2);
+        _batchSkipButton.IsVisible = isBatchRunning;
+        _batchSkipButton.IsEnabled = isBatchRunning
                                      && viewModel.IsCapturing
                                      && !viewModel.IsManualBatchSkipRequested;
     }
