@@ -41,5 +41,26 @@
   </Application.Resources>
   <Application.Styles>
     <FluentTheme />
+
+    <!--
+      批量采集弹窗是当前唯一 AcceptsReturn=True 的 TextBox。
+      Avalonia Fluent 主题会在普通、悬停、焦点和禁用状态下，分别给
+      模板内的 Border#PART_BorderElement 设置背景，因此需要进入模板覆盖。
+    -->
+    <Style Selector="TextBox[AcceptsReturn=true]">
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+    <Style Selector="TextBox[AcceptsReturn=true] /template/ Border#PART_BorderElement">
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+    <Style Selector="TextBox[AcceptsReturn=true]:pointerover /template/ Border#PART_BorderElement">
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+    <Style Selector="TextBox[AcceptsReturn=true]:focus /template/ Border#PART_BorderElement">
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+    <Style Selector="TextBox[AcceptsReturn=true]:disabled /template/ Border#PART_BorderElement">
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
   </Application.Styles>
 </Application>
