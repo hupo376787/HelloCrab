@@ -128,6 +128,7 @@ public partial class MainWindow
             return;
         }
 
+        MoveDraggedHistoryItemToVisibleEdge(_historyAutoScrollDirection);
         EnsureHistoryAutoScrollTimer().Start();
     }
 
@@ -180,7 +181,30 @@ public partial class MainWindow
             return;
 
         scrollViewer.Offset = new Vector(scrollViewer.Offset.X, nextY);
-        MoveDraggedHistoryItem(_lastHistoryPointerInList);
+        MoveDraggedHistoryItemToVisibleEdge(_historyAutoScrollDirection);
+    }
+
+    private void MoveDraggedHistoryItemToVisibleEdge(int direction)
+    {
+        if (_draggedHistoryItem is null
+            || _historyInteractionsViewModel is not { } viewModel)
+        {
+            return;
+        }
+
+        var realizedIndexes = HistoryList
+            .GetRealizedContainers()
+            .Select(HistoryList.IndexFromContainer)
+            .Where(index => index >= 0)
+            .OrderBy(index => index)
+            .ToArray();
+        if (realizedIndexes.Length == 0)
+            return;
+
+        var targetIndex = direction < 0
+            ? realizedIndexes[0]
+            : realizedIndexes[^1];
+        viewModel.MoveHistoryItemPreview(_draggedHistoryItem, targetIndex);
     }
 
     private void StopHistoryAutoScroll()
