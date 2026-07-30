@@ -103,10 +103,6 @@ public sealed class LocalizationService : ObservableObject
         foreach (var pair in selected.Strings)
             strings[pair.Key] = pair.Value;
 
-        // 该提示已从界面设计中废弃。即使 exe 旁仍保留旧版语言 JSON，
-        // 或用户切换到自定义语言包，也不允许旧文案再次显示。
-        strings["History.Hint"] = string.Empty;
-
         if (Application.Current is { } app)
         {
             foreach (var oldKey in _appliedResourceKeys)
@@ -127,9 +123,6 @@ public sealed class LocalizationService : ObservableObject
 
     public string Get(string key, string? fallback = null)
     {
-        if (key.Equals("History.Hint", StringComparison.Ordinal))
-            return string.Empty;
-
         if (_packs.TryGetValue(CurrentLanguageCode, out var selected)
             && selected.Strings.TryGetValue(key, out var value))
         {
