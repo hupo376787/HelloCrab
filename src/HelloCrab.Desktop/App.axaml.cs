@@ -79,6 +79,7 @@ public partial class App : Application
                 platformShell,
                 ffmpegInstaller,
                 personImageDetector);
+            viewModel.InitializeRuntimeStatusLocalization();
 
             _viewModel = viewModel;
             _remoteApiHost = new RemoteApiHostService(viewModel);
@@ -119,7 +120,7 @@ public partial class App : Application
         catch (Exception ex)
         {
             _viewModel?.AddRemoteLog($"切换远程控制服务器失败：{ex.Message}");
-            _viewModel?.SetRemoteApiStatus($"启动失败：{ex.Message}");
+            _viewModel?.SetRemoteApiStatus(RemoteApiStatusKind.StartFailed, ex.Message);
         }
         finally
         {
@@ -146,7 +147,7 @@ public partial class App : Application
         catch (Exception ex)
         {
             _viewModel?.AddRemoteLog($"切换远程端口失败：{ex.Message}");
-            _viewModel?.SetRemoteApiStatus($"启动失败：{ex.Message}");
+            _viewModel?.SetRemoteApiStatus(RemoteApiStatusKind.StartFailed, ex.Message);
         }
         finally
         {
