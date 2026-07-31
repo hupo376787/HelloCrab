@@ -2,7 +2,7 @@
 
 public sealed class AppSettings
 {
-    public int Version { get; set; } = 12;
+    public int Version { get; set; } = 13;
 
     /// <summary>
     /// Light 或 Dark。
@@ -17,6 +17,9 @@ public sealed class AppSettings
     public bool IncludeWorkId { get; set; } = false;
     public bool DownloadCover { get; set; }
     public bool DownloadMusic { get; set; }
+
+    /// <summary>开启后将作品基础文件名上限从 170 放宽到 220 个字符。</summary>
+    public bool EnableLongFileNames { get; set; }
 
     /// <summary>作品媒体下载速度上限，单位 MB/s；0 表示不限速。</summary>
     public decimal DownloadSpeedLimitMBps { get; set; }
