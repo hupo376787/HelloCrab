@@ -1,3 +1,5 @@
+using System.Threading;
+
 namespace HelloCrab.Core.Services.Settings;
 
 public static class LongFileNameState
