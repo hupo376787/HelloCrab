@@ -18,6 +18,7 @@ public sealed partial class MainWindowViewModel
 {
     private bool _runtimeStatusLocalizationInitialized;
     private bool _runtimeStatusLocalizationUpdating;
+    private bool _remoteApiStatusIsStructured = true;
     private RemoteApiStatusKind _remoteApiStatusKind = RemoteApiStatusKind.NotStarted;
     private string? _remoteApiStatusDetail;
 
@@ -42,6 +43,7 @@ public sealed partial class MainWindowViewModel
     {
         Ui(() =>
         {
+            _remoteApiStatusIsStructured = true;
             _remoteApiStatusKind = kind;
             _remoteApiStatusDetail = detail;
             RefreshLocalizedRemoteApiStatus();
@@ -52,7 +54,8 @@ public sealed partial class MainWindowViewModel
         => Ui(() =>
         {
             RefreshLocalizedPersonDetectionModelStatus();
-            RefreshLocalizedRemoteApiStatus();
+            if (_remoteApiStatusIsStructured)
+                RefreshLocalizedRemoteApiStatus();
         });
 
     private void RuntimeStatusLocalization_PropertyChanged(
@@ -65,7 +68,15 @@ public sealed partial class MainWindowViewModel
         // 旧采集逻辑仍会在模型状态变化时生成一次中文状态。这里立即根据当前语言
         // 重新生成，保证模型下载、开关变化和运行时重新检测后也不会回到中文。
         if (e.PropertyName == nameof(PersonDetectionModelStatusText))
+        {
             RefreshLocalizedPersonDetectionModelStatus();
+        }
+        else if (e.PropertyName == nameof(RemoteApiStatusText))
+        {
+            // 远程端口编辑器已有自己的三语言即时提示。它通过旧字符串接口写入时，
+            // 不应被之前保存的服务器生命周期状态覆盖。
+            _remoteApiStatusIsStructured = false;
+        }
     }
 
     private void RefreshLocalizedPersonDetectionModelStatus()
@@ -90,6 +101,9 @@ public sealed partial class MainWindowViewModel
 
     private void RefreshLocalizedRemoteApiStatus()
     {
+        if (!_remoteApiStatusIsStructured)
+            return;
+
         var detail = _remoteApiStatusDetail ?? string.Empty;
         var text = _remoteApiStatusKind switch
         {
