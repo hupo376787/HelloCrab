@@ -478,6 +478,16 @@ Install-Package ScheduleEditor -Version 1.0.0
 
 `.github/workflows/build-all-platforms.yml` 会构建桌面端、Browser、Android 和 iOS。推送 `v*` 标签后，会把所有平台产物与 SHA256 校验文件一起发布到 GitHub Release。iOS 默认生成无需签名的 Simulator 包，配置 Apple 签名 Secrets 后还会生成 IPA。详见 `GITHUB-ACTIONS-RELEASE.md`。
 
+## 完整对话记录
+
+https://chatgpt.com/share/6a641f2e-a20c-83e8-9bb6-eac5d94eed6c
+
+https://chatgpt.com/share/6a641f80-50e8-83ee-83ae-908b8c9b5934
+
+https://chatgpt.com/share/6a641f9c-21dc-83ee-964c-e724bd98d917
+
+https://chatgpt.com/share/6a641fb6-4c60-83e8-81d6-e7f0661a6017
+
 ## 免责声明
 
 本项目仅供学习、研究与技术交流使用，不得用于任何违法违规用途。使用者应自行遵守所在地法律法规、目标平台的服务条款，以及与著作权、隐私权和数据使用相关的规定。
