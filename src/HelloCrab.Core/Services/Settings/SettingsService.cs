@@ -39,8 +39,6 @@ public sealed class SettingsService
             {
                 var defaults = new AppSettings();
                 EnsureRemoteToken(defaults);
-                RemoteApiPortState.Set(defaults.RemoteApiPort);
-                LongFileNameState.Set(defaults.EnableLongFileNames);
                 return defaults;
             }
 
@@ -56,11 +54,10 @@ public sealed class SettingsService
             }
 
             // v4 增加 PushPlusToken；v6 清理已经下线的平台配置字段；v7 增加微博平台；
-            // v8 增加人像检测开关；v9 增加视频音轨检测开关；v10 增加 JSON 多语言；
-            // v11 增加下载速度限制；v12 增加人像检测置信度；v13 增加长文件名开关。
+            // v8 增加人像检测开关；v9 增加视频音轨检测开关；v10 增加 JSON 多语言；v11 增加下载速度限制；v12 增加人像检测置信度。
             // 未知旧字段会在下次保存时自然移除。
-            if (settings.Version < 13)
-                settings.Version = 13;
+            if (settings.Version < 12)
+                settings.Version = 12;
             if (string.IsNullOrWhiteSpace(settings.LanguageCode))
                 settings.LanguageCode = "zh-CN";
 
@@ -76,9 +73,7 @@ public sealed class SettingsService
                 settings.DuplicateStopThreshold,
                 1,
                 10000);
-            settings.RemoteApiPort = RemoteApiPortState.Normalize(settings.RemoteApiPort);
-            RemoteApiPortState.Set(settings.RemoteApiPort);
-            LongFileNameState.Set(settings.EnableLongFileNames);
+            settings.RemoteApiPort = Math.Clamp(settings.RemoteApiPort, 1024, 65535);
             EnsureRemoteToken(settings);
 
             return settings;
@@ -88,8 +83,6 @@ public sealed class SettingsService
             // 设置文件损坏时不阻止程序启动，后续保存会用当前有效设置覆盖它。
             var defaults = new AppSettings();
             EnsureRemoteToken(defaults);
-            RemoteApiPortState.Set(defaults.RemoteApiPort);
-            LongFileNameState.Set(defaults.EnableLongFileNames);
             return defaults;
         }
     }
@@ -106,11 +99,6 @@ public sealed class SettingsService
             var directory = Path.GetDirectoryName(SettingsPath);
             if (!string.IsNullOrWhiteSpace(directory))
                 Directory.CreateDirectory(directory);
-
-            // MainWindowViewModel 的其他设置可能在端口或文件名策略修改后继续触发延迟保存。
-            // 每次序列化前都使用当前进程状态，避免旧快照把新值覆盖回去。
-            settings.RemoteApiPort = RemoteApiPortState.Current;
-            settings.EnableLongFileNames = LongFileNameState.Enabled;
 
             var json = JsonSerializer.Serialize(settings, JsonOptions);
             var tempPath = SettingsPath + ".tmp";

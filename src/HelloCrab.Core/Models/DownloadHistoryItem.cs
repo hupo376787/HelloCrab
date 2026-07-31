@@ -97,7 +97,8 @@ public sealed class DownloadHistoryItem : ObservableObject
     [JsonIgnore]
     public string UpdatedAtText => UpdatedAt == default
         ? LocalizationService.Current?.Get("History.NotDownloaded", "尚未下载") ?? "尚未下载"
-        : FormatUpdatedAt(UpdatedAt.LocalDateTime);
+        : (LocalizationService.Current?.Format("History.LastDownloaded", UpdatedAt.LocalDateTime.ToString("yyyy-MM-dd HH:mm"))
+           ?? $"最后下载：{UpdatedAt.LocalDateTime:yyyy-MM-dd HH:mm}");
 
     [JsonIgnore]
     public string ItemsSizeText => FormatBytes(ItemsSize);
@@ -112,28 +113,6 @@ public sealed class DownloadHistoryItem : ObservableObject
         OnPropertyChanged(nameof(UidText));
         OnPropertyChanged(nameof(UpdatedAtText));
         OnPropertyChanged(nameof(ItemsSummary));
-    }
-
-    private static string FormatUpdatedAt(DateTime updatedAt)
-    {
-        var localization = LocalizationService.Current;
-        var languageCode = localization?.CurrentLanguageCode ?? "zh-CN";
-        var fallback = languageCode.StartsWith("ja", StringComparison.OrdinalIgnoreCase)
-            ? "更新日時：{0}"
-            : languageCode.StartsWith("zh", StringComparison.OrdinalIgnoreCase)
-                ? "更新时间：{0}"
-                : "Updated: {0}";
-        var template = localization?.Get("History.UpdatedAt", fallback) ?? fallback;
-        var value = updatedAt.ToString("yyyy-MM-dd HH:mm");
-
-        try
-        {
-            return string.Format(template, value);
-        }
-        catch (FormatException)
-        {
-            return string.Format(fallback, value);
-        }
     }
 
     private static string FormatBytes(long bytes)

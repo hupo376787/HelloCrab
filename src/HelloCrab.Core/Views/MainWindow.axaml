@@ -1,4 +1,4 @@
-<Window
+﻿<Window
     x:Class="HelloCrab.Core.Views.MainWindow"
     xmlns="https://github.com/avaloniaui"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -395,20 +395,6 @@
                            Foreground="#F59E0B"
                            Text="{DynamicResource Lang.Download.PageDelay}"
                            TextWrapping="Wrap" />
-                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
-                  <StackPanel Spacing="2" VerticalAlignment="Center">
-                    <TextBlock Text="{Binding LongFileNameSettingText}"
-                               FontWeight="Medium" />
-                    <TextBlock Classes="caption"
-                               Text="{Binding LongFileNameSettingDescriptionText}"
-                               TextWrapping="Wrap" />
-                  </StackPanel>
-                  <ToggleSwitch Grid.Column="1"
-                                IsChecked="{Binding EnableLongFileNames, Mode=TwoWay}"
-                                OnContent="{DynamicResource Lang.Common.Enabled}"
-                                OffContent="{DynamicResource Lang.Common.Disabled}"
-                                VerticalAlignment="Center" />
-                </Grid>
                 <Grid ColumnDefinitions="*,126,Auto" ColumnSpacing="8">
                   <StackPanel Spacing="2" VerticalAlignment="Center">
                     <TextBlock Text="{DynamicResource Lang.Download.SpeedLimit}"
@@ -500,10 +486,25 @@
                            Text="{DynamicResource Lang.Download.CheckAudioImpact}"
                            TextWrapping="Wrap" />
                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
-                  <TextBlock Text="{Binding FfmpegInstallStatusText}"
-                             Classes="caption"
-                             TextWrapping="Wrap"
-                             VerticalAlignment="Center" />
+                  <StackPanel Spacing="2" VerticalAlignment="Center">
+                    <Grid ColumnDefinitions="Auto,*"
+                          IsVisible="{Binding IsFfmpegAvailable}">
+                      <TextBlock Classes="caption"
+                                 Text="{DynamicResource Lang.Download.FfmpegAvailableLabel}" />
+                      <TextBlock Grid.Column="1"
+                                 Classes="caption"
+                                 Text="{Binding FfmpegDirectory}"
+                                 TextWrapping="Wrap" />
+                    </Grid>
+                    <TextBlock Classes="caption"
+                               IsVisible="{Binding IsFfmpegMissing}"
+                               Text="{DynamicResource Lang.Download.FfmpegNotFound}"
+                               TextWrapping="Wrap" />
+                    <TextBlock Classes="caption"
+                               IsVisible="{Binding IsFfmpegUnsupported}"
+                               Text="{DynamicResource Lang.Download.FfmpegUnsupported}"
+                               TextWrapping="Wrap" />
+                  </StackPanel>
                   <Button Grid.Column="1"
                           Classes="sectionAction"
                           MinWidth="145"
@@ -555,10 +556,33 @@
                 <TextBlock Classes="caption"
                            Text="{DynamicResource Lang.Download.PersonDetectionConfidenceDescription}"
                            TextWrapping="Wrap" />
-                <TextBlock Classes="caption"
-                           FontWeight="Medium"
-                           Text="{Binding PersonDetectionModelStatusText}"
-                           TextWrapping="Wrap" />
+                <StackPanel Spacing="2">
+                  <Grid ColumnDefinitions="Auto,*"
+                        IsVisible="{Binding IsPersonDetectionModelFound}">
+                    <TextBlock Classes="caption"
+                               FontWeight="Medium"
+                               Text="{DynamicResource Lang.Download.PersonDetectionModelFoundLabel}" />
+                    <TextBlock Grid.Column="1"
+                               Classes="caption"
+                               FontWeight="Medium"
+                               Text="{Binding PersonDetectionModelName}"
+                               TextWrapping="Wrap" />
+                  </Grid>
+                  <Grid ColumnDefinitions="Auto,*"
+                        IsVisible="{Binding IsPersonDetectionModelFound}">
+                    <TextBlock Classes="caption"
+                               Text="{DynamicResource Lang.Download.PersonDetectionModelLocationLabel}" />
+                    <TextBlock Grid.Column="1"
+                               Classes="caption"
+                               Text="{Binding PersonDetectionModelPath}"
+                               TextWrapping="Wrap" />
+                  </Grid>
+                  <TextBlock Classes="caption"
+                             FontWeight="Medium"
+                             IsVisible="{Binding IsPersonDetectionModelMissing}"
+                             Text="{DynamicResource Lang.Download.PersonDetectionModelMissing}"
+                             TextWrapping="Wrap" />
+                </StackPanel>
                 <TextBlock Classes="caption"
                            Text="{DynamicResource Lang.Download.PersonDetectionDescription}"
                            TextWrapping="Wrap" />
@@ -594,36 +618,8 @@
                 <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto" ColumnSpacing="10" RowSpacing="7">
                   <TextBlock Text="{DynamicResource Lang.Remote.Status}" Classes="caption" />
                   <TextBlock Grid.Column="1" Text="{Binding RemoteApiStatusText}" TextWrapping="Wrap" />
-                  <TextBlock Grid.Row="1"
-                             Text="{DynamicResource Lang.Remote.Port}"
-                             Classes="caption"
-                             VerticalAlignment="Center" />
-                  <Grid Grid.Row="1" Grid.Column="1" ColumnDefinitions="*,Auto" ColumnSpacing="8">
-                    <TextBox Text="{Binding RemoteApiPortDraft, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                             MaxLength="5"
-                             Watermark="1024–65535"
-                             FontFamily="Consolas,Menlo,Monospace"
-                             MinHeight="38"
-                             VerticalAlignment="Center"
-                             VerticalContentAlignment="Center" />
-                    <Button Grid.Column="1"
-                            Width="36"
-                            Height="34"
-                            MinWidth="36"
-                            MinHeight="34"
-                            Padding="0"
-                            VerticalAlignment="Center"
-                            HorizontalContentAlignment="Center"
-                            VerticalContentAlignment="Center"
-                            Command="{Binding ApplyRemoteApiPortCommand}"
-                            ToolTip.Tip="{DynamicResource Lang.Remote.Port}">
-                      <TextBlock Text="&#xE74E;"
-                                 FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
-                                 FontSize="16"
-                                 HorizontalAlignment="Center"
-                                 VerticalAlignment="Center" />
-                    </Button>
-                  </Grid>
+                  <TextBlock Grid.Row="1" Text="{DynamicResource Lang.Remote.Port}" Classes="caption" />
+                  <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding RemoteApiPort}" />
                   <TextBlock Grid.Row="2"
                              Text="{DynamicResource Lang.Remote.Token}"
                              Classes="caption"
@@ -695,32 +691,17 @@
 
           <Border Grid.Row="1" Classes="card">
             <Grid ColumnDefinitions="88,8,*" ColumnSpacing="12">
-              <StackPanel Width="88"
-                          Spacing="6"
-                          HorizontalAlignment="Center"
-                          VerticalAlignment="Center">
-                <Grid Width="88" Height="88">
-                  <Ellipse Fill="#22FFFFFF"
-                           Stroke="#40FFFFFF"
-                           StrokeThickness="1" />
-                  <Image Margin="1"
-                         Width="86"
-                         Height="86"
-                         Source="{Binding CurrentAuthorAvatarImage}"
-                         Stretch="UniformToFill"
-                         RenderOptions.BitmapInterpolationMode="HighQuality">
-                    <Image.Clip>
-                      <EllipseGeometry Rect="0,0,86,86" />
-                    </Image.Clip>
-                  </Image>
-                </Grid>
-                <TextBlock Classes="caption emojiText"
-                           Text="{Binding CurrentAuthorName}"
-                           MaxWidth="88"
-                           HorizontalAlignment="Stretch"
-                           TextAlignment="Center"
-                           TextWrapping="Wrap" />
-              </StackPanel>
+              <Border Width="88"
+                      Height="88"
+                      CornerRadius="44"
+                      Background="#22FFFFFF"
+                      BorderBrush="#40FFFFFF"
+                      BorderThickness="1"
+                      ClipToBounds="True"
+                      VerticalAlignment="Center">
+                <Image Source="{Binding CurrentAuthorAvatarImage}"
+                       Stretch="UniformToFill" />
+              </Border>
               <Border Grid.Column="1" Width="8" CornerRadius="3" Background="#A78BFA" />
               <StackPanel Grid.Column="2" Spacing="5">
                 <TextBlock Classes="caption" Text="{DynamicResource Lang.Metrics.CurrentWork}" />
@@ -736,6 +717,7 @@
                            Classes="caption"
                            Text="{Binding DownloadProgressText}"
                            TextWrapping="Wrap" />
+                <TextBlock Classes="caption emojiText" Text="{Binding CurrentAuthorName}" />
               </StackPanel>
             </Grid>
           </Border>
@@ -778,6 +760,7 @@
         <Grid RowDefinitions="Auto,Auto,Auto,*">
           <StackPanel>
             <TextBlock Text="{DynamicResource Lang.History.Title}" FontSize="19" FontWeight="SemiBold" />
+            <TextBlock Classes="caption" Text="{DynamicResource Lang.History.Hint}" Margin="0,3,0,0" />
           </StackPanel>
 
           <Border Grid.Row="1"

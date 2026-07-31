@@ -116,5 +116,4 @@ public sealed record BrowserCookie(string Name, string Value);
 public sealed record ChromiumInstallProgress(
     double? Percent,
     string Stage,
-    string? Detail = null,
-    string? DownloadUrl = null);
+    string? Detail = null);

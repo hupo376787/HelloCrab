@@ -51,8 +51,11 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
     private double _ffmpegInstallProgressPercent;
     private string _ffmpegInstallProgressText = string.Empty;
     private bool _isClearingImageCache;
-    private string _ffmpegInstallStatusText = string.Empty;
-    private string _personDetectionModelStatusText = string.Empty;
+    private bool _isFfmpegAvailable;
+    private string _ffmpegDirectory = string.Empty;
+    private bool _isPersonDetectionModelFound;
+    private string _personDetectionModelName = string.Empty;
+    private string _personDetectionModelPath = string.Empty;
     private bool _isCapturing;
     private string _statusText = "准备就绪";
     private string _currentUrl = "尚未打开浏览器";
@@ -105,7 +108,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
     private readonly int _remoteApiPort;
     private string _remoteApiToken;
     private string _remoteApiTokenDraft;
-    private string _remoteApiStatusText = "远程服务器未启动";
+    private string _remoteApiStatusText = string.Empty;
 
     public MainWindowViewModel(
         IBrowserAutomationService browser,
@@ -162,9 +165,11 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
         _remoteApiToken = settings.RemoteApiToken;
         _remoteApiTokenDraft = _remoteApiToken;
         _isHistoryVisible = false;
-        _ffmpegInstallStatusText = _ffmpegInstaller.GetStatusText();
-        _personDetectionModelStatusText = BuildPersonDetectionModelStatusText(
-            _personImageDetector.GetModelInfo());
+        RefreshFfmpegStatus(_ffmpegInstaller.GetToolInfo());
+        RefreshPersonDetectionModelStatus();
+        _remoteApiStatusText = _localization.Get(
+            "Remote.Status.NotStarted",
+            "远程服务器未启动");
         _isApplyingSettings = false;
         ApplyTheme();
 
@@ -358,18 +363,51 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
         private set => SetProperty(ref _ffmpegInstallProgressText, value);
     }
 
-    public string FfmpegInstallStatusText
+    public bool IsFfmpegAvailable
     {
-        get => _ffmpegInstallStatusText;
-        private set => SetProperty(ref _ffmpegInstallStatusText, value);
+        get => _isFfmpegAvailable;
+        private set
+        {
+            if (!SetProperty(ref _isFfmpegAvailable, value))
+                return;
+
+            OnPropertyChanged(nameof(IsFfmpegMissing));
+            OnPropertyChanged(nameof(IsFfmpegUnsupported));
+        }
+    }
+
+    public string FfmpegDirectory
+    {
+        get => _ffmpegDirectory;
+        private set => SetProperty(ref _ffmpegDirectory, value);
     }
 
     public bool IsFfmpegAutoInstallSupported => _ffmpegInstaller.IsSupported;
+    public bool IsFfmpegMissing => !IsFfmpegAvailable && IsFfmpegAutoInstallSupported;
+    public bool IsFfmpegUnsupported => !IsFfmpegAvailable && !IsFfmpegAutoInstallSupported;
 
-    public string PersonDetectionModelStatusText
+    public bool IsPersonDetectionModelFound
     {
-        get => _personDetectionModelStatusText;
-        private set => SetProperty(ref _personDetectionModelStatusText, value);
+        get => _isPersonDetectionModelFound;
+        private set
+        {
+            if (SetProperty(ref _isPersonDetectionModelFound, value))
+                OnPropertyChanged(nameof(IsPersonDetectionModelMissing));
+        }
+    }
+
+    public bool IsPersonDetectionModelMissing => !IsPersonDetectionModelFound;
+
+    public string PersonDetectionModelName
+    {
+        get => _personDetectionModelName;
+        private set => SetProperty(ref _personDetectionModelName, value);
+    }
+
+    public string PersonDetectionModelPath
+    {
+        get => _personDetectionModelPath;
+        private set => SetProperty(ref _personDetectionModelPath, value);
     }
 
     public string ImageCachePathText => _localization.Format("Status.ImageCachePath", _imageCache.CacheDirectory);
@@ -665,22 +703,33 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
 
             Ui(() =>
             {
-                PersonDetectionModelStatusText = BuildPersonDetectionModelStatusText(modelInfo);
+                RefreshFfmpegStatus(ffmpegInfo);
+                ApplyPersonDetectionModelInfo(modelInfo);
 
-                AddLog(string.IsNullOrWhiteSpace(chromiumPath)
-                    ? "未找到 Chromium 浏览器。首次使用请点击“安装 Chromium”。"
-                    : $"已找到 Chromium 浏览器，位置：{chromiumPath}");
+                AddLocalizedLog(
+                    string.IsNullOrWhiteSpace(chromiumPath)
+                        ? "Log.Component.ChromiumMissing"
+                        : "Log.Component.ChromiumFound",
+                    chromiumPath);
 
-                AddLog(ffmpegInfo.IsFound
-                    ? $"已找到 FFmpeg，位置：{ffmpegInfo.FfmpegPath}；ffprobe：{ffmpegInfo.FfprobePath}"
-                    : "未找到 FFmpeg。开启视频音轨检测前可点击“下载 FFmpeg”。");
+                if (ffmpegInfo.IsFound)
+                {
+                    AddLocalizedLog(
+                        "Log.Component.FfmpegFound",
+                        ffmpegInfo.FfmpegPath,
+                        ffmpegInfo.FfprobePath);
+                }
+                else
+                {
+                    AddLocalizedLog("Log.Component.FfmpegMissing");
+                }
 
                 AddPersonDetectionModelLog(modelInfo);
             });
         }
         catch (Exception ex)
         {
-            Ui(() => AddLog($"检查 Chromium、FFmpeg 和 YOLO 组件失败：{ex.Message}"));
+            Ui(() => AddLocalizedLog("Log.Component.CheckFailed", ex.Message));
         }
     }
 
@@ -691,11 +740,11 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
             var items = await _historyService.LoadAsync();
             Ui(() => SyncHistory(items));
             await LoadHistoryAvatarsAsync(items);
-            Ui(() => AddLog($"已加载 {items.Count} 位作者的下载历史。"));
+            Ui(() => AddLocalizedLog("Log.HistoryLoaded", items.Count));
         }
         catch (Exception ex)
         {
-            Ui(() => AddLog($"加载下载历史失败：{ex.Message}"));
+            Ui(() => AddLocalizedLog("Log.HistoryLoadFailed", ex.Message));
         }
     }
 
@@ -754,7 +803,6 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
             "正在准备 Chromium 下载…");
 
         var startedAt = DateTimeOffset.Now;
-        var loggedDownloadUrls = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var progress = new Progress<ChromiumInstallProgress>(item =>
         {
             IsChromiumInstallProgressIndeterminate = item.Percent is null;
@@ -762,12 +810,6 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
                 ChromiumInstallProgressPercent = Math.Clamp(percent, 0d, 100d);
 
             ChromiumInstallProgressText = BuildChromiumInstallProgressText(item);
-
-            if (!string.IsNullOrWhiteSpace(item.DownloadUrl)
-                && loggedDownloadUrls.Add(item.DownloadUrl))
-            {
-                AddLog($"{item.Stage} 下载地址：{item.DownloadUrl}");
-            }
         });
 
         try
@@ -790,7 +832,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
                 var chromiumPath = await _browser.FindInstalledChromiumPathAsync(CancellationToken.None);
                 if (!string.IsNullOrWhiteSpace(chromiumPath))
                 {
-                    AddLog($"已找到 Chromium 浏览器，位置：{chromiumPath}");
+                    AddLocalizedLog("Log.Component.ChromiumFound", chromiumPath);
                     if (IsPathInsideDirectory(
                         chromiumPath,
                         _browser.PreferredChromiumInstallDirectory))
@@ -933,17 +975,18 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
         IsFfmpegInstallProgressVisible = true;
         IsFfmpegInstallProgressIndeterminate = true;
         FfmpegInstallProgressPercent = 0;
-        FfmpegInstallProgressText = "正在准备 FFmpeg 下载…";
+        FfmpegInstallProgressText = _localization.Get("Ffmpeg.Progress.Preparing");
 
         try
         {
-            StatusText = "正在后台下载并安装 FFmpeg…";
-            AddLog("开始访问 gyan.dev FFmpeg Windows 构建页，并下载 release essentials ZIP。界面会实时显示下载百分比、大小和速度。");
+            StatusText = _localization.Get("Ffmpeg.Status.Downloading");
+            AddLocalizedLog("Ffmpeg.Log.Starting");
 
-            var loggedDownloadUrls = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var progress = new Progress<FfmpegInstallProgress>(item =>
             {
-                IsFfmpegInstallProgressIndeterminate = item.TotalBytes is not > 0;
+                var isDownloading = item.BytesReceived > 0;
+                IsFfmpegInstallProgressIndeterminate =
+                    !isDownloading || item.Percentage is null;
 
                 if (item.Percentage is { } percentage)
                 {
@@ -953,37 +996,30 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
 
                 FfmpegInstallProgressText =
                     BuildFfmpegInstallProgressText(item);
-                FfmpegInstallStatusText = item.Message;
-
-                if (!string.IsNullOrWhiteSpace(item.DownloadUrl)
-                    && loggedDownloadUrls.Add(item.DownloadUrl))
-                {
-                    AddLog($"FFmpeg 下载地址：{item.DownloadUrl}");
-                }
             });
 
             var result = await _ffmpegInstaller.InstallAsync(progress);
             IsFfmpegInstallProgressIndeterminate = false;
             FfmpegInstallProgressPercent = 100;
-            FfmpegInstallProgressText = "FFmpeg 下载并安装完成";
-            FfmpegInstallStatusText = _ffmpegInstaller.GetStatusText();
-            StatusText = "FFmpeg 下载并安装完成";
-            AddLog($"ffmpeg.exe：{result.FfmpegPath}");
-            AddLog($"ffprobe.exe：{result.FfprobePath}");
-            AddLog("无需重启程序；后续开启视频音轨检测时会直接使用新安装的工具。");
+            FfmpegInstallProgressText = _localization.Get("Ffmpeg.Progress.Completed");
+            RefreshFfmpegStatus(_ffmpegInstaller.GetToolInfo());
+            StatusText = _localization.Get("Ffmpeg.Status.Completed");
+            AddLocalizedLog("Ffmpeg.Log.ExecutablePath", "ffmpeg.exe", result.FfmpegPath);
+            AddLocalizedLog("Ffmpeg.Log.ExecutablePath", "ffprobe.exe", result.FfprobePath);
+            AddLocalizedLog("Ffmpeg.Log.NoRestart");
         }
         catch (OperationCanceledException)
         {
-            FfmpegInstallProgressText = "FFmpeg 下载已取消";
-            StatusText = "FFmpeg 下载已取消";
-            FfmpegInstallStatusText = _ffmpegInstaller.GetStatusText();
+            FfmpegInstallProgressText = _localization.Get("Ffmpeg.Progress.Canceled");
+            StatusText = _localization.Get("Ffmpeg.Status.Canceled");
+            RefreshFfmpegStatus(_ffmpegInstaller.GetToolInfo());
         }
         catch (Exception ex)
         {
-            FfmpegInstallProgressText = $"FFmpeg 下载或安装失败：{ex.Message}";
-            StatusText = "FFmpeg 下载或安装失败";
-            FfmpegInstallStatusText = $"安装失败：{ex.Message}";
-            AddLog($"FFmpeg 安装失败：{ex.Message}");
+            FfmpegInstallProgressText = _localization.Format("Ffmpeg.Progress.Failed", ex.Message);
+            StatusText = _localization.Get("Ffmpeg.Status.Failed");
+            RefreshFfmpegStatus(_ffmpegInstaller.GetToolInfo());
+            AddLocalizedLog("Ffmpeg.Log.Failed", ex.Message);
         }
         finally
         {
@@ -1191,6 +1227,14 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
 
     public void AddRemoteLog(string message) => Ui(() => AddLog(message));
 
+    public void AddRemoteLocalizedLog(string key, params object?[] arguments)
+        => Ui(() => AddLocalizedLog(key, arguments));
+
+    public string Localize(string key, params object?[] arguments)
+        => arguments.Length == 0
+            ? _localization.Get(key)
+            : _localization.Format(key, arguments);
+
 
     private void ApplyRemoteApiToken()
     {
@@ -1224,6 +1268,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
 
     public void SetRemoteApiStatus(string message)
         => Ui(() => RemoteApiStatusText = message);
+
+    public void SetRemoteApiLocalizedStatus(string key, params object?[] arguments)
+        => Ui(() => RemoteApiStatusText = Localize(key, arguments));
 
     public RemoteCrawlerSnapshot CreateRemoteSnapshot()
     {
@@ -1965,24 +2012,50 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
             target.AvatarImage = null;
     }
 
+    private void RefreshFfmpegStatus(FfmpegToolInfo toolInfo)
+    {
+        IsFfmpegAvailable = toolInfo.IsFound;
+        FfmpegDirectory = toolInfo.IsFound && !string.IsNullOrWhiteSpace(toolInfo.FfmpegPath)
+            ? Path.GetDirectoryName(toolInfo.FfmpegPath) ?? string.Empty
+            : string.Empty;
+        OnPropertyChanged(nameof(IsFfmpegMissing));
+        OnPropertyChanged(nameof(IsFfmpegUnsupported));
+        OnPropertyChanged(nameof(InstallFfmpegButtonText));
+    }
+
     private PersonDetectionModelInfo RefreshPersonDetectionModelStatus()
     {
         var modelInfo = _personImageDetector.GetModelInfo();
-        PersonDetectionModelStatusText = BuildPersonDetectionModelStatusText(modelInfo);
+        ApplyPersonDetectionModelInfo(modelInfo);
         return modelInfo;
     }
 
-    private static string BuildPersonDetectionModelStatusText(PersonDetectionModelInfo modelInfo)
-        => modelInfo.IsFound
-            ? $"已发现 YOLO 模型：{modelInfo.ModelName}\n位置：{modelInfo.ModelPath}"
-            : "未发现 YOLO 模型。请将 person-detection.onnx、yolo11.onnx，或 yolo11 后带任意一个字母的 ONNX 模型放入程序根目录的 Models 文件夹。";
+    private void ApplyPersonDetectionModelInfo(PersonDetectionModelInfo modelInfo)
+    {
+        IsPersonDetectionModelFound = modelInfo.IsFound;
+        PersonDetectionModelName = modelInfo.ModelName ?? string.Empty;
+        PersonDetectionModelPath = modelInfo.ModelPath ?? string.Empty;
+    }
 
     private void AddPersonDetectionModelLog(PersonDetectionModelInfo modelInfo)
     {
-        AddLog(modelInfo.IsFound
-            ? $"已找到 YOLO 模型：{modelInfo.ModelName}，位置：{modelInfo.ModelPath}"
-            : "未找到 YOLO 模型。人像检测开启时将跳过检测并保留图片；请检查程序根目录的 Models 文件夹。");
+        if (modelInfo.IsFound)
+        {
+            AddLocalizedLog(
+                "Log.Component.YoloFound",
+                modelInfo.ModelName,
+                modelInfo.ModelPath);
+        }
+        else
+        {
+            AddLocalizedLog("Log.Component.YoloMissing");
+        }
     }
+
+    private void AddLocalizedLog(string key, params object?[] arguments)
+        => AddLog(arguments.Length == 0
+            ? _localization.Get(key)
+            : _localization.Format(key, arguments));
 
     private void AddLog(string message)
     {
@@ -2158,6 +2231,12 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
     private void RefreshLocalizedUi()
     {
         RefreshPlatformDisplayNames();
+        if (!_remoteApiEnabled)
+        {
+            RemoteApiStatusText = _localization.Get(
+                "Remote.Status.NotStarted",
+                "远程服务器未启动");
+        }
         BrowserModeStatusText = GetBrowserModeStatusText(IsHeadlessMode, _browser.IsLoginRecoveryActive);
         OnPropertyChanged(nameof(LanguageDirectoryText));
         OnPropertyChanged(nameof(InstallChromiumButtonText));

@@ -98,8 +98,7 @@ public sealed class GyanFfmpegInstallerService : IFfmpegInstallerService, IDispo
 
         var packageUri = await ResolvePackageUriAsync(cancellationToken);
         progress?.Report(new FfmpegInstallProgress(
-            $"已找到 release essentials 压缩包：{packageUri.AbsolutePath.Split('/').Last()}",
-            DownloadUrl: packageUri.AbsoluteUri));
+            $"已找到 release essentials 压缩包：{packageUri.AbsolutePath.Split('/').Last()}"));
 
         var temporaryRoot = Path.Combine(
             Path.GetTempPath(),
@@ -206,12 +205,6 @@ public sealed class GyanFfmpegInstallerService : IFfmpegInstallerService, IDispo
         IProgress<FfmpegInstallProgress>? progress,
         CancellationToken cancellationToken)
     {
-        var probe = await ProbePackageAsync(packageUri, cancellationToken);
-        progress?.Report(new FfmpegInstallProgress(
-            "正在连接 FFmpeg 下载服务器",
-            TotalBytes: probe.TotalBytes,
-            DownloadUrl: probe.FinalUri.AbsoluteUri));
-
         using var request = new HttpRequestMessage(HttpMethod.Get, packageUri);
         request.Headers.Referrer = new Uri(BuildsPageUrl);
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/zip"));
@@ -223,17 +216,9 @@ public sealed class GyanFfmpegInstallerService : IFfmpegInstallerService, IDispo
             cancellationToken);
         response.EnsureSuccessStatusCode();
 
-        var finalUri = response.RequestMessage?.RequestUri ?? probe.FinalUri;
-        var totalBytes = response.Content.Headers.ContentRange?.Length
-                         ?? response.Content.Headers.ContentLength
-                         ?? probe.TotalBytes;
+        var totalBytes = response.Content.Headers.ContentLength;
         if (totalBytes is > MaximumPackageBytes)
             throw new InvalidDataException("FFmpeg 压缩包大小异常，已取消下载。");
-
-        progress?.Report(new FfmpegInstallProgress(
-            "正在下载 FFmpeg",
-            TotalBytes: totalBytes,
-            DownloadUrl: finalUri.AbsoluteUri));
 
         await using var input = await response.Content.ReadAsStreamAsync(cancellationToken);
         await using var output = new FileStream(
@@ -268,8 +253,7 @@ public sealed class GyanFfmpegInstallerService : IFfmpegInstallerService, IDispo
                     "正在下载 FFmpeg",
                     received,
                     totalBytes,
-                    CalculateBytesPerSecond(received, downloadTimer.Elapsed),
-                    finalUri.AbsoluteUri));
+                    CalculateBytesPerSecond(received, downloadTimer.Elapsed)));
             }
         }
 
@@ -281,87 +265,8 @@ public sealed class GyanFfmpegInstallerService : IFfmpegInstallerService, IDispo
             "正在下载 FFmpeg",
             received,
             totalBytes,
-            CalculateBytesPerSecond(received, downloadTimer.Elapsed),
-            finalUri.AbsoluteUri));
+            CalculateBytesPerSecond(received, downloadTimer.Elapsed)));
     }
-
-    /// <summary>
-    /// 先探测重定向后的真实下载地址和文件总大小。
-    /// 部分 CDN 的正式 GET 响应不返回 Content-Length，因此依次尝试 HEAD
-    /// 和只请求第一个字节的 Range 请求，以便进度条仍能显示真实百分比。
-    /// </summary>
-    private async Task<PackageProbeResult> ProbePackageAsync(
-        Uri packageUri,
-        CancellationToken cancellationToken)
-    {
-        var headResult = await TryProbeAsync(
-            HttpMethod.Head,
-            packageUri,
-            useRange: false,
-            cancellationToken: cancellationToken);
-        if (headResult.TotalBytes is > 0)
-            return headResult;
-
-        var rangeResult = await TryProbeAsync(
-            HttpMethod.Get,
-            headResult.FinalUri,
-            useRange: true,
-            cancellationToken: cancellationToken);
-        return rangeResult.TotalBytes is > 0
-            ? rangeResult
-            : headResult;
-    }
-
-    private async Task<PackageProbeResult> TryProbeAsync(
-        HttpMethod method,
-        Uri packageUri,
-        bool useRange,
-        CancellationToken cancellationToken)
-    {
-        try
-        {
-            using var request = new HttpRequestMessage(method, packageUri);
-            request.Headers.Referrer = new Uri(BuildsPageUrl);
-            request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/zip"));
-            request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/octet-stream"));
-            if (useRange)
-                request.Headers.Range = new RangeHeaderValue(0, 0);
-
-            using var response = await _httpClient.SendAsync(
-                request,
-                HttpCompletionOption.ResponseHeadersRead,
-                cancellationToken);
-            var finalUri = response.RequestMessage?.RequestUri ?? packageUri;
-            if (!response.IsSuccessStatusCode)
-                return new PackageProbeResult(finalUri, null);
-
-            var totalBytes = response.Content.Headers.ContentRange?.Length;
-            if (totalBytes is null
-                && (!useRange || response.StatusCode == HttpStatusCode.OK))
-            {
-                totalBytes = response.Content.Headers.ContentLength;
-            }
-
-            if (totalBytes is > MaximumPackageBytes)
-                throw new InvalidDataException("FFmpeg 压缩包大小异常，已取消下载。");
-
-            return new PackageProbeResult(finalUri, totalBytes);
-        }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
-        catch (InvalidDataException)
-        {
-            throw;
-        }
-        catch
-        {
-            return new PackageProbeResult(packageUri, null);
-        }
-    }
-
-    private sealed record PackageProbeResult(Uri FinalUri, long? TotalBytes);
 
     private async Task VerifyChecksumIfAvailableAsync(
         Uri packageUri,

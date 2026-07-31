@@ -1,4 +1,4 @@
-using System.Net;
+﻿using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using Avalonia.Threading;
@@ -53,19 +53,17 @@ public sealed class RemoteApiHostService : IAsyncDisposable
     {
         if (_application is not null)
         {
-            _viewModel.SetRemoteApiStatus(
-                RemoteApiStatusKind.RunningPort,
-                _viewModel.EffectiveRemoteApiPort.ToString());
+            _viewModel.SetRemoteApiLocalizedStatus("Remote.Status.RunningPort", _viewModel.RemoteApiPort);
             return;
         }
 
         WebApplication? app = null;
         try
         {
-            _viewModel.SetRemoteApiStatus(RemoteApiStatusKind.Starting);
+            _viewModel.SetRemoteApiLocalizedStatus("Remote.Status.Starting");
 
             var builder = WebApplication.CreateSlimBuilder();
-            builder.WebHost.UseUrls($"http://0.0.0.0:{_viewModel.EffectiveRemoteApiPort}");
+            builder.WebHost.UseUrls($"http://0.0.0.0:{_viewModel.RemoteApiPort}");
             builder.Services.AddCors(options =>
             {
                 options.AddDefaultPolicy(policy => policy
@@ -106,7 +104,7 @@ public sealed class RemoteApiHostService : IAsyncDisposable
                 {
                     context.Response.StatusCode = StatusCodes.Status401Unauthorized;
                     await context.Response.WriteAsJsonAsync(
-                        RemoteCommandResult.Fail("远程访问令牌不正确。"),
+                        RemoteCommandResult.Fail(_viewModel.Localize("Remote.Api.TokenInvalid")),
                         context.RequestAborted);
                     return;
                 }
@@ -153,7 +151,7 @@ public sealed class RemoteApiHostService : IAsyncDisposable
             {
                 await InvokeOnUiAsync(() =>
                     _viewModel.ApplyRemoteSettingsAsync(settings));
-                return RemoteCommandResult.Ok("设置已保存，桌面客户端界面与 settings.json 已同步。");
+                return RemoteCommandResult.Ok(_viewModel.Localize("Remote.Api.SettingsSaved"));
             });
             app.MapPost("/api/actions/{action}", (string action) => ExecuteActionAsync(action));
 
@@ -161,39 +159,23 @@ public sealed class RemoteApiHostService : IAsyncDisposable
             _application = app;
 
             var addresses = GetLanAddresses()
-                .Select(address => $"http://{address}:{_viewModel.EffectiveRemoteApiPort}")
+                .Select(address => $"http://{address}:{_viewModel.RemoteApiPort}")
                 .ToArray();
             var addressText = addresses.Length == 0
-                ? $"http://127.0.0.1:{_viewModel.EffectiveRemoteApiPort}"
+                ? $"http://127.0.0.1:{_viewModel.RemoteApiPort}"
                 : string.Join("、", addresses);
 
-            _viewModel.SetRemoteApiStatus(
-                RemoteApiStatusKind.RunningAddresses,
-                addressText);
-            _viewModel.AddRemoteLog($"远程控制服务已启动：{addressText}");
-            _viewModel.AddRemoteLog($"远程访问令牌：{_viewModel.RemoteApiToken}");
+            _viewModel.SetRemoteApiLocalizedStatus("Remote.Status.RunningAt", addressText);
+            _viewModel.AddRemoteLocalizedLog("Remote.Log.Started", addressText);
+            _viewModel.AddRemoteLocalizedLog("Remote.Log.Token", _viewModel.RemoteApiToken);
         }
         catch (Exception ex)
         {
             if (app is not null)
                 await app.DisposeAsync();
 
-            if (IsAddressAlreadyInUse(ex))
-            {
-                var message =
-                    $"启动失败：端口 {_viewModel.EffectiveRemoteApiPort} 已被占用，请修改远程端口后保存。";
-                _viewModel.SetRemoteApiStatus(
-                    RemoteApiStatusKind.StartFailedPortInUse,
-                    _viewModel.EffectiveRemoteApiPort.ToString());
-                _viewModel.AddRemoteLog($"远程控制服务{message}");
-            }
-            else
-            {
-                _viewModel.SetRemoteApiStatus(
-                    RemoteApiStatusKind.StartFailed,
-                    ex.Message);
-                _viewModel.AddRemoteLog($"远程控制服务启动失败：{ex.Message}");
-            }
+            _viewModel.SetRemoteApiLocalizedStatus("Remote.Status.StartFailed", ex.Message);
+            _viewModel.AddRemoteLocalizedLog("Remote.Log.StartFailed", ex.Message);
         }
     }
 
@@ -202,11 +184,11 @@ public sealed class RemoteApiHostService : IAsyncDisposable
         var application = Interlocked.Exchange(ref _application, null);
         if (application is null)
         {
-            _viewModel.SetRemoteApiStatus(RemoteApiStatusKind.Stopped);
+            _viewModel.SetRemoteApiLocalizedStatus("Remote.Status.Stopped");
             return;
         }
 
-        _viewModel.SetRemoteApiStatus(RemoteApiStatusKind.Stopping);
+        _viewModel.SetRemoteApiLocalizedStatus("Remote.Status.Stopping");
         try
         {
             await application.StopAsync(TimeSpan.FromSeconds(3));
@@ -216,8 +198,8 @@ public sealed class RemoteApiHostService : IAsyncDisposable
             await application.DisposeAsync();
         }
 
-        _viewModel.SetRemoteApiStatus(RemoteApiStatusKind.Stopped);
-        _viewModel.AddRemoteLog("远程控制服务已关闭，端口已停止监听。");
+        _viewModel.SetRemoteApiLocalizedStatus("Remote.Status.Stopped");
+        _viewModel.AddRemoteLocalizedLog("Remote.Log.Stopped");
     }
 
     private async Task<RemoteCommandResult> ExecuteActionAsync(string action)
@@ -229,40 +211,40 @@ public sealed class RemoteApiHostService : IAsyncDisposable
                 case "install-chromium":
                     return await StartAsyncCommandAsync(
                         _viewModel.InstallChromiumCommand,
-                        "Chromium 安装任务已启动，请在日志中查看进度。");
+                        _viewModel.Localize("Remote.Api.InstallChromiumAccepted"));
 
                 case "open-browser":
                     return await StartAsyncCommandAsync(
                         _viewModel.OpenBrowserCommand,
-                        "浏览器打开任务已启动。");
+                        _viewModel.Localize("Remote.Api.OpenBrowserAccepted"));
 
                 case "start":
                     return await StartAsyncCommandAsync(
                         _viewModel.StartCaptureCommand,
-                        "采集任务已启动。");
+                        _viewModel.Localize("Remote.Api.StartCaptureAccepted"));
 
                 case "stop":
                     await InvokeOnUiAsync(() =>
                     {
                         if (!_viewModel.StopCaptureCommand.CanExecute(null))
-                            throw new InvalidOperationException("当前没有正在运行的采集任务。");
+                            throw new InvalidOperationException(_viewModel.Localize("Remote.Api.NoCaptureRunning"));
 
                         _viewModel.StopCaptureCommand.Execute(null);
                     });
-                    return RemoteCommandResult.Ok("停止命令已发送。");
+                    return RemoteCommandResult.Ok(_viewModel.Localize("Remote.Api.StopAccepted"));
 
                 case "open-download-folder":
                     await InvokeOnUiAsync(() =>
                     {
                         if (!_viewModel.OpenDownloadFolderCommand.CanExecute(null))
-                            throw new InvalidOperationException("当前无法打开下载目录。");
+                            throw new InvalidOperationException(_viewModel.Localize("Remote.Api.CannotOpenFolder"));
 
                         _viewModel.OpenDownloadFolderCommand.Execute(null);
                     });
-                    return RemoteCommandResult.Ok("已在主机上打开下载目录。");
+                    return RemoteCommandResult.Ok(_viewModel.Localize("Remote.Api.FolderOpened"));
 
                 default:
-                    return RemoteCommandResult.Fail($"未知操作：{action}");
+                    return RemoteCommandResult.Fail(_viewModel.Localize("Remote.Api.UnknownAction", action));
             }
         }
         catch (Exception ex)
@@ -278,7 +260,7 @@ public sealed class RemoteApiHostService : IAsyncDisposable
         await InvokeOnUiAsync(() =>
         {
             if (!command.CanExecute(null))
-                throw new InvalidOperationException("当前状态下不能执行该操作。");
+                throw new InvalidOperationException(_viewModel.Localize("Remote.Api.ActionUnavailable"));
 
             _ = command.ExecuteAsync(null);
         });
@@ -345,23 +327,6 @@ public sealed class RemoteApiHostService : IAsyncDisposable
         var rightBytes = System.Text.Encoding.UTF8.GetBytes(right);
         return leftBytes.Length == rightBytes.Length
                && System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(leftBytes, rightBytes);
-    }
-
-    private static bool IsAddressAlreadyInUse(Exception exception)
-    {
-        for (Exception? current = exception; current is not null; current = current.InnerException)
-        {
-            if (current is SocketException { SocketErrorCode: SocketError.AddressAlreadyInUse })
-                return true;
-
-            if (current.Message.Contains("address already in use", StringComparison.OrdinalIgnoreCase)
-                || current.Message.Contains("地址已在使用", StringComparison.OrdinalIgnoreCase))
-            {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     private static IEnumerable<string> GetLanAddresses()

@@ -1,4 +1,4 @@
-using System.Reflection;
+﻿using System.Reflection;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Unicode;
@@ -48,6 +48,10 @@ public sealed class LocalizationService : ObservableObject
     {
         _packs.Clear();
 
+        // 先加载内置完整语言包，再让 Languages 目录中的同语言文件按 key 覆盖。
+        // 这样应用升级新增 key 后，用户旧版本语言文件不会导致界面直接显示 key 名。
+        LoadEmbeddedPacks();
+
         try
         {
             if (Directory.Exists(LanguageDirectory))
@@ -63,8 +67,6 @@ public sealed class LocalizationService : ObservableObject
         {
             // 目录损坏或单个语言包不可读时，继续使用嵌入式语言包。
         }
-
-        LoadEmbeddedPacks();
 
         Languages = _packs.Values
             .OrderBy(pack => pack.SortOrder)
@@ -181,6 +183,18 @@ public sealed class LocalizationService : ObservableObject
             pack.Code = pack.Code.Trim();
             pack.DisplayName = pack.DisplayName.Trim();
             pack.Source = source;
+
+            if (_packs.TryGetValue(pack.Code, out var embeddedBase))
+            {
+                var mergedStrings = new Dictionary<string, string>(
+                    embeddedBase.Strings,
+                    StringComparer.Ordinal);
+                foreach (var pair in pack.Strings)
+                    mergedStrings[pair.Key] = pair.Value;
+
+                pack.Strings = mergedStrings;
+            }
+
             _packs[pack.Code] = pack;
         }
         catch

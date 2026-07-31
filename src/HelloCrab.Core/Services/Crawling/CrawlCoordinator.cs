@@ -1,4 +1,4 @@
-using System.Threading.Channels;
+﻿using System.Threading.Channels;
 using HelloCrab.Core.Models;
 using HelloCrab.Core.Services.Browser;
 using HelloCrab.Core.Services.Downloading;
@@ -519,26 +519,12 @@ public sealed class CrawlCoordinator : IAsyncDisposable
 
                     try
                     {
-                        if (adapter is ISiteManagedDownloadAdapter siteManagedDownloader)
-                        {
-                            await siteManagedDownloader.DownloadWorkAsync(
-                                work,
-                                _platformDownloadRoot,
-                                _downloadOptions,
-                                RaiseLog,
-                                progress => OnDownloadProgressChanged(siteManagedDownloader, progress),
-                                cancellationToken);
-                        }
-                        else
-                        {
-                            await _downloader.DownloadWorkAsync(
-                                work,
-                                _platformDownloadRoot,
-                                _downloadOptions,
-                                _personDetectionSessionId,
-                                cancellationToken);
-                        }
-
+                        await _downloader.DownloadWorkAsync(
+                            work,
+                            _platformDownloadRoot,
+                            _downloadOptions,
+                            _personDetectionSessionId,
+                            cancellationToken);
                         await _index.MarkCompletedAsync(authorFolder, completionKey, cancellationToken);
                         Interlocked.Increment(ref _downloadedCount);
                     }

@@ -1,5 +1,3 @@
-using System.Diagnostics;
-using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.RegularExpressions;
 using HelloCrab.Core.Services.Browser;
@@ -33,198 +31,54 @@ public sealed class PlaywrightChromiumInstaller
                 null,
                 "Chromium"));
 
-            return await RunPlaywrightInstallProcessAsync(progress, cancellationToken);
+            var previousBrowsersPath = Environment.GetEnvironmentVariable(
+                BrowsersPathEnvironmentVariable,
+                EnvironmentVariableTarget.Process);
+            var originalOut = Console.Out;
+            var originalError = Console.Error;
+
+            using var outputWriter = new PlaywrightInstallProgressWriter(
+                originalOut,
+                progress);
+            using var errorWriter = new PlaywrightInstallProgressWriter(
+                originalError,
+                progress);
+
+            try
+            {
+                // Playwright 安装器通过该变量决定浏览器保存位置。
+                Environment.SetEnvironmentVariable(
+                    BrowsersPathEnvironmentVariable,
+                    PreferredInstallDirectory,
+                    EnvironmentVariableTarget.Process);
+
+                // Microsoft.Playwright.Program.Main 会把下载百分比输出到 Console。
+                // 临时使用 Tee TextWriter 捕获输出并解析百分比，同时仍转发到原控制台。
+                Console.SetOut(outputWriter);
+                Console.SetError(errorWriter);
+
+                var exitCode = await Task.Run(
+                    () => Microsoft.Playwright.Program.Main(new[] { "install", "chromium" }),
+                    cancellationToken);
+
+                outputWriter.FlushPending();
+                errorWriter.FlushPending();
+                return exitCode;
+            }
+            finally
+            {
+                Console.SetOut(originalOut);
+                Console.SetError(originalError);
+                Environment.SetEnvironmentVariable(
+                    BrowsersPathEnvironmentVariable,
+                    previousBrowsersPath,
+                    EnvironmentVariableTarget.Process);
+            }
         }
         finally
         {
             InstallGate.Release();
         }
-    }
-
-    /// <summary>
-    /// 直接启动 Playwright 随包附带的 Node 驱动并重定向输出。
-    /// Microsoft.Playwright.Program.Main 启动的是独立子进程，修改 Console.Out
-    /// 无法可靠捕获其下载进度，因此这里直接管理该进程。
-    /// </summary>
-    private async Task<int> RunPlaywrightInstallProcessAsync(
-        IProgress<ChromiumInstallProgress>? progress,
-        CancellationToken cancellationToken)
-    {
-        var (nodePath, cliPath) = FindPlaywrightDriver();
-        var startInfo = new ProcessStartInfo
-        {
-            FileName = nodePath,
-            UseShellExecute = false,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            CreateNoWindow = true,
-            WindowStyle = ProcessWindowStyle.Hidden,
-            WorkingDirectory = AppContext.BaseDirectory,
-            StandardOutputEncoding = Encoding.UTF8,
-            StandardErrorEncoding = Encoding.UTF8
-        };
-
-        startInfo.ArgumentList.Add(cliPath);
-        startInfo.ArgumentList.Add("install");
-        startInfo.ArgumentList.Add("chromium");
-
-        startInfo.Environment[BrowsersPathEnvironmentVariable] = PreferredInstallDirectory;
-        startInfo.Environment["PW_LANG_NAME"] = "csharp";
-        startInfo.Environment["PW_LANG_NAME_VERSION"] =
-            $"{Environment.Version.Major}.{Environment.Version.Minor}";
-        startInfo.Environment["PW_CLI_DISPLAY_VERSION"] =
-            typeof(Microsoft.Playwright.Playwright).Assembly
-                .GetName()
-                .Version?
-                .ToString(3) ?? string.Empty;
-
-        using var process = new Process { StartInfo = startInfo };
-        using var outputWriter = new PlaywrightInstallProgressWriter(
-            Console.Out,
-            progress);
-        using var errorWriter = new PlaywrightInstallProgressWriter(
-            Console.Error,
-            progress);
-
-        if (!process.Start())
-            throw new InvalidOperationException("无法启动 Playwright Chromium 安装进程。");
-
-        var outputTask = PumpOutputAsync(
-            process.StandardOutput,
-            outputWriter,
-            cancellationToken);
-        var errorTask = PumpOutputAsync(
-            process.StandardError,
-            errorWriter,
-            cancellationToken);
-
-        try
-        {
-            await Task.WhenAll(
-                process.WaitForExitAsync(cancellationToken),
-                outputTask,
-                errorTask);
-        }
-        catch (OperationCanceledException)
-        {
-            TryKillProcess(process);
-            throw;
-        }
-        finally
-        {
-            outputWriter.FlushPending();
-            errorWriter.FlushPending();
-        }
-
-        return process.ExitCode;
-    }
-
-    private static async Task PumpOutputAsync(
-        StreamReader reader,
-        PlaywrightInstallProgressWriter writer,
-        CancellationToken cancellationToken)
-    {
-        var buffer = new char[2048];
-        while (true)
-        {
-            var read = await reader.ReadAsync(buffer.AsMemory(), cancellationToken);
-            if (read == 0)
-                break;
-
-            writer.Write(new string(buffer, 0, read));
-        }
-    }
-
-    private static void TryKillProcess(Process process)
-    {
-        try
-        {
-            if (!process.HasExited)
-                process.Kill(entireProcessTree: true);
-        }
-        catch
-        {
-            // 取消安装时进程可能已经自行退出。
-        }
-    }
-
-    private static (string NodePath, string CliPath) FindPlaywrightDriver()
-    {
-        var searchDirectories = new List<string>();
-        var configuredSearchPath = Environment.GetEnvironmentVariable(
-            "PLAYWRIGHT_DRIVER_SEARCH_PATH");
-        if (!string.IsNullOrWhiteSpace(configuredSearchPath))
-            searchDirectories.Add(configuredSearchPath);
-
-        if (!string.IsNullOrWhiteSpace(AppContext.BaseDirectory))
-            searchDirectories.Add(AppContext.BaseDirectory);
-
-        var assemblyLocation = typeof(Microsoft.Playwright.Playwright)
-            .Assembly
-            .Location;
-        if (!string.IsNullOrWhiteSpace(assemblyLocation))
-        {
-            var assemblyDirectory = Path.GetDirectoryName(assemblyLocation);
-            if (!string.IsNullOrWhiteSpace(assemblyDirectory))
-            {
-                searchDirectories.Add(assemblyDirectory);
-
-                var nugetRoot = Directory.GetParent(assemblyDirectory)?.Parent;
-                if (nugetRoot is not null)
-                    searchDirectories.Add(nugetRoot.FullName);
-            }
-        }
-
-        var customNodePath = Environment.GetEnvironmentVariable(
-            "PLAYWRIGHT_NODEJS_PATH");
-
-        foreach (var directory in searchDirectories
-                     .Where(path => !string.IsNullOrWhiteSpace(path))
-                     .Distinct(StringComparer.OrdinalIgnoreCase))
-        {
-            var cliPath = Path.GetFullPath(Path.Combine(
-                directory,
-                ".playwright",
-                "package",
-                "cli.js"));
-            var nodePath = !string.IsNullOrWhiteSpace(customNodePath)
-                ? Path.GetFullPath(customNodePath)
-                : Path.GetFullPath(Path.Combine(
-                    directory,
-                    ".playwright",
-                    "node",
-                    GetPlaywrightPlatformId(),
-                    OperatingSystem.IsWindows() ? "node.exe" : "node"));
-
-            if (File.Exists(cliPath) && File.Exists(nodePath))
-                return (nodePath, cliPath);
-        }
-
-        throw new InvalidOperationException(
-            "Microsoft.Playwright 程序集存在，但没有找到随包附带的 Node 驱动。" +
-            "请重新发布或重新解压完整的桌面程序。");
-    }
-
-    private static string GetPlaywrightPlatformId()
-    {
-        if (OperatingSystem.IsWindows())
-            return "win32_x64";
-
-        if (OperatingSystem.IsMacOS())
-        {
-            return RuntimeInformation.ProcessArchitecture == Architecture.Arm64
-                ? "darwin-arm64"
-                : "darwin-x64";
-        }
-
-        if (OperatingSystem.IsLinux())
-        {
-            return RuntimeInformation.ProcessArchitecture == Architecture.Arm64
-                ? "linux-arm64"
-                : "linux-x64";
-        }
-
-        throw new PlatformNotSupportedException("当前系统不受 Playwright Chromium 安装器支持。");
     }
 
     /// <summary>
@@ -421,14 +275,8 @@ public sealed class PlaywrightChromiumInstaller
         private static readonly Regex TotalSizeRegex = new(
             @"(?:of|/)\s*(?<size>\d+(?:\.\d+)?\s*[KMGT]?i?B)",
             RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
-        private static readonly Regex LeadingSizeRegex = new(
-            @"^\s*(?<size>\d+(?:\.\d+)?\s*[KMGT]?i?B)\s*\[",
-            RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
-        private static readonly Regex DownloadWithUrlRegex = new(
-            @"Downloading\s+(?<stage>.+?)\s+from\s+(?<url>https?://\S+)",
-            RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
         private static readonly Regex DownloadStageRegex = new(
-            @"Downloading\s+(?<stage>.+)$",
+            @"Downloading\s+(?<stage>.+?)(?:\s+from\s+|$)",
             RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
         private readonly TextWriter _inner;
@@ -436,7 +284,6 @@ public sealed class PlaywrightChromiumInstaller
         private readonly StringBuilder _line = new();
         private readonly object _sync = new();
         private string _stage = "Chromium";
-        private string? _downloadUrl;
         private string? _lastReportKey;
 
         public PlaywrightInstallProgressWriter(
@@ -532,22 +379,11 @@ public sealed class PlaywrightChromiumInstaller
             if (line.Length == 0)
                 return;
 
-            var stageWithUrlMatch = DownloadWithUrlRegex.Match(line);
-            if (stageWithUrlMatch.Success)
+            var stageMatch = DownloadStageRegex.Match(line);
+            if (stageMatch.Success)
             {
-                _stage = NormalizeStage(stageWithUrlMatch.Groups["stage"].Value);
-                _downloadUrl = stageWithUrlMatch.Groups["url"].Value.Trim();
-                Report(null, _stage, null, _downloadUrl);
-            }
-            else
-            {
-                var stageMatch = DownloadStageRegex.Match(line);
-                if (stageMatch.Success)
-                {
-                    _stage = NormalizeStage(stageMatch.Groups["stage"].Value);
-                    _downloadUrl = null;
-                    Report(null, _stage, null, null);
-                }
+                _stage = NormalizeStage(stageMatch.Groups["stage"].Value);
+                Report(null, _stage, null);
             }
 
             var percentMatch = PercentRegex.Match(line);
@@ -560,38 +396,27 @@ public sealed class PlaywrightChromiumInstaller
             {
                 percent = Math.Clamp(percent, 0d, 100d);
                 var sizeMatch = TotalSizeRegex.Match(line);
-                if (!sizeMatch.Success)
-                    sizeMatch = LeadingSizeRegex.Match(line);
-
                 var detail = sizeMatch.Success
                     ? $"size:{sizeMatch.Groups["size"].Value}"
                     : null;
-                Report(percent, _stage, detail, _downloadUrl);
+                Report(percent, _stage, detail);
                 return;
             }
 
             if (line.Contains("downloaded to", StringComparison.OrdinalIgnoreCase))
-                Report(100d, _stage, "finalizing", _downloadUrl);
+                Report(100d, _stage, "finalizing");
             else if (line.Contains("extract", StringComparison.OrdinalIgnoreCase))
-                Report(null, _stage, "extracting", _downloadUrl);
+                Report(null, _stage, "extracting");
         }
 
-        private void Report(
-            double? percent,
-            string stage,
-            string? detail,
-            string? downloadUrl)
+        private void Report(double? percent, string stage, string? detail)
         {
-            var key = $"{stage}|{percent:0.##}|{detail}|{downloadUrl}";
+            var key = $"{stage}|{percent:0.##}|{detail}";
             if (string.Equals(key, _lastReportKey, StringComparison.Ordinal))
                 return;
 
             _lastReportKey = key;
-            _progress?.Report(new ChromiumInstallProgress(
-                percent,
-                stage,
-                detail,
-                downloadUrl));
+            _progress?.Report(new ChromiumInstallProgress(percent, stage, detail));
         }
 
         private static string NormalizeStage(string value)
