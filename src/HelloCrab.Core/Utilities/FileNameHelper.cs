@@ -1,5 +1,6 @@
 ﻿using System.Globalization;
 using System.Text;
+using HelloCrab.Core.Services.Settings;
 
 namespace HelloCrab.Core.Utilities;
 
@@ -71,8 +72,11 @@ public static class FileNameHelper
         string? description,
         string? workId,
         bool includeWorkId,
-        int maxLength = 170)
+        int? maxLength = null)
     {
+        var effectiveMaxLength = Math.Max(
+            1,
+            maxLength ?? LongFileNameState.CurrentWorkBaseNameMaxLength);
         var datePrefix = localPublishedAt.ToString("yyyy-MM-dd HH-mm-ss", CultureInfo.InvariantCulture);
         var safeWorkId = includeWorkId && !string.IsNullOrWhiteSpace(workId)
             ? Sanitize(workId, 64)
@@ -81,11 +85,11 @@ public static class FileNameHelper
 
         // 格式：yyyy-MM-dd HH-mm-ss标题[_作品ID]
         // 没有文案时只使用发布时间；图集序号由下载层最后追加。
-        var titleLength = Math.Max(1, maxLength - datePrefix.Length - idSuffix.Length);
+        var titleLength = Math.Max(1, effectiveMaxLength - datePrefix.Length - idSuffix.Length);
         var safeTitle = string.IsNullOrWhiteSpace(description)
             ? string.Empty
             : Sanitize(description, titleLength);
-        return Sanitize(datePrefix + safeTitle + idSuffix, maxLength);
+        return Sanitize(datePrefix + safeTitle + idSuffix, effectiveMaxLength);
     }
 
     public static string ShortenId(string id)

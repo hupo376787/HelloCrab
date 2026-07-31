@@ -395,6 +395,20 @@
                            Foreground="#F59E0B"
                            Text="{DynamicResource Lang.Download.PageDelay}"
                            TextWrapping="Wrap" />
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                  <StackPanel Spacing="2" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding LongFileNameSettingText}"
+                               FontWeight="Medium" />
+                    <TextBlock Classes="caption"
+                               Text="{Binding LongFileNameSettingDescriptionText}"
+                               TextWrapping="Wrap" />
+                  </StackPanel>
+                  <ToggleSwitch Grid.Column="1"
+                                IsChecked="{Binding EnableLongFileNames, Mode=TwoWay}"
+                                OnContent="{DynamicResource Lang.Common.Enabled}"
+                                OffContent="{DynamicResource Lang.Common.Disabled}"
+                                VerticalAlignment="Center" />
+                </Grid>
                 <Grid ColumnDefinitions="*,126,Auto" ColumnSpacing="8">
                   <StackPanel Spacing="2" VerticalAlignment="Center">
                     <TextBlock Text="{DynamicResource Lang.Download.SpeedLimit}"
