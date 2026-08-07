@@ -49,6 +49,37 @@ jobs:
           git apply --check -p2 /tmp/hellocrab-i18n.patch
           git apply -p2 /tmp/hellocrab-i18n.patch
 
+      - name: Add latest UI localization keys
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import pathlib
+
+          additions = {
+              'zh-CN': {
+                  'Download.LongFileNames': '解除长路径限制',
+                  'Download.LongFileNamesDescription': '开启后作品标题文件名最长由 170 提高到 220 个字符；仍受操作系统和文件系统限制。',
+              },
+              'en-US': {
+                  'Download.LongFileNames': 'Allow longer file names',
+                  'Download.LongFileNamesDescription': 'When enabled, work title file names can grow from 170 to 220 characters. Operating-system and file-system limits still apply.',
+              },
+              'ja-JP': {
+                  'Download.LongFileNames': '長いファイル名を許可',
+                  'Download.LongFileNamesDescription': '有効にすると、作品タイトルのファイル名上限を 170 文字から 220 文字へ拡張します。OS とファイルシステムの制限は引き続き適用されます。',
+              },
+          }
+          root = pathlib.Path('src/HelloCrab.Core/Languages')
+          for code, values in additions.items():
+              path = root / f'{code}.json'
+              data = json.loads(path.read_text(encoding='utf-8-sig'))
+              key = 'strings' if 'strings' in data else 'Strings'
+              data[key].update(values)
+              path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+          PY
+
       - name: Validate localization resources
         shell: bash
         run: |
@@ -69,7 +100,7 @@ jobs:
           key_sets = [set(v) for v in packs.values()]
           if not (key_sets[0] == key_sets[1] == key_sets[2]):
               raise SystemExit('Language key sets are not identical.')
-          if len(key_sets[0]) != 563:
+          if len(key_sets[0]) != 565:
               raise SystemExit(f'Unexpected localization key count: {len(key_sets[0])}')
 
           expected = {
