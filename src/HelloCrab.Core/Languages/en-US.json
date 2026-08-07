@@ -37,7 +37,7 @@
     "Capture.StopOnDuplicate": "Stop after consecutive previously downloaded works",
     "Capture.DuplicateThreshold": "Duplicate stop threshold",
     "Capture.DuplicateThresholdHint": "Default: 20. The counter resets when a new work is found.",
-    "Capture.Start": "Collect all author works",
+    "Capture.Start": "Collect all works",
     "Capture.Stop": "Stop collection",
     "Download.Title": "Download settings",
     "Download.RootWatermark": "Download folder",
