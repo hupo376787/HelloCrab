@@ -835,12 +835,6 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
                 if (!string.IsNullOrWhiteSpace(chromiumPath))
                 {
                     AddLocalizedLog("Log.Component.ChromiumFound", chromiumPath);
-                    if (IsPathInsideDirectory(
-                        chromiumPath,
-                        _browser.PreferredChromiumInstallDirectory))
-                    {
-                        AddLocalizedLog("Log.Chromium.PortableUsing");
-                    }
                 }
             }
             else

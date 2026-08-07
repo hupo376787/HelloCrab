@@ -236,7 +236,6 @@
     "Log.Chromium.InstallStarting": "开始下载并安装 Chromium 到程序目录：{0}。界面会实时显示当前组件的下载百分比。",
     "Status.ChromiumInstalled": "Chromium 下载并安装完成",
     "Log.Chromium.InstalledElapsed": "Chromium 已安装到程序目录，用时 {0}。现在可以点击“打开浏览器”。",
-    "Log.Chromium.PortableUsing": "当前正在使用程序目录中的便携 Chromium。关闭 HelloCrab 后，可以删除用户目录下旧的 ms-playwright 缓存。",
     "Status.ChromiumInstallFailedCode": "Chromium 安装失败，退出码 {0}",
     "Log.Chromium.RetryHintAfterExit": "安装程序已经结束，安装按钮已恢复，可以检查网络后重新尝试。",
     "Status.ChromiumInstallFailed": "Chromium 安装失败",

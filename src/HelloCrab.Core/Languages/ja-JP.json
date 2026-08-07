@@ -236,7 +236,6 @@
     "Log.Chromium.InstallStarting": "Chromium を次のプログラムディレクトリへダウンロードしてインストールします：{0}。コンポーネントの進捗率をリアルタイムで表示します。",
     "Status.ChromiumInstalled": "Chromium のダウンロードとインストールが完了しました",
     "Log.Chromium.InstalledElapsed": "Chromium をプログラムディレクトリにインストールしました。所要時間：{0}。「ブラウザーを開く」をクリックできます。",
-    "Log.Chromium.PortableUsing": "現在はプログラムディレクトリ内のポータブル Chromium を使用しています。HelloCrab 終了後、ユーザーディレクトリの古い ms-playwright キャッシュは削除できます。",
     "Status.ChromiumInstallFailedCode": "Chromium のインストールに失敗しました。終了コード {0}",
     "Log.Chromium.RetryHintAfterExit": "インストーラーは終了しました。インストールボタンは再度使用できます。ネットワークを確認して再試行してください。",
     "Status.ChromiumInstallFailed": "Chromium のインストールに失敗しました",

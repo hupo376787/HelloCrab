@@ -236,7 +236,6 @@
     "Log.Chromium.InstallStarting": "Downloading and installing Chromium to: {0}. Component download progress will be shown in real time.",
     "Status.ChromiumInstalled": "Chromium download and installation completed",
     "Log.Chromium.InstalledElapsed": "Chromium was installed to the program directory in {0}. You can now click “Open browser”.",
-    "Log.Chromium.PortableUsing": "The portable Chromium in the program directory is now in use. After closing HelloCrab, the old ms-playwright cache in the user profile can be deleted.",
     "Status.ChromiumInstallFailedCode": "Chromium installation failed, exit code {0}",
     "Log.Chromium.RetryHintAfterExit": "The installer has exited and the install button is available again. Check the network and retry.",
     "Status.ChromiumInstallFailed": "Chromium installation failed",
