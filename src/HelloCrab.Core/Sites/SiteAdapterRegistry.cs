@@ -1,3 +1,4 @@
+using HelloCrab.Core.Services.Localization;
 using HelloCrab.Core.Models;
 
 namespace HelloCrab.Core.Sites;
@@ -19,5 +20,5 @@ public sealed class SiteAdapterRegistry
     public ISiteAdapter GetRequired(string id)
         => _adapters.TryGetValue(id, out var adapter)
             ? adapter
-            : throw new InvalidOperationException($"未注册平台适配器：{id}");
+            : throw new InvalidOperationException(RuntimeLocalization.Format("Error.Site.NotRegistered", "未注册平台适配器：{0}", id));
 }

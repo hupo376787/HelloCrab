@@ -1,3 +1,4 @@
+using HelloCrab.Core.Services.Localization;
 using System.Collections.Concurrent;
 using System.Globalization;
 using System.Net;
@@ -44,7 +45,7 @@ public sealed class MeipianSiteAdapter : ISiteAdapter
         new(StringComparer.Ordinal);
 
     public string Id => "meipian";
-    public string DisplayName => "美篇网页版";
+    public string DisplayName => RuntimeLocalization.Get("Platform.meipian", "美篇网页版");
     public string HomeUrl => "https://www.meipian.cn/";
 
     public bool CanHandlePage(string pageUrl)
@@ -104,17 +105,17 @@ public sealed class MeipianSiteAdapter : ISiteAdapter
 
         var html = await browser.FetchTextAsync(work.SourceUrl, cancellationToken);
         if (string.IsNullOrWhiteSpace(html))
-            throw new InvalidOperationException("美篇文章详情返回了空文档。");
+            throw new InvalidOperationException(RuntimeLocalization.Get("Meipian.Error.EmptyDetail", "美篇文章详情返回了空文档。"));
 
         var articleDetailJson = ExtractArticleDetailJson(html);
         using var document = JsonDocument.Parse(articleDetailJson);
         var root = document.RootElement;
         if (!TryGetObject(root, "article", out var article))
-            throw new InvalidOperationException("ARTICLE_DETAIL 中没有 article 数据。");
+            throw new InvalidOperationException(RuntimeLocalization.Get("Meipian.Error.NoArticle", "ARTICLE_DETAIL 中没有 article 数据。"));
 
         var detailWorkId = ReadFirstString(article, "mask_id", "maskId") ?? work.WorkId;
         if (!string.Equals(detailWorkId, work.WorkId, StringComparison.OrdinalIgnoreCase))
-            throw new InvalidOperationException("文章详情标识与列表标识不一致。");
+            throw new InvalidOperationException(RuntimeLocalization.Get("Meipian.Error.IdMismatch", "文章详情标识与列表标识不一致。"));
 
         var author = TryGetObject(root, "author", out var authorElement)
             ? authorElement
@@ -293,7 +294,7 @@ public sealed class MeipianSiteAdapter : ISiteAdapter
             ? DecodeText(authorNameMatch.Groups["name"].Value)
             : string.Empty;
         if (string.IsNullOrWhiteSpace(authorName))
-            authorName = $"美篇用户 {userId}";
+            authorName = RuntimeLocalization.Format("Meipian.UserFallback", "美篇用户 {0}", userId);
 
         var avatarMatch = AuthorAvatarRegex.Match(html);
         var authorAvatar = avatarMatch.Success
@@ -308,7 +309,7 @@ public sealed class MeipianSiteAdapter : ISiteAdapter
                 Array.Empty<WorkItem>(),
                 null,
                 null,
-                "美篇作者页中没有找到 div.articlecontent。");
+                RuntimeLocalization.Get("Meipian.Error.NoArticleContent", "美篇作者页中没有找到 div.articlecontent。"));
         }
 
         var sectionEnd = html.IndexOf("noarticle", contentMatch.Index, StringComparison.OrdinalIgnoreCase);
@@ -339,7 +340,7 @@ public sealed class MeipianSiteAdapter : ISiteAdapter
                 userId,
                 authorName,
                 authorAvatar,
-                string.IsNullOrWhiteSpace(description) ? "无标题" : description,
+                string.IsNullOrWhiteSpace(description) ? RuntimeLocalization.Get("Common.UnknownTitle", "无标题") : description,
                 ParseDateTimestamp(match.Groups["date"].Value),
                 Array.Empty<MediaAsset>(),
                 sourceUrl)
@@ -354,7 +355,7 @@ public sealed class MeipianSiteAdapter : ISiteAdapter
             works,
             hasMore,
             cursor,
-            $"美篇首屏发现 {works.Count} 篇文章，将逐篇读取 ARTICLE_DETAIL 图集数据。");
+            RuntimeLocalization.Format("Meipian.FirstPageSummary", "美篇首屏发现 {0} 篇文章，将逐篇读取 ARTICLE_DETAIL 图集数据。", works.Count));
     }
 
     private ParsedWorkBatch ParsePagingResponse(string json, string responseUrl, string pageUrl)
@@ -390,7 +391,7 @@ public sealed class MeipianSiteAdapter : ISiteAdapter
 
         var profile = _profiles.TryGetValue(userId, out var cached)
             ? cached
-            : new ProfileInfo($"美篇用户 {userId}", null);
+            : new ProfileInfo(RuntimeLocalization.Format("Meipian.UserFallback", "美篇用户 {0}", userId), null);
         var authorPageUrl = $"https://www.meipian.cn/c/{Uri.EscapeDataString(userId)}";
         var works = new List<WorkItem>();
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -407,7 +408,7 @@ public sealed class MeipianSiteAdapter : ISiteAdapter
             cursor = ReadFirstString(item, "id") ?? cursor;
             var title = ReadFirstString(item, "title")
                         ?? ReadFirstString(item, "abstract")
-                        ?? "无标题";
+                        ?? RuntimeLocalization.Get("Common.UnknownTitle", "无标题");
             var sourceUrl = $"https://www.meipian.cn/{Uri.EscapeDataString(maskId)}";
             var assets = new List<MediaAsset>();
             var coverUrl = NormalizeUrl(ReadFirstString(
@@ -440,20 +441,20 @@ public sealed class MeipianSiteAdapter : ISiteAdapter
             hasMore,
             cursor,
             works.Count == 0
-                ? "美篇分页接口已返回空列表。"
-                : $"美篇分页返回 {works.Count} 篇文章。");
+                ? RuntimeLocalization.Get("Meipian.PageEmpty", "美篇分页接口已返回空列表。")
+                : RuntimeLocalization.Format("Meipian.PageSummary", "美篇分页返回 {0} 篇文章。", works.Count));
     }
 
     private static string ExtractArticleDetailJson(string html)
     {
         var markerIndex = html.IndexOf(ArticleDetailMarker, StringComparison.Ordinal);
         if (markerIndex < 0)
-            throw new InvalidOperationException("详情文档中没有找到 var ARTICLE_DETAIL。");
+            throw new InvalidOperationException(RuntimeLocalization.Get("Meipian.Error.DetailVarMissing", "详情文档中没有找到 var ARTICLE_DETAIL。"));
 
         var assignmentIndex = html.IndexOf('=', markerIndex + ArticleDetailMarker.Length);
         var objectStart = assignmentIndex < 0 ? -1 : html.IndexOf('{', assignmentIndex + 1);
         if (objectStart < 0)
-            throw new InvalidOperationException("ARTICLE_DETAIL 没有有效的对象起始位置。");
+            throw new InvalidOperationException(RuntimeLocalization.Get("Meipian.Error.ObjectStart", "ARTICLE_DETAIL 没有有效的对象起始位置。"));
 
         var depth = 0;
         var inString = false;
@@ -495,7 +496,7 @@ public sealed class MeipianSiteAdapter : ISiteAdapter
             }
         }
 
-        throw new InvalidOperationException("ARTICLE_DETAIL 对象没有正常结束。");
+        throw new InvalidOperationException(RuntimeLocalization.Get("Meipian.Error.ObjectEnd", "ARTICLE_DETAIL 对象没有正常结束。"));
     }
 
     private static bool TryReadContentArray(

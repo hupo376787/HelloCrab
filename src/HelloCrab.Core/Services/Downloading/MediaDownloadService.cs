@@ -1,4 +1,5 @@
-﻿using System.Net;
+using HelloCrab.Core.Services.Localization;
+using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Diagnostics;
@@ -121,15 +122,15 @@ public sealed class MediaDownloadService : IAsyncDisposable
             var selectedVideo = primaryAssets.First(x => x.Type == MediaAssetType.Video);
             var resolution = selectedVideo.Width > 0 && selectedVideo.Height > 0
                 ? $"{selectedVideo.Width}x{selectedVideo.Height}"
-                : "未知分辨率";
+                : RuntimeLocalization.Get("Common.UnknownResolution", "未知分辨率");
             var codec = string.IsNullOrWhiteSpace(selectedVideo.Codec)
-                ? "未知编码"
+                ? RuntimeLocalization.Get("Common.UnknownCodec", "未知编码")
                 : selectedVideo.Codec;
-            RaiseLog($"哔哩哔哩已选择最高画质 DASH：{resolution}，{codec}，下载后自动合并音频。");
+            RaiseLog(RuntimeLocalization.Format("Log.Download.BilibiliDashSelected", "哔哩哔哩已选择最高画质 DASH：{0}，{1}，下载后自动合并音频。", resolution, codec));
         }
 
         if (primaryAssets.Length == 0)
-            throw new InvalidOperationException("作品中没有可下载的视频或图片资源。");
+            throw new InvalidOperationException(RuntimeLocalization.Get("Error.Download.NoMedia", "作品中没有可下载的视频或图片资源。"));
 
         // 单个视频保持原来的无序号文件名；图片作品以及多媒体/混合轮播统一追加 _01、_02。
         var appendSequence = primaryAssets.Length > 1
@@ -204,7 +205,7 @@ public sealed class MediaDownloadService : IAsyncDisposable
             }
             else
             {
-                RaiseLog($"作品未提供封面地址：{work.WorkId}");
+                RaiseLog(RuntimeLocalization.Format("Log.Download.NoCover", "作品未提供封面地址：{0}", work.WorkId));
             }
         }
 
@@ -221,7 +222,7 @@ public sealed class MediaDownloadService : IAsyncDisposable
             }
             else
             {
-                RaiseLog($"作品未提供背景音乐地址：{work.WorkId}");
+                RaiseLog(RuntimeLocalization.Format("Log.Download.NoMusic", "作品未提供背景音乐地址：{0}", work.WorkId));
             }
         }
 
@@ -240,7 +241,7 @@ public sealed class MediaDownloadService : IAsyncDisposable
                 PersonDetectionQueueService.PendingSuffix,
                 StringComparison.OrdinalIgnoreCase))
         {
-            RaiseLog($"人像检测文件未进入 .pending 状态，已按普通图片保留：{Path.GetFileName(imagePath)}");
+            RaiseLog(RuntimeLocalization.Format("Log.Person.PendingStateMissing", "人像检测文件未进入 .pending 状态，已按普通图片保留：{0}", Path.GetFileName(imagePath)));
             return;
         }
 
@@ -248,7 +249,7 @@ public sealed class MediaDownloadService : IAsyncDisposable
         if (!sessionId.HasValue)
         {
             RestorePendingImage(imagePath, finalPath);
-            RaiseLog($"人像检测会话不存在，已恢复并保留图片：{Path.GetFileName(finalPath)}");
+            RaiseLog(RuntimeLocalization.Format("Log.Person.SessionMissing", "人像检测会话不存在，已恢复并保留图片：{0}", Path.GetFileName(finalPath)));
             return;
         }
 
@@ -259,13 +260,12 @@ public sealed class MediaDownloadService : IAsyncDisposable
                 imagePath,
                 finalPath,
                 confidence);
-            RaiseLog($"已加入后台人像检测队列：{Path.GetFileName(finalPath)}");
+            RaiseLog(RuntimeLocalization.Format("Log.Person.Queued", "已加入后台人像检测队列：{0}", Path.GetFileName(finalPath)));
         }
         catch (Exception ex)
         {
             RestorePendingImage(imagePath, finalPath);
-            RaiseLog(
-                $"加入人像检测队列失败，已恢复并保留图片：{Path.GetFileName(finalPath)}；{ex.Message}");
+            RaiseLog(RuntimeLocalization.Format("Log.Person.QueueFailed", "加入人像检测队列失败，已恢复并保留图片：{0}；{1}", Path.GetFileName(finalPath), ex.Message));
         }
     }
 
@@ -323,7 +323,7 @@ public sealed class MediaDownloadService : IAsyncDisposable
                     catch (Exception ex) when (ex is not OperationCanceledException)
                     {
                         lastError = ex;
-                        RaiseLog($"HLS 视频下载失败，第 {attempt}/3 次：{ex.Message}");
+                        RaiseLog(RuntimeLocalization.Format("Log.Download.HlsRetryFailed", "HLS 视频下载失败，第 {0}/3 次：{1}", attempt, ex.Message));
                         if (attempt < 3)
                             await Task.Delay(TimeSpan.FromSeconds(attempt * 2), cancellationToken);
                     }
@@ -359,7 +359,7 @@ public sealed class MediaDownloadService : IAsyncDisposable
                         {
                             if (applyTimestamp)
                                 ApplyPublishedTimestamp(targetPath, publishedAt);
-                            RaiseLog($"待检测图片已存在，重新加入队列：{Path.GetFileName(finalTargetPath)}");
+                            RaiseLog(RuntimeLocalization.Format("Log.Person.PendingExisting", "待检测图片已存在，重新加入队列：{0}", Path.GetFileName(finalTargetPath)));
                             return targetPath;
                         }
 
@@ -368,7 +368,7 @@ public sealed class MediaDownloadService : IAsyncDisposable
                             File.Move(finalTargetPath, targetPath, overwrite: true);
                             if (applyTimestamp)
                                 ApplyPublishedTimestamp(targetPath, publishedAt);
-                            RaiseLog($"已有图片已转入后台人像检测：{Path.GetFileName(finalTargetPath)}");
+                            RaiseLog(RuntimeLocalization.Format("Log.Person.ExistingMoved", "已有图片已转入后台人像检测：{0}", Path.GetFileName(finalTargetPath)));
                             return targetPath;
                         }
                     }
@@ -376,7 +376,7 @@ public sealed class MediaDownloadService : IAsyncDisposable
                     {
                         if (applyTimestamp)
                             ApplyPublishedTimestamp(targetPath, publishedAt);
-                        RaiseLog($"文件已存在，跳过：{Path.GetFileName(targetPath)}");
+                        RaiseLog(RuntimeLocalization.Format("Log.Download.FileExists", "文件已存在，跳过：{0}", Path.GetFileName(targetPath)));
                         return targetPath;
                     }
 
@@ -412,15 +412,14 @@ public sealed class MediaDownloadService : IAsyncDisposable
                     }
 
                     if (!File.Exists(partPath) || new FileInfo(partPath).Length == 0)
-                        throw new IOException("下载结果为空文件。");
+                        throw new IOException(RuntimeLocalization.Get("Error.Download.EmptyResult", "下载结果为空文件。"));
 
                     var actualLength = new FileInfo(partPath).Length;
                     if (expectedLength.HasValue
                         && expectedLength.Value > 0
                         && actualLength != expectedLength.Value)
                     {
-                        throw new IOException(
-                            $"下载文件长度不完整：期望 {expectedLength.Value}，实际 {actualLength}。");
+                        throw new IOException(RuntimeLocalization.Format("Error.Download.IncompleteLength", "下载文件长度不完整：期望 {0}，实际 {1}。", expectedLength.Value, actualLength));
                     }
 
                     File.Move(partPath, targetPath, true);
@@ -430,9 +429,9 @@ public sealed class MediaDownloadService : IAsyncDisposable
                         ? Path.GetFileName(finalTargetPath)
                         : Path.GetFileName(targetPath);
                     var completedLabel = stageForPersonDetection
-                        ? "图片下载完成，等待后台人像检测"
-                        : completionLabel ?? "下载完成";
-                    RaiseLog($"{completedLabel}：{completedFileName}");
+                        ? RuntimeLocalization.Get("Status.ImageAwaitPerson", "图片下载完成，等待后台人像检测")
+                        : completionLabel ?? RuntimeLocalization.Get("Common.DownloadComplete", "下载完成");
+                    RaiseLog(RuntimeLocalization.Format("Log.Download.CompletedFile", "{0}：{1}", completedLabel, completedFileName));
                     if (asset.Type is MediaAssetType.Video or MediaAssetType.Music)
                         ClearTransferProgress(completedFileName, asset.Type);
                     return targetPath;
@@ -442,13 +441,13 @@ public sealed class MediaDownloadService : IAsyncDisposable
                     if (asset.Type is MediaAssetType.Video or MediaAssetType.Music)
                         ClearTransferProgress(Path.GetFileName(targetWithoutExtension), asset.Type);
                     lastError = ex;
-                    RaiseLog($"下载失败，第 {attempt}/3 次：{ex.Message}");
+                    RaiseLog(RuntimeLocalization.Format("Log.Download.RetryFailed", "下载失败，第 {0}/3 次：{1}", attempt, ex.Message));
                     await Task.Delay(TimeSpan.FromSeconds(attempt * 2), cancellationToken);
                 }
             }
         }
 
-        throw new IOException("所有候选下载地址均失败。", lastError);
+        throw new IOException(RuntimeLocalization.Get("Error.Download.AllCandidatesFailed", "所有候选下载地址均失败。"), lastError);
     }
 
     private async Task<string> DownloadHlsAssetAsync(
@@ -466,7 +465,7 @@ public sealed class MediaDownloadService : IAsyncDisposable
         {
             if (applyTimestamp)
                 ApplyPublishedTimestamp(targetPath, publishedAt);
-            RaiseLog($"文件已存在，跳过：{Path.GetFileName(targetPath)}");
+            RaiseLog(RuntimeLocalization.Format("Log.Download.FileExists", "文件已存在，跳过：{0}", Path.GetFileName(targetPath)));
             return targetPath;
         }
 
@@ -485,7 +484,7 @@ public sealed class MediaDownloadService : IAsyncDisposable
         try
         {
             Directory.CreateDirectory(cacheDirectory);
-            RaiseLog($"检测到 Pinterest HLS 视频，正在由程序下载播放列表和分片：{Path.GetFileName(targetPath)}");
+            RaiseLog(RuntimeLocalization.Format("Log.Hls.Detected", "检测到 Pinterest HLS 视频，正在由程序下载播放列表和分片：{0}", Path.GetFileName(targetPath)));
             ReportTransferProgress(new MediaTransferProgress(
                 true,
                 displayFileName,
@@ -494,7 +493,7 @@ public sealed class MediaDownloadService : IAsyncDisposable
                 null,
                 0,
                 null,
-                "正在读取 HLS 播放列表"));
+                RuntimeLocalization.Get("Progress.Hls.ReadPlaylist", "正在读取 HLS 播放列表")));
 
             try
             {
@@ -505,7 +504,7 @@ public sealed class MediaDownloadService : IAsyncDisposable
                     displayFileName,
                     cancellationToken);
 
-                RaiseLog($"Pinterest HLS 分片下载完成，正在通过 FFmpeg 本地合并：{Path.GetFileName(targetPath)}");
+                RaiseLog(RuntimeLocalization.Format("Log.Hls.SegmentsDoneMerge", "Pinterest HLS 分片下载完成，正在通过 FFmpeg 本地合并：{0}", Path.GetFileName(targetPath)));
                 ReportTransferProgress(new MediaTransferProgress(
                     true,
                     displayFileName,
@@ -514,7 +513,7 @@ public sealed class MediaDownloadService : IAsyncDisposable
                     null,
                     0,
                     null,
-                    "HLS 分片下载完成，正在合并 MP4"));
+                    RuntimeLocalization.Get("Progress.Hls.Merging", "HLS 分片下载完成，正在合并 MP4")));
                 await _mediaProcessor.DownloadHlsAsync(
                     localPlaylistPath,
                     partPath,
@@ -533,7 +532,7 @@ public sealed class MediaDownloadService : IAsyncDisposable
                 // 保留 FFmpeg 直连作为兼容回退。正常情况下 Pinterest 会走上面的
                 // HttpClient 下载路径，从而继承系统代理，不依赖 FFmpeg 的网络栈。
                 TryDeleteTemporaryFile(partPath);
-                RaiseLog($"程序下载 HLS 分片或本地合并失败，尝试 FFmpeg 直连：{ex.Message}");
+                RaiseLog(RuntimeLocalization.Format("Log.Hls.DirectFallback", "程序下载 HLS 分片或本地合并失败，尝试 FFmpeg 直连：{0}", ex.Message));
                 ReportTransferProgress(new MediaTransferProgress(
                     true,
                     displayFileName,
@@ -542,7 +541,7 @@ public sealed class MediaDownloadService : IAsyncDisposable
                     null,
                     0,
                     null,
-                    "正在通过 FFmpeg 直连下载 HLS"));
+                    RuntimeLocalization.Get("Progress.Hls.Direct", "正在通过 FFmpeg 直连下载 HLS")));
                 await _mediaProcessor.DownloadHlsAsync(
                     playlistUrl,
                     partPath,
@@ -553,12 +552,12 @@ public sealed class MediaDownloadService : IAsyncDisposable
             }
 
             if (!File.Exists(partPath) || new FileInfo(partPath).Length == 0)
-                throw new IOException("HLS 下载结果为空文件。");
+                throw new IOException(RuntimeLocalization.Get("Error.Hls.EmptyResult", "HLS 下载结果为空文件。"));
 
             File.Move(partPath, targetPath, overwrite: true);
             if (applyTimestamp)
                 ApplyPublishedTimestamp(targetPath, publishedAt);
-            RaiseLog($"{completionLabel ?? "下载完成"}：{Path.GetFileName(targetPath)}");
+            RaiseLog(RuntimeLocalization.Format("Log.Download.CompletedFile", "{0}：{1}", completionLabel ?? RuntimeLocalization.Get("Common.DownloadComplete", "下载完成"), Path.GetFileName(targetPath)));
             ClearTransferProgress(displayFileName, MediaAssetType.Video);
             return targetPath;
         }
@@ -582,7 +581,7 @@ public sealed class MediaDownloadService : IAsyncDisposable
         CancellationToken cancellationToken)
     {
         if (!Uri.TryCreate(WebUtility.HtmlDecode(playlistUrl), UriKind.Absolute, out var currentPlaylistUri))
-            throw new InvalidOperationException("Pinterest HLS 播放列表地址无效。");
+            throw new InvalidOperationException(RuntimeLocalization.Get("Error.Hls.InvalidPlaylistUrl", "Pinterest HLS 播放列表地址无效。"));
 
         // 主播放列表可能再次指向子播放列表，最多递归四层，防止异常循环。
         for (var depth = 0; depth < 4; depth++)
@@ -593,7 +592,7 @@ public sealed class MediaDownloadService : IAsyncDisposable
                 browserContext,
                 cancellationToken);
             if (!playlistText.Contains("#EXTM3U", StringComparison.OrdinalIgnoreCase))
-                throw new IOException("Pinterest HLS 地址未返回有效的 M3U8 播放列表。");
+                throw new IOException(RuntimeLocalization.Get("Error.Hls.InvalidPlaylist", "Pinterest HLS 地址未返回有效的 M3U8 播放列表。"));
 
             var bestVariant = SelectBestHlsVariant(playlistText, currentPlaylistUri);
             if (bestVariant is not null)
@@ -601,8 +600,8 @@ public sealed class MediaDownloadService : IAsyncDisposable
                 currentPlaylistUri = bestVariant.Uri;
                 var resolution = bestVariant.Width > 0 && bestVariant.Height > 0
                     ? $"{bestVariant.Width}x{bestVariant.Height}"
-                    : "未知分辨率";
-                RaiseLog($"Pinterest HLS 已选择最高画质播放列表：{resolution}，带宽 {bestVariant.Bandwidth}。");
+                    : RuntimeLocalization.Get("Common.UnknownResolution", "未知分辨率");
+                RaiseLog(RuntimeLocalization.Format("Log.Hls.BestVariant", "Pinterest HLS 已选择最高画质播放列表：{0}，带宽 {1}。", resolution, bestVariant.Bandwidth));
                 continue;
             }
 
@@ -615,7 +614,7 @@ public sealed class MediaDownloadService : IAsyncDisposable
                 cancellationToken);
         }
 
-        throw new IOException("Pinterest HLS 主播放列表嵌套层级过深。");
+        throw new IOException(RuntimeLocalization.Get("Error.Hls.TooDeep", "Pinterest HLS 主播放列表嵌套层级过深。"));
     }
 
     private async Task<string> DownloadHlsTextAsync(
@@ -635,7 +634,7 @@ public sealed class MediaDownloadService : IAsyncDisposable
                 cancellationToken);
             if (!response.IsSuccessStatusCode)
                 throw new HttpRequestException(
-                    $"HLS 播放列表 HTTP {(int)response.StatusCode} {response.ReasonPhrase}");
+                    RuntimeLocalization.Format("Error.Hls.PlaylistHttp", "HLS 播放列表 HTTP {0} {1}", (int)response.StatusCode, response.ReasonPhrase));
 
             return await response.Content.ReadAsStringAsync(cancellationToken);
         }
@@ -672,7 +671,7 @@ public sealed class MediaDownloadService : IAsyncDisposable
                 return decodedReference;
 
             if (!Uri.TryCreate(playlistUri, decodedReference, out var absoluteUri))
-                throw new IOException($"无法解析 HLS 资源地址：{decodedReference}");
+                throw new IOException(RuntimeLocalization.Format("Error.Hls.ResourceUrl", "无法解析 HLS 资源地址：{0}", decodedReference));
 
             var absoluteUrl = absoluteUri.AbsoluteUri;
             if (resourcesByUrl.TryGetValue(absoluteUrl, out var existing))
@@ -764,7 +763,7 @@ public sealed class MediaDownloadService : IAsyncDisposable
             rewrittenLines,
             new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
             cancellationToken);
-        RaiseLog($"Pinterest HLS 已下载 {resources.Length} 个本地资源分片。");
+        RaiseLog(RuntimeLocalization.Format("Log.Hls.ResourcesDownloaded", "Pinterest HLS 已下载 {0} 个本地资源分片。", resources.Length));
         return localPlaylistPath;
     }
 
@@ -791,7 +790,7 @@ public sealed class MediaDownloadService : IAsyncDisposable
                     cancellationToken);
                 if (!response.IsSuccessStatusCode)
                     throw new HttpRequestException(
-                        $"HLS 分片 HTTP {(int)response.StatusCode} {response.ReasonPhrase}");
+                        RuntimeLocalization.Format("Error.Hls.SegmentHttp", "HLS 分片 HTTP {0} {1}", (int)response.StatusCode, response.ReasonPhrase));
 
                 await using var input = await response.Content.ReadAsStreamAsync(cancellationToken);
                 await using var output = new FileStream(
@@ -821,7 +820,7 @@ public sealed class MediaDownloadService : IAsyncDisposable
             }
 
             if (!File.Exists(partPath) || new FileInfo(partPath).Length == 0)
-                throw new IOException($"HLS 分片下载结果为空：{resource.RemoteUrl}");
+                throw new IOException(RuntimeLocalization.Format("Error.Hls.EmptySegment", "HLS 分片下载结果为空：{0}", resource.RemoteUrl));
 
             File.Move(partPath, resource.LocalPath, overwrite: true);
             progressTracker.CompletePart();
@@ -840,7 +839,7 @@ public sealed class MediaDownloadService : IAsyncDisposable
     {
         if (Interlocked.Exchange(ref _hlsBrowserFallbackLogged, 1) == 0)
         {
-            RaiseLog("HLS 系统网络请求失败，已切换到浏览器网络通道继续下载。");
+            RaiseLog(RuntimeLocalization.Get("Log.Hls.BrowserFallback", "HLS 系统网络请求失败，已切换到浏览器网络通道继续下载。"));
         }
 
         return await _browser.FetchBytesAsync(
@@ -1018,8 +1017,7 @@ public sealed class MediaDownloadService : IAsyncDisposable
             if (requireAudioMerge)
             {
                 throw new FileNotFoundException(
-                    "哔哩哔哩 DASH 音视频必须使用 FFmpeg 合并，但当前未找到 ffmpeg/ffprobe。" +
-                    "请先完成程序内的 FFmpeg 安装后重试。",
+                    RuntimeLocalization.Get("Error.Audio.DashNeedsFfmpeg", "哔哩哔哩 DASH 音视频必须使用 FFmpeg 合并，但当前未找到 ffmpeg/ffprobe。请先完成程序内的 FFmpeg 安装后重试。"),
                     ex.FileName,
                     ex);
             }
@@ -1030,25 +1028,25 @@ public sealed class MediaDownloadService : IAsyncDisposable
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            RaiseLog($"无法检查视频音轨，保留原视频：{Path.GetFileName(videoPath)}；{ex.Message}");
+            RaiseLog(RuntimeLocalization.Format("Log.Audio.CheckFailed", "无法检查视频音轨，保留原视频：{0}；{1}", Path.GetFileName(videoPath), ex.Message));
             return false;
         }
 
         if (hasAudio)
             return false;
 
-        RaiseLog($"检测到无音轨视频，准备下载临时音频并合并：{Path.GetFileName(videoPath)}");
+        RaiseLog(RuntimeLocalization.Format("Log.Audio.SilentDetected", "检测到无音轨视频，准备下载临时音频并合并：{0}", Path.GetFileName(videoPath)));
         if (music is null || music.CandidateUrls.Count == 0)
         {
             if (requireAudioMerge)
-                throw new IOException("哔哩哔哩 DASH 数据中没有可用音频流，无法生成完整视频。");
+                throw new IOException(RuntimeLocalization.Get("Error.Audio.DashNoAudio", "哔哩哔哩 DASH 数据中没有可用音频流，无法生成完整视频。"));
 
-            RaiseLog("该作品没有可用的音乐地址，无法为无声视频补充音频。");
+            RaiseLog(RuntimeLocalization.Get("Log.Audio.NoMusic", "该作品没有可用的音乐地址，无法为无声视频补充音频。"));
             return false;
         }
 
         var directory = Path.GetDirectoryName(videoPath)
-                        ?? throw new IOException("无法确定视频所在目录。");
+                        ?? throw new IOException(RuntimeLocalization.Get("Error.Audio.NoDirectory", "无法确定视频所在目录。"));
         var videoExtension = Path.GetExtension(videoPath);
         var uniqueId = Guid.NewGuid().ToString("N");
         var temporaryAudioBase = Path.Combine(directory, $".smc-audio-{uniqueId}");
@@ -1065,10 +1063,10 @@ public sealed class MediaDownloadService : IAsyncDisposable
                 publishedAt,
                 cancellationToken,
                 applyTimestamp: false,
-                completionLabel: "临时音频下载完成");
+                completionLabel: RuntimeLocalization.Get("Status.Audio.TempDownloaded", "临时音频下载完成"));
 
             if (!await _mediaProcessor.HasAudioStreamAsync(temporaryAudioPath, cancellationToken))
-                throw new IOException("下载的临时音乐文件中没有可用音频轨。");
+                throw new IOException(RuntimeLocalization.Get("Error.Audio.TempNoTrack", "下载的临时音乐文件中没有可用音频轨。"));
 
             // 开启“下载背景音乐”时，直接复用本次临时音频，不再重复请求网络。
             if (!string.IsNullOrWhiteSpace(retainedMusicTargetWithoutExtension))
@@ -1088,7 +1086,7 @@ public sealed class MediaDownloadService : IAsyncDisposable
                 null,
                 0,
                 null,
-                "正在合并音视频"));
+                RuntimeLocalization.Get("Progress.Audio.Merging", "正在合并音视频")));
             try
             {
                 await _mediaProcessor.MergeVideoAndAudioAsync(
@@ -1103,11 +1101,11 @@ public sealed class MediaDownloadService : IAsyncDisposable
             }
 
             if (!await _mediaProcessor.HasAudioStreamAsync(muxedPath, cancellationToken))
-                throw new IOException("合并后的文件仍未检测到音频轨。");
+                throw new IOException(RuntimeLocalization.Get("Error.Audio.MergeNoTrack", "合并后的文件仍未检测到音频轨。"));
 
             File.Move(muxedPath, videoPath, overwrite: true);
             ApplyPublishedTimestamp(videoPath, publishedAt);
-            RaiseLog($"无声视频已补充音频并合并完成：{Path.GetFileName(videoPath)}");
+            RaiseLog(RuntimeLocalization.Format("Log.Audio.MergeComplete", "无声视频已补充音频并合并完成：{0}", Path.GetFileName(videoPath)));
             return retainedMusic;
         }
         finally
@@ -1126,13 +1124,13 @@ public sealed class MediaDownloadService : IAsyncDisposable
         if (File.Exists(targetPath) && new FileInfo(targetPath).Length > 0)
         {
             ApplyPublishedTimestamp(targetPath, publishedAt);
-            RaiseLog($"背景音乐已存在，跳过：{Path.GetFileName(targetPath)}");
+            RaiseLog(RuntimeLocalization.Format("Log.Audio.MusicExists", "背景音乐已存在，跳过：{0}", Path.GetFileName(targetPath)));
             return true;
         }
 
         File.Copy(temporaryAudioPath, targetPath, overwrite: true);
         ApplyPublishedTimestamp(targetPath, publishedAt);
-        RaiseLog($"背景音乐已保存：{Path.GetFileName(targetPath)}");
+        RaiseLog(RuntimeLocalization.Format("Log.Audio.MusicSaved", "背景音乐已保存：{0}", Path.GetFileName(targetPath)));
         return true;
     }
 
@@ -1220,14 +1218,14 @@ public sealed class MediaDownloadService : IAsyncDisposable
         if (mediaType.StartsWith("text/", StringComparison.Ordinal)
             || mediaType.Contains("json", StringComparison.Ordinal))
         {
-            throw new IOException($"资源返回了非媒体内容：{mediaType}");
+            throw new IOException(RuntimeLocalization.Format("Error.Download.NonMediaContent", "资源返回了非媒体内容：{0}", mediaType));
         }
 
         if ((type is MediaAssetType.Image or MediaAssetType.Cover)
             && !mediaType.StartsWith("image/", StringComparison.Ordinal)
             && mediaType != "application/octet-stream")
         {
-            throw new IOException($"图片资源 Content-Type 异常：{mediaType}");
+            throw new IOException(RuntimeLocalization.Format("Error.Download.ImageContentType", "图片资源 Content-Type 异常：{0}", mediaType));
         }
 
         if (type == MediaAssetType.Music
@@ -1235,7 +1233,7 @@ public sealed class MediaDownloadService : IAsyncDisposable
             && !mediaType.StartsWith("video/", StringComparison.Ordinal)
             && mediaType != "application/octet-stream")
         {
-            throw new IOException($"音乐资源 Content-Type 异常：{mediaType}");
+            throw new IOException(RuntimeLocalization.Format("Error.Download.MusicContentType", "音乐资源 Content-Type 异常：{0}", mediaType));
         }
     }
 
@@ -1345,14 +1343,14 @@ public sealed class MediaDownloadService : IAsyncDisposable
         var utc = publishedAt.UtcDateTime;
         var errors = new List<string>();
 
-        TrySet(() => File.SetCreationTimeUtc(path, utc), "创建时间", errors);
-        TrySet(() => File.SetLastWriteTimeUtc(path, utc), "修改时间", errors);
-        TrySet(() => File.SetLastAccessTimeUtc(path, utc), "访问时间", errors);
+        TrySet(() => File.SetCreationTimeUtc(path, utc), RuntimeLocalization.Get("FileTime.Creation", "创建时间"), errors);
+        TrySet(() => File.SetLastWriteTimeUtc(path, utc), RuntimeLocalization.Get("FileTime.Modified", "修改时间"), errors);
+        TrySet(() => File.SetLastAccessTimeUtc(path, utc), RuntimeLocalization.Get("FileTime.Accessed", "访问时间"), errors);
 
         // 某些 Linux 文件系统不支持修改 birth time。只提示一次，不影响下载任务。
         if (errors.Count > 0 && Interlocked.Exchange(ref _timestampWarningLogged, 1) == 0)
         {
-            RaiseLog($"部分文件时间属性无法设置（当前文件系统可能不支持）：{string.Join("；", errors)}");
+            RaiseLog(RuntimeLocalization.Format("Log.FileTimestamp.Partial", "部分文件时间属性无法设置（当前文件系统可能不支持）：{0}", string.Join("; ", errors)));
         }
     }
 
@@ -1389,7 +1387,7 @@ public sealed class MediaDownloadService : IAsyncDisposable
             totalBytes,
             0,
             totalBytes is > 0 ? 0d : null,
-            "正在下载"));
+            RuntimeLocalization.Get("Common.Downloading", "正在下载")));
 
         while (true)
         {
@@ -1422,7 +1420,7 @@ public sealed class MediaDownloadService : IAsyncDisposable
                 totalBytes,
                 speed,
                 percent,
-                "正在下载"));
+                RuntimeLocalization.Get("Common.Downloading", "正在下载")));
         }
 
         var finalElapsed = stopwatch.Elapsed;
@@ -1434,7 +1432,7 @@ public sealed class MediaDownloadService : IAsyncDisposable
             totalBytes,
             finalElapsed.TotalSeconds > 0 ? bytesReceived / finalElapsed.TotalSeconds : 0,
             totalBytes is > 0 ? 100d : null,
-            "下载完成"));
+            RuntimeLocalization.Get("Common.DownloadComplete", "下载完成")));
     }
 
     private async Task CopyStreamAsync(
@@ -1594,8 +1592,8 @@ public sealed class MediaDownloadService : IAsyncDisposable
                 bytes / elapsedSeconds,
                 percent,
                 _totalParts > 0
-                    ? $"HLS 分片 {completed}/{_totalParts}"
-                    : "正在下载 HLS 分片",
+                    ? RuntimeLocalization.Format("Progress.Hls.Parts", "HLS 分片 {0}/{1}", completed, _totalParts)
+                    : RuntimeLocalization.Get("Progress.Hls.DownloadingParts", "正在下载 HLS 分片"),
                 completed,
                 _totalParts));
         }

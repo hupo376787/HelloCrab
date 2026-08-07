@@ -1,3 +1,4 @@
+using HelloCrab.Core.Services.Localization;
 using System.Diagnostics;
 using HelloCrab.Core.Services.Platform;
 using HelloCrab.Desktop.Linux;
@@ -24,7 +25,9 @@ public sealed class PlatformShellService : IPlatformShellService
         if (!Uri.TryCreate(url, UriKind.Absolute, out var uri)
             || uri.Scheme is not ("http" or "https"))
         {
-            throw new ArgumentException("只能打开 HTTP 或 HTTPS 地址。", nameof(url));
+            throw new ArgumentException(
+                RuntimeLocalization.Get("Error.Shell.HttpOnly", "只能打开 HTTP 或 HTTPS 地址。"),
+                nameof(url));
         }
 
         Process.Start(new ProcessStartInfo(uri.ToString())
@@ -42,6 +45,7 @@ public sealed class PlatformShellService : IPlatformShellService
         if (OperatingSystem.IsLinux())
             return new LinuxFolderOpener();
 
-        throw new PlatformNotSupportedException("当前桌面系统不受支持。");
+        throw new PlatformNotSupportedException(
+            RuntimeLocalization.Get("Error.Shell.UnsupportedDesktop", "当前桌面系统不受支持。"));
     }
 }

@@ -1,3 +1,4 @@
+using HelloCrab.Core.Services.Localization;
 using System.Text.Json;
 using HelloCrab.Core.Services.Browser;
 using HelloCrab.Desktop.Chromium;
@@ -74,7 +75,9 @@ public sealed class PlaywrightBrowserService : IBrowserAutomationService
             await EnsureContextCoreAsync(headless, cancellationToken);
             await NavigateCoreAsync(
                 normalizedUrl,
-                headless ? "无头浏览器已启动" : "浏览器已启动，请扫码登录并进入作者主页",
+                headless
+                ? RuntimeLocalization.Get("BrowserState.HeadlessStarted", "无头浏览器已启动")
+                : RuntimeLocalization.Get("BrowserState.VisibleStarted", "浏览器已启动，请扫码登录并进入作者主页"),
                 cancellationToken);
 
             if (headless && await IsLoginRequiredAsync(GetActivePage(), cancellationToken))
@@ -96,10 +99,10 @@ public sealed class PlaywrightBrowserService : IBrowserAutomationService
         try
         {
             if (_context is null)
-                throw new InvalidOperationException("浏览器尚未启动。");
+                throw new InvalidOperationException(RuntimeLocalization.Get("Error.Browser.NotStartedDetail", "浏览器尚未启动。"));
 
             _targetUrl = normalizedUrl;
-            await NavigateCoreAsync(normalizedUrl, "页面已打开", cancellationToken);
+            await NavigateCoreAsync(normalizedUrl, RuntimeLocalization.Get("BrowserState.PageOpened", "页面已打开"), cancellationToken);
 
             if (_requestedHeadless
                 && _actualHeadless
@@ -123,7 +126,7 @@ public sealed class PlaywrightBrowserService : IBrowserAutomationService
             var page = await ResolveForegroundPageAsync(cancellationToken);
             AttachPage(page);
             _page = page;
-            UpdateUrl(page.Url, "已选择当前活动标签页");
+            UpdateUrl(page.Url, RuntimeLocalization.Get("BrowserState.ActiveTabSelected", "已选择当前活动标签页"));
             return page.Url;
         }
         finally
@@ -139,13 +142,13 @@ public sealed class PlaywrightBrowserService : IBrowserAutomationService
         if (!Uri.TryCreate(url, UriKind.Absolute, out var target)
             || target.Scheme is not ("http" or "https"))
         {
-            throw new ArgumentException("请输入有效的 HTTP 或 HTTPS URL。", nameof(url));
+            throw new ArgumentException(RuntimeLocalization.Get("Error.Browser.InvalidUrl", "请输入有效的 HTTP 或 HTTPS URL。"), nameof(url));
         }
 
         cancellationToken.ThrowIfCancellationRequested();
         var page = GetActivePage();
         if (page.IsClosed)
-            throw new InvalidOperationException("当前采集页面已经关闭。");
+            throw new InvalidOperationException(RuntimeLocalization.Get("Error.Browser.CapturePageClosed", "当前采集页面已经关闭。"));
 
         try
         {
@@ -180,7 +183,7 @@ public sealed class PlaywrightBrowserService : IBrowserAutomationService
         catch (PlaywrightException ex) when (IsTargetClosedError(ex.Message))
         {
             throw new InvalidOperationException(
-                "读取作品详情时浏览器页面被关闭，请重新打开作者主页后再试。",
+                RuntimeLocalization.Get("Error.Browser.DetailPageClosed", "读取作品详情时浏览器页面被关闭，请重新打开作者主页后再试。"),
                 ex);
         }
     }
@@ -193,10 +196,10 @@ public sealed class PlaywrightBrowserService : IBrowserAutomationService
         if (!Uri.TryCreate(url, UriKind.Absolute, out var target)
             || target.Scheme is not ("http" or "https"))
         {
-            throw new ArgumentException("请输入有效的 HTTP 或 HTTPS URL。", nameof(url));
+            throw new ArgumentException(RuntimeLocalization.Get("Error.Browser.InvalidUrl", "请输入有效的 HTTP 或 HTTPS URL。"), nameof(url));
         }
 
-        var context = _context ?? throw new InvalidOperationException("浏览器尚未启动。");
+        var context = _context ?? throw new InvalidOperationException(RuntimeLocalization.Get("Error.Browser.NotStartedDetail", "浏览器尚未启动。"));
         cancellationToken.ThrowIfCancellationRequested();
 
         var headers = new Dictionary<string, string>
@@ -226,9 +229,10 @@ public sealed class PlaywrightBrowserService : IBrowserAutomationService
             if (!response.Ok)
             {
                 var responseText = await response.TextAsync();
-                throw new HttpRequestException(
-                    $"浏览器请求 HTTP {response.Status} {response.StatusText}: " +
-                    responseText[..Math.Min(responseText.Length, 180)]);
+                throw new HttpRequestException(RuntimeLocalization.Format(
+                    "Error.Browser.RequestHttp",
+                    "浏览器请求 HTTP {0} {1}: {2}",
+                    response.Status, response.StatusText, responseText[..Math.Min(responseText.Length, 180)]));
             }
 
             return await response.BodyAsync().WaitAsync(cancellationToken);
@@ -255,7 +259,7 @@ public sealed class PlaywrightBrowserService : IBrowserAutomationService
         catch (PlaywrightException ex) when (IsTargetClosedError(ex.Message))
         {
             throw new InvalidOperationException(
-                "刷新作者主页时浏览器页面被关闭。请重新打开作者主页后再开始采集。",
+                RuntimeLocalization.Get("Error.Browser.RefreshPageClosed", "刷新作者主页时浏览器页面被关闭。请重新打开作者主页后再开始采集。"),
                 ex);
         }
         catch (PlaywrightException ex) when (!page.IsClosed && IsRecoverableNavigationInterruption(ex.Message))
@@ -273,15 +277,15 @@ public sealed class PlaywrightBrowserService : IBrowserAutomationService
                 // 页面可能已经完成加载，或仍在后台请求；后续接口捕获会继续判断。
             }
 
-            RaiseState(true, page.Url, "页面刷新由站点脚本接管，已继续等待作品接口");
+            RaiseState(true, page.Url, RuntimeLocalization.Get("BrowserState.RefreshHandledBySite", "页面刷新由站点脚本接管，已继续等待作品接口"));
         }
 
         if (page.IsClosed)
-            throw new InvalidOperationException("作者主页在刷新过程中被关闭，请重新打开后再试。");
+            throw new InvalidOperationException(RuntimeLocalization.Get("Error.Browser.RefreshClosed", "作者主页在刷新过程中被关闭，请重新打开后再试。"));
 
         if (_captureLockEnabled)
             await ApplyCaptureLockOverlayAsync(page);
-        UpdateUrl(page.Url, "作者主页已刷新，开始捕获第一页数据");
+        UpdateUrl(page.Url, RuntimeLocalization.Get("BrowserState.AuthorRefreshed", "作者主页已刷新，开始捕获第一页数据"));
     }
 
     public async Task SetCaptureLockAsync(bool isLocked, CancellationToken cancellationToken = default)
@@ -304,7 +308,7 @@ public sealed class PlaywrightBrowserService : IBrowserAutomationService
                 _lockedPage = page;
                 _lockedUrl = page.Url;
                 await ApplyCaptureLockOverlayAsync(page);
-                UpdateUrl(page.Url, "采集标签页已锁定，停止采集后可继续操作");
+                UpdateUrl(page.Url, RuntimeLocalization.Get("BrowserState.CaptureLocked", "采集标签页已锁定，停止采集后可继续操作"));
                 return;
             }
 
@@ -338,7 +342,7 @@ public sealed class PlaywrightBrowserService : IBrowserAutomationService
             if (active is not null)
             {
                 _page = active;
-                UpdateUrl(active.Url, "采集标签页已解锁");
+                UpdateUrl(active.Url, RuntimeLocalization.Get("BrowserState.CaptureUnlocked", "采集标签页已解锁"));
             }
         }
         finally
@@ -349,7 +353,7 @@ public sealed class PlaywrightBrowserService : IBrowserAutomationService
 
     public async Task<BrowserDownloadContext> GetDownloadContextAsync(CancellationToken cancellationToken = default)
     {
-        var context = _context ?? throw new InvalidOperationException("浏览器尚未启动。");
+        var context = _context ?? throw new InvalidOperationException(RuntimeLocalization.Get("Error.Browser.NotStartedDetail", "浏览器尚未启动。"));
         var page = GetActivePage();
         cancellationToken.ThrowIfCancellationRequested();
         var userAgent = await page.EvaluateAsync<string>("() => navigator.userAgent");
@@ -432,7 +436,7 @@ public sealed class PlaywrightBrowserService : IBrowserAutomationService
         if (string.IsNullOrWhiteSpace(chromiumExecutablePath))
         {
             throw new InvalidOperationException(
-                "未找到 Chromium。请先点击“安装 Chromium”。程序会优先安装到程序目录。"
+                RuntimeLocalization.Get("Error.Browser.ChromiumMissing", "未找到 Chromium。请先点击“安装 Chromium”。程序会优先安装到程序目录。")
             );
         }
 
@@ -449,7 +453,7 @@ public sealed class PlaywrightBrowserService : IBrowserAutomationService
         catch (Exception ex)
         {
             throw new InvalidOperationException(
-                $"无法在程序目录创建浏览器数据目录：{userDataDir}。请将 HelloCrab 放到当前用户可写的目录。",
+                RuntimeLocalization.Format("Error.Browser.ProfileDirectory", "无法在程序目录创建浏览器数据目录：{0}。请将 HelloCrab 放到当前用户可写的目录。", userDataDir),
                 ex);
         }
 
@@ -479,13 +483,13 @@ public sealed class PlaywrightBrowserService : IBrowserAutomationService
         _actualHeadless = headless;
         _attachedPages.Clear();
 
-        var context = _context ?? throw new InvalidOperationException("浏览器上下文创建失败。");
+        var context = _context ?? throw new InvalidOperationException(RuntimeLocalization.Get("Error.Browser.ContextCreateFailed", "浏览器上下文创建失败。"));
         context.Page += (_, page) => AttachPage(page);
         context.Close += (_, _) => HandleContextClosed(context);
 
         _page = context.Pages.FirstOrDefault() ?? await context.NewPageAsync();
         AttachPage(_page);
-        RaiseState(true, _targetUrl, "已使用 Playwright Chromium");
+        RaiseState(true, _targetUrl, RuntimeLocalization.Get("BrowserState.PlaywrightUsing", "已使用 Playwright Chromium"));
     }
 
     private static void TryMigrateLegacyBrowserProfile(string destinationDirectory)
@@ -599,7 +603,7 @@ public sealed class PlaywrightBrowserService : IBrowserAutomationService
         _captureLockEnabled = false;
         _attachedPages.Clear();
         StopAuthenticationMonitorCore();
-        RaiseState(false, string.Empty, "浏览器已关闭");
+        RaiseState(false, string.Empty, RuntimeLocalization.Get("BrowserState.Closed", "浏览器已关闭"));
     }
 
     private async Task NavigateCoreAsync(
@@ -634,14 +638,14 @@ public sealed class PlaywrightBrowserService : IBrowserAutomationService
         RaiseState(
             true,
             targetUrl,
-            "检测到登录失效，正在关闭无头浏览器并切换为显示模式扫码登录");
+            RuntimeLocalization.Get("BrowserState.LoginExpiredSwitching", "检测到登录失效，正在关闭无头浏览器并切换为显示模式扫码登录"));
 
         await RestartContextCoreAsync(false, cancellationToken);
-        await NavigateCoreAsync(targetUrl, "已切换显示模式，请扫码登录", cancellationToken);
+        await NavigateCoreAsync(targetUrl, RuntimeLocalization.Get("BrowserState.VisibleLoginMode", "已切换显示模式，请扫码登录"), cancellationToken);
         RaiseState(
             true,
             targetUrl,
-            "请在显示的 Chromium 中扫码登录；登录成功后将自动恢复无头模式并返回目标 URL");
+            RuntimeLocalization.Get("BrowserState.LoginInstruction", "请在显示的 Chromium 中扫码登录；登录成功后将自动恢复无头模式并返回目标 URL"));
     }
 
     private async Task ResumeHeadlessAfterLoginCoreAsync(CancellationToken cancellationToken)
@@ -650,21 +654,21 @@ public sealed class PlaywrightBrowserService : IBrowserAutomationService
             return;
 
         var targetUrl = _targetUrl;
-        RaiseState(true, targetUrl, "检测到登录成功，正在恢复无头模式并返回目标 URL");
+        RaiseState(true, targetUrl, RuntimeLocalization.Get("BrowserState.LoginSuccessRestoring", "检测到登录成功，正在恢复无头模式并返回目标 URL"));
 
         await RestartContextCoreAsync(true, cancellationToken);
-        await NavigateCoreAsync(targetUrl, "已恢复无头模式并返回目标 URL", cancellationToken);
+        await NavigateCoreAsync(targetUrl, RuntimeLocalization.Get("BrowserState.HeadlessRestored", "已恢复无头模式并返回目标 URL"), cancellationToken);
 
         if (await IsLoginRequiredAsync(GetActivePage(), cancellationToken))
         {
             await RestartContextCoreAsync(false, cancellationToken);
-            await NavigateCoreAsync(targetUrl, "登录状态尚未生效，请继续扫码登录", cancellationToken);
-            RaiseState(true, targetUrl, "登录状态尚未生效，请继续在显示窗口中完成登录");
+            await NavigateCoreAsync(targetUrl, RuntimeLocalization.Get("BrowserState.LoginNotEffective", "登录状态尚未生效，请继续扫码登录"), cancellationToken);
+            RaiseState(true, targetUrl, RuntimeLocalization.Get("BrowserState.LoginNotEffectiveWindow", "登录状态尚未生效，请继续在显示窗口中完成登录"));
             return;
         }
 
         _loginRecoveryActive = false;
-        RaiseState(true, _targetUrl, "登录成功，已恢复无头模式");
+        RaiseState(true, _targetUrl, RuntimeLocalization.Get("BrowserState.LoginSuccessHeadless", "登录成功，已恢复无头模式"));
     }
 
     private void StartAuthenticationMonitorCore()
@@ -770,7 +774,7 @@ public sealed class PlaywrightBrowserService : IBrowserAutomationService
             RaiseState(
                 _context is not null,
                 _targetUrl,
-                $"登录状态监测失败：{ex.Message}");
+                RuntimeLocalization.Format("BrowserState.AuthMonitorFailed", "登录状态监测失败：{0}", ex.Message));
         }
     }
 
@@ -888,10 +892,10 @@ public sealed class PlaywrightBrowserService : IBrowserAutomationService
 
     private async Task<IPage> ResolveForegroundPageAsync(CancellationToken cancellationToken)
     {
-        var context = _context ?? throw new InvalidOperationException("浏览器尚未启动。");
+        var context = _context ?? throw new InvalidOperationException(RuntimeLocalization.Get("Error.Browser.NotStartedDetail", "浏览器尚未启动。"));
         var pages = context.Pages.Where(page => !page.IsClosed).ToArray();
         if (pages.Length == 0)
-            throw new InvalidOperationException("当前没有可锁定的浏览器页面。");
+            throw new InvalidOperationException(RuntimeLocalization.Get("Error.Browser.NoLockablePage", "当前没有可锁定的浏览器页面。"));
 
         // Chromium 只有当前选中的标签页同时具备 document.hasFocus()。从后往前检查，
         // 在极短的标签切换过程中也优先选择最近创建/激活的页面。
@@ -944,7 +948,7 @@ public sealed class PlaywrightBrowserService : IBrowserAutomationService
     }
 
     private IPage GetActivePage()
-        => ActivePage ?? throw new InvalidOperationException("浏览器尚未启动或当前没有可用页面。");
+        => ActivePage ?? throw new InvalidOperationException(RuntimeLocalization.Get("Error.Browser.NoActivePage", "浏览器尚未启动或当前没有可用页面。"));
 
     private void AttachPage(IPage page)
     {
@@ -982,7 +986,7 @@ public sealed class PlaywrightBrowserService : IBrowserAutomationService
                 RaiseState(
                     _context is not null,
                     string.Empty,
-                    "采集标签页已被关闭，请停止采集后重新打开作者主页");
+                    RuntimeLocalization.Get("BrowserState.CapturePageWasClosed", "采集标签页已被关闭，请停止采集后重新打开作者主页"));
             }
 
             if (ReferenceEquals(_page, page))
@@ -992,7 +996,7 @@ public sealed class PlaywrightBrowserService : IBrowserAutomationService
         if (!string.IsNullOrWhiteSpace(page.Url)
             && !page.Url.Equals("about:blank", StringComparison.OrdinalIgnoreCase))
         {
-            UpdateUrl(_loginRecoveryActive ? _targetUrl : page.Url, "已连接浏览器页面");
+            UpdateUrl(_loginRecoveryActive ? _targetUrl : page.Url, RuntimeLocalization.Get("BrowserState.PageConnected", "已连接浏览器页面"));
         }
     }
 
@@ -1059,7 +1063,7 @@ public sealed class PlaywrightBrowserService : IBrowserAutomationService
 
         if (_loginRecoveryActive)
         {
-            RaiseState(true, _targetUrl, "显示模式登录窗口已打开，等待扫码登录");
+            RaiseState(true, _targetUrl, RuntimeLocalization.Get("BrowserState.LoginWindowOpened", "显示模式登录窗口已打开，等待扫码登录"));
             return;
         }
 
@@ -1071,14 +1075,14 @@ public sealed class PlaywrightBrowserService : IBrowserAutomationService
                 return;
             }
 
-            UpdateUrl(currentUrl, "采集标签页已刷新");
+            UpdateUrl(currentUrl, RuntimeLocalization.Get("BrowserState.CaptureTabRefreshed", "采集标签页已刷新"));
             await ApplyCaptureLockOverlayAsync(page);
             return;
         }
 
         if (IsUsefulTargetUrl(currentUrl))
             _targetUrl = currentUrl;
-        UpdateUrl(currentUrl, "页面已切换");
+        UpdateUrl(currentUrl, RuntimeLocalization.Get("BrowserState.PageChanged", "页面已切换"));
     }
 
     private async Task TriggerVisibleLoginRecoveryAsync()
@@ -1098,7 +1102,7 @@ public sealed class PlaywrightBrowserService : IBrowserAutomationService
         }
         catch (Exception ex)
         {
-            RaiseState(_context is not null, _targetUrl, $"切换扫码登录模式失败：{ex.Message}");
+            RaiseState(_context is not null, _targetUrl, RuntimeLocalization.Format("BrowserState.LoginModeSwitchFailed", "切换扫码登录模式失败：{0}", ex.Message));
         }
     }
 
@@ -1110,7 +1114,7 @@ public sealed class PlaywrightBrowserService : IBrowserAutomationService
         _restoringLockedPage = true;
         try
         {
-            RaiseState(true, unexpectedUrl, "检测到采集标签页被误操作，正在恢复作者主页");
+            RaiseState(true, unexpectedUrl, RuntimeLocalization.Get("BrowserState.AccidentalNavigation", "检测到采集标签页被误操作，正在恢复作者主页"));
             await Task.Delay(150);
             if (!_captureLockEnabled || page.IsClosed || string.IsNullOrWhiteSpace(_lockedUrl))
                 return;
@@ -1121,11 +1125,11 @@ public sealed class PlaywrightBrowserService : IBrowserAutomationService
                 Timeout = 60_000
             });
             await ApplyCaptureLockOverlayAsync(page);
-            UpdateUrl(page.Url, "已恢复并重新锁定作者主页");
+            UpdateUrl(page.Url, RuntimeLocalization.Get("BrowserState.AuthorRestored", "已恢复并重新锁定作者主页"));
         }
         catch (Exception ex)
         {
-            RaiseState(true, page.IsClosed ? string.Empty : page.Url, $"恢复作者主页失败：{ex.Message}");
+            RaiseState(true, page.IsClosed ? string.Empty : page.Url, RuntimeLocalization.Format("BrowserState.AuthorRestoreFailed", "恢复作者主页失败：{0}", ex.Message));
         }
         finally
         {
@@ -1139,7 +1143,7 @@ public sealed class PlaywrightBrowserService : IBrowserAutomationService
         {
             if (!page.IsClosed)
                 await page.CloseAsync();
-            RaiseState(true, _lockedPage?.Url ?? _currentUrl, "采集期间已阻止打开新的标签页");
+            RaiseState(true, _lockedPage?.Url ?? _currentUrl, RuntimeLocalization.Get("BrowserState.NewTabBlocked", "采集期间已阻止打开新的标签页"));
         }
         catch
         {
@@ -1164,18 +1168,18 @@ public sealed class PlaywrightBrowserService : IBrowserAutomationService
     private static string NormalizeUrl(string value)
     {
         if (string.IsNullOrWhiteSpace(value))
-            throw new ArgumentException("URL 不能为空。", nameof(value));
+            throw new ArgumentException(RuntimeLocalization.Get("Error.Browser.UrlEmpty", "URL 不能为空。"), nameof(value));
 
         var normalized = value.Trim();
         if (!Uri.TryCreate(normalized, UriKind.Absolute, out var uri))
         {
             normalized = "https://" + normalized.TrimStart('/');
             if (!Uri.TryCreate(normalized, UriKind.Absolute, out uri))
-                throw new ArgumentException("请输入有效的 HTTP 或 HTTPS URL。", nameof(value));
+                throw new ArgumentException(RuntimeLocalization.Get("Error.Browser.InvalidUrl", "请输入有效的 HTTP 或 HTTPS URL。"), nameof(value));
         }
 
         if (uri.Scheme is not ("http" or "https"))
-            throw new ArgumentException("仅支持 HTTP 或 HTTPS URL。", nameof(value));
+            throw new ArgumentException(RuntimeLocalization.Get("Error.Browser.HttpOnly", "仅支持 HTTP 或 HTTPS URL。"), nameof(value));
 
         return uri.ToString();
     }
@@ -1262,8 +1266,15 @@ public sealed class PlaywrightBrowserService : IBrowserAutomationService
 
         try
         {
+            var lockTitleJson = JsonSerializer.Serialize(RuntimeLocalization.Get("BrowserLock.Title", "采集标签页已锁定"));
+            var lockDescriptionJson = JsonSerializer.Serialize(RuntimeLocalization.Get("BrowserLock.Description", "正在自动滚动和下载，请勿操作此页面。"));
+            var lockUnlockHintJson = JsonSerializer.Serialize(RuntimeLocalization.Get("BrowserLock.UnlockHint", "回到采集软件点击“停止采集”后即可解锁。"));
+
             await page.EvaluateAsync($$"""
                 () => {
+                    const lockTitle = {{lockTitleJson}};
+                    const lockDescription = {{lockDescriptionJson}};
+                    const lockUnlockHint = {{lockUnlockHintJson}};
                     const elementId = '{{CaptureLockElementId}}';
                     const eventNames = [
                         'click', 'dblclick', 'mousedown', 'mouseup', 'pointerdown', 'pointerup',
@@ -1283,10 +1294,10 @@ public sealed class PlaywrightBrowserService : IBrowserAutomationService
                                             box-shadow:0 20px 70px rgba(0,0,0,.48);color:white;text-align:center;
                                             font-family:system-ui,-apple-system,'Segoe UI',sans-serif;">
                                     <div style="font-size:32px;line-height:1;margin-bottom:14px;">🔒</div>
-                                    <div style="font-size:18px;font-weight:700;margin-bottom:8px;">采集标签页已锁定</div>
+                                    <div style="font-size:18px;font-weight:700;margin-bottom:8px;">${lockTitle}</div>
                                     <div style="font-size:13px;line-height:1.7;color:rgba(255,255,255,.76);">
-                                        正在自动滚动和下载，请勿操作此页面。<br>
-                                        回到采集软件点击“停止采集”后即可解锁。
+                                        ${lockDescription}<br>
+                                        ${lockUnlockHint}
                                     </div>
                                 </div>`;
                             Object.assign(overlay.style, {

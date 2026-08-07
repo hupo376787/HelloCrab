@@ -1,3 +1,4 @@
+using HelloCrab.Core.Services.Localization;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Text;
@@ -36,7 +37,7 @@ public sealed class FfmpegMediaService : IMediaProcessor
         if (result.ExitCode != 0)
         {
             throw new IOException(
-                $"ffprobe 检查失败：{TrimProcessText(result.StandardError)}");
+                RuntimeLocalization.Format("Ffmpeg.Error.ProbeFailed", "ffprobe 检查失败：{0}", TrimProcessText(result.StandardError)));
         }
 
         return !string.IsNullOrWhiteSpace(result.StandardOutput);
@@ -164,7 +165,7 @@ public sealed class FfmpegMediaService : IMediaProcessor
             var error = string.IsNullOrWhiteSpace(transcodeResult.StandardError)
                 ? copyResult.StandardError
                 : transcodeResult.StandardError;
-            throw new IOException($"ffmpeg 下载 Pinterest HLS 失败：{TrimProcessText(error)}");
+            throw new IOException(RuntimeLocalization.Format("Ffmpeg.Error.HlsFailed", "ffmpeg 下载 Pinterest HLS 失败：{0}", TrimProcessText(error)));
         }
     }
 
@@ -237,7 +238,7 @@ public sealed class FfmpegMediaService : IMediaProcessor
             var error = string.IsNullOrWhiteSpace(transcodeResult.StandardError)
                 ? copyResult.StandardError
                 : transcodeResult.StandardError;
-            throw new IOException($"ffmpeg 合并失败：{TrimProcessText(error)}");
+            throw new IOException(RuntimeLocalization.Format("Ffmpeg.Error.MergeFailed", "ffmpeg 合并失败：{0}", TrimProcessText(error)));
         }
     }
 
@@ -264,12 +265,12 @@ public sealed class FfmpegMediaService : IMediaProcessor
         try
         {
             if (!process.Start())
-                throw new IOException($"无法启动 {Path.GetFileName(fileName)}。");
+                throw new IOException(RuntimeLocalization.Format("Ffmpeg.Error.StartFailed", "无法启动 {0}。", Path.GetFileName(fileName)));
         }
         catch (Exception ex) when (ex is Win32Exception or FileNotFoundException)
         {
             throw new FileNotFoundException(
-                $"未找到 {Path.GetFileName(fileName)}。请安装 FFmpeg，或把 ffmpeg/ffprobe 放到程序目录或系统 PATH 中。",
+                RuntimeLocalization.Format("Ffmpeg.Error.ToolMissing", "未找到 {0}。请安装 FFmpeg，或把 ffmpeg/ffprobe 放到程序目录或系统 PATH 中。", Path.GetFileName(fileName)), 
                 fileName,
                 ex);
         }
@@ -342,7 +343,7 @@ public sealed class FfmpegMediaService : IMediaProcessor
     private static string TrimProcessText(string? value)
     {
         if (string.IsNullOrWhiteSpace(value))
-            return "未返回详细错误信息。";
+            return RuntimeLocalization.Get("Ffmpeg.Error.NoDetails", "未返回详细错误信息。");
 
         const int maxLength = 1600;
         var text = value.Trim();

@@ -1,3 +1,4 @@
+using HelloCrab.Core.Services.Localization;
 using System.Collections.Concurrent;
 using System.Globalization;
 using System.Net;
@@ -40,7 +41,7 @@ public sealed class BilibiliSiteAdapter : ISiteAdapter
     };
 
     public string Id => "bilibili";
-    public string DisplayName => "哔哩哔哩网页版";
+    public string DisplayName => RuntimeLocalization.Get("Platform.bilibili", "哔哩哔哩网页版");
     public string HomeUrl => "https://www.bilibili.com/";
 
     public bool CanHandlePage(string pageUrl)
@@ -105,14 +106,14 @@ public sealed class BilibiliSiteAdapter : ISiteAdapter
             var code = ReadFirstInt64(root, "code");
             if (code != 0)
             {
-                var message = ReadFirstString(root, "message") ?? "未知错误";
-                diagnostic = $"哔哩哔哩作者资料接口返回失败：code={code}，{message}。";
+                var message = ReadFirstString(root, "message") ?? RuntimeLocalization.Get("Common.UnknownError", "未知错误");
+                diagnostic = RuntimeLocalization.Format("Bilibili.ProfileApiFailed", "哔哩哔哩作者资料接口返回失败：code={0}，{1}。", code, message);
                 return true;
             }
 
             if (!TryGetObject(root, "data", out var data))
             {
-                diagnostic = "哔哩哔哩作者资料接口中没有 data 节点。";
+                diagnostic = RuntimeLocalization.Get("Bilibili.ProfileNoData", "哔哩哔哩作者资料接口中没有 data 节点。");
                 return true;
             }
 
@@ -121,14 +122,16 @@ public sealed class BilibiliSiteAdapter : ISiteAdapter
                               ?? targetMid;
             if (string.IsNullOrWhiteSpace(responseMid))
             {
-                diagnostic = "哔哩哔哩作者资料接口中没有 UID。";
+                diagnostic = RuntimeLocalization.Get("Bilibili.ProfileNoUid", "哔哩哔哩作者资料接口中没有 UID。");
                 return true;
             }
 
             if (!string.IsNullOrWhiteSpace(targetMid) && !SameId(responseMid, targetMid))
             {
-                diagnostic =
-                    $"已忽略其他哔哩哔哩作者资料：UID {responseMid}，当前目标 UID {targetMid}。";
+                diagnostic = RuntimeLocalization.Format(
+                    "Bilibili.ProfileOtherIgnored",
+                    "已忽略其他哔哩哔哩作者资料：UID {0}，当前目标 UID {1}。",
+                    responseMid, targetMid);
                 return true;
             }
 
@@ -144,13 +147,13 @@ public sealed class BilibiliSiteAdapter : ISiteAdapter
                 waiter.TrySetResult(profile);
 
             diagnostic = string.IsNullOrWhiteSpace(profile.FaceUrl)
-                ? $"已获取哔哩哔哩作者资料：{profile.DisplayName}（UID {normalizedMid}），但接口未返回头像。"
-                : $"已获取哔哩哔哩作者头像：{profile.DisplayName}（UID {normalizedMid}）。";
+                ? RuntimeLocalization.Format("Bilibili.ProfileNoAvatar", "已获取哔哩哔哩作者资料：{0}（UID {1}），但接口未返回头像。", profile.DisplayName, normalizedMid)
+                : RuntimeLocalization.Format("Bilibili.ProfileAvatarLoaded", "已获取哔哩哔哩作者头像：{0}（UID {1}）。", profile.DisplayName, normalizedMid);
             return true;
         }
         catch (JsonException ex)
         {
-            diagnostic = $"解析哔哩哔哩作者资料失败：{ex.Message}";
+            diagnostic = RuntimeLocalization.Format("Bilibili.ProfileParseFailed", "解析哔哩哔哩作者资料失败：{0}", ex.Message);
             return true;
         }
     }
@@ -174,7 +177,7 @@ public sealed class BilibiliSiteAdapter : ISiteAdapter
                 Array.Empty<WorkItem>(),
                 false,
                 null,
-                "无法从哔哩哔哩作者主页读取 UID。");
+                RuntimeLocalization.Get("Bilibili.Error.CannotReadUid", "无法从哔哩哔哩作者主页读取 UID。"));
         }
 
         targetMid = NormalizeNumericId(targetMid);
@@ -185,12 +188,12 @@ public sealed class BilibiliSiteAdapter : ISiteAdapter
         var code = ReadFirstInt64(root, "code");
         if (code != 0)
         {
-            var message = ReadFirstString(root, "message") ?? "未知错误";
+            var message = ReadFirstString(root, "message") ?? RuntimeLocalization.Get("Common.UnknownError", "未知错误");
             return new ParsedWorkBatch(
                 Array.Empty<WorkItem>(),
                 null,
                 null,
-                $"哔哩哔哩作品接口返回失败：code={code}，{message}。");
+                RuntimeLocalization.Format("Bilibili.WorkApiFailed", "哔哩哔哩作品接口返回失败：code={0}，{1}。", code, message));
         }
 
         if (!TryGetObject(root, "data", out var data)
@@ -201,7 +204,7 @@ public sealed class BilibiliSiteAdapter : ISiteAdapter
                 Array.Empty<WorkItem>(),
                 null,
                 null,
-                "哔哩哔哩作品接口中没有找到 data.list.vlist。");
+                RuntimeLocalization.Get("Bilibili.WorkNoList", "哔哩哔哩作品接口中没有找到 data.list.vlist。"));
         }
 
         var works = new List<WorkItem>();
@@ -233,7 +236,7 @@ public sealed class BilibiliSiteAdapter : ISiteAdapter
             if (string.IsNullOrWhiteSpace(authorName))
                 authorName = ReadFirstString(item, "author")?.Trim();
             if (string.IsNullOrWhiteSpace(authorName))
-                authorName = $"哔哩哔哩用户 {targetMid}";
+                authorName = RuntimeLocalization.Format("Bilibili.UserFallback", "哔哩哔哩用户 {0}", targetMid);
 
             var authorAvatarUrl = cachedProfile?.FaceUrl;
             var coverUrl = NormalizeUrl(ReadFirstString(item, "pic"));
@@ -278,11 +281,9 @@ public sealed class BilibiliSiteAdapter : ISiteAdapter
         var nextPage = hasMore
             ? (pageNumber + 1).ToString(CultureInfo.InvariantCulture)
             : null;
-        var diagnostic =
-            $"哔哩哔哩第 {pageNumber} 页发现 {works.Count} 个视频，" +
-            $"总数 {totalCount}；将逐个读取视频页 DASH 最高画质。";
+        var diagnostic = RuntimeLocalization.Format("Bilibili.PageSummary", "哔哩哔哩第 {0} 页发现 {1} 个视频，总数 {2}；将逐个读取视频页 DASH 最高画质。", pageNumber, works.Count, totalCount);
         if (rejectedCount > 0)
-            diagnostic += $" 已过滤 {rejectedCount} 个非目标作者条目。";
+            diagnostic += " " + RuntimeLocalization.Format("Bilibili.Filtered", "已过滤 {0} 个非目标作者条目。", rejectedCount);
 
         return new ParsedWorkBatch(
             works,
@@ -308,22 +309,22 @@ public sealed class BilibiliSiteAdapter : ISiteAdapter
 
         var html = await FetchVideoPageAsync(work, browser, cancellationToken);
         if (string.IsNullOrWhiteSpace(html))
-            throw new InvalidOperationException("哔哩哔哩视频详情返回了空文档。");
+            throw new InvalidOperationException(RuntimeLocalization.Get("Bilibili.Error.EmptyDetail", "哔哩哔哩视频详情返回了空文档。"));
 
         using var playInfo = ParsePlayInfo(html);
         if (!TryGetObject(playInfo.RootElement, "data", out var data))
-            throw new InvalidOperationException("window.__playinfo__ 中没有 data 节点。");
+            throw new InvalidOperationException(RuntimeLocalization.Get("Bilibili.Error.PlayInfoNoData", "window.__playinfo__ 中没有 data 节点。"));
 
         var resolvedAssets = new List<MediaAsset>();
         if (TryGetObject(data, "dash", out var dash))
         {
             var video = ParseBestDashVideo(dash);
             if (video is null)
-                throw new InvalidOperationException("DASH 数据中没有可用的视频流。");
+                throw new InvalidOperationException(RuntimeLocalization.Get("Bilibili.Error.NoVideoDash", "DASH 数据中没有可用的视频流。"));
 
             resolvedAssets.Add(video);
             var audio = ParseBestDashAudio(dash)
-                        ?? throw new InvalidOperationException("DASH 数据中没有可用的音频流。");
+                        ?? throw new InvalidOperationException(RuntimeLocalization.Get("Bilibili.Error.NoAudioDash", "DASH 数据中没有可用的音频流。"));
             resolvedAssets.Add(audio);
         }
         else
@@ -331,7 +332,7 @@ public sealed class BilibiliSiteAdapter : ISiteAdapter
             // 极少数旧视频或受限页面可能只返回 durl（已包含音频的视频文件）。
             var progressive = ParseProgressiveVideo(data);
             if (progressive is null)
-                throw new InvalidOperationException("视频页中既没有 DASH，也没有可用的 durl 视频流。");
+                throw new InvalidOperationException(RuntimeLocalization.Get("Bilibili.Error.NoPlayableVideo", "视频页中既没有 DASH，也没有可用的 durl 视频流。"));
             resolvedAssets.Add(progressive);
         }
 
@@ -540,9 +541,10 @@ public sealed class BilibiliSiteAdapter : ISiteAdapter
         var html = await response.Content.ReadAsStringAsync(cancellationToken);
         if (!response.IsSuccessStatusCode)
         {
-            throw new HttpRequestException(
-                $"读取视频页失败：HTTP {(int)response.StatusCode} {response.ReasonPhrase}，" +
-                $"{TrimForMessage(html)}");
+            throw new HttpRequestException(RuntimeLocalization.Format(
+                "Bilibili.Error.VideoHttp",
+                "读取视频页失败：HTTP {0} {1}，{2}",
+                (int)response.StatusCode, response.ReasonPhrase, TrimForMessage(html)));
         }
 
         return html;
@@ -554,16 +556,16 @@ public sealed class BilibiliSiteAdapter : ISiteAdapter
         if (markerIndex < 0)
         {
             throw new InvalidOperationException(
-                "视频页中没有找到 window.__playinfo__。请确认页面可正常播放且登录状态有效。");
+                RuntimeLocalization.Get("Bilibili.Error.PlayInfoMissing", "视频页中没有找到 window.__playinfo__。请确认页面可正常播放且登录状态有效。"));
         }
 
         var equalsIndex = html.IndexOf('=', markerIndex + PlayInfoMarker.Length);
         if (equalsIndex < 0)
-            throw new InvalidOperationException("window.__playinfo__ 格式不完整。");
+            throw new InvalidOperationException(RuntimeLocalization.Get("Bilibili.Error.PlayInfoIncomplete", "window.__playinfo__ 格式不完整。"));
 
         var jsonStart = html.IndexOf('{', equalsIndex + 1);
         if (jsonStart < 0)
-            throw new InvalidOperationException("window.__playinfo__ 中没有 JSON 对象。");
+            throw new InvalidOperationException(RuntimeLocalization.Get("Bilibili.Error.PlayInfoNoJson", "window.__playinfo__ 中没有 JSON 对象。"));
 
         var json = ExtractBalancedJsonObject(html, jsonStart);
         return JsonDocument.Parse(json);
@@ -617,7 +619,7 @@ public sealed class BilibiliSiteAdapter : ISiteAdapter
                 return text[startIndex..(index + 1)];
         }
 
-        throw new InvalidOperationException("window.__playinfo__ JSON 对象没有正确结束。");
+        throw new InvalidOperationException(RuntimeLocalization.Get("Bilibili.Error.PlayInfoUnclosed", "window.__playinfo__ JSON 对象没有正确结束。"));
     }
 
     private static MediaAsset? ParseBestDashVideo(JsonElement dash)
@@ -950,7 +952,7 @@ public sealed class BilibiliSiteAdapter : ISiteAdapter
     private static string TrimForMessage(string? value)
     {
         if (string.IsNullOrWhiteSpace(value))
-            return "未返回正文";
+            return RuntimeLocalization.Get("Common.NoBody", "未返回正文");
 
         var normalized = value.Replace('\r', ' ').Replace('\n', ' ').Trim();
         return normalized.Length <= 180 ? normalized : normalized[..180];
@@ -962,7 +964,7 @@ public sealed class BilibiliSiteAdapter : ISiteAdapter
         string? FaceUrl)
     {
         public string DisplayName => string.IsNullOrWhiteSpace(Name)
-            ? $"哔哩哔哩用户 {Mid}"
+            ? RuntimeLocalization.Format("Bilibili.UserFallback", "哔哩哔哩用户 {0}", Mid)
             : Name!;
     }
 }

@@ -1,4 +1,5 @@
-﻿using System.Diagnostics;
+using HelloCrab.Core.Services.Localization;
+using System.Diagnostics;
 using System.IO.Compression;
 using System.Net;
 using System.Net.Http.Headers;
@@ -67,16 +68,16 @@ public sealed class GyanFfmpegInstallerService : IFfmpegInstallerService, IDispo
     public string GetStatusText()
     {
         if (!OperatingSystem.IsWindows())
-            return "自动下载仅支持 Windows；其他系统请通过系统包管理器安装 FFmpeg。";
+            return RuntimeLocalization.Get("Ffmpeg.Status.WindowsOnly", "自动下载仅支持 Windows；其他系统请通过系统包管理器安装 FFmpeg。");
 
         if (!Environment.Is64BitOperatingSystem)
-            return "gyan.dev 当前提供 64 位 Windows 构建，此系统不支持自动安装。";
+            return RuntimeLocalization.Get("Ffmpeg.Status.X64Only", "gyan.dev 当前提供 64 位 Windows 构建，此系统不支持自动安装。");
 
         var existing = FindExistingPair();
         if (existing is not null)
-            return $"FFmpeg 已可用：{Path.GetDirectoryName(existing.Value.FfmpegPath)}";
+            return RuntimeLocalization.Format("Ffmpeg.Status.Available", "FFmpeg 已可用：{0}", Path.GetDirectoryName(existing.Value.FfmpegPath));
 
-        return "尚未检测到 FFmpeg。需要检测/修复视频音轨时可点击下载。";
+        return RuntimeLocalization.Get("Ffmpeg.Status.Missing", "尚未检测到 FFmpeg。需要检测/修复视频音轨时可点击下载。");
     }
 
     public async Task<FfmpegInstallResult> InstallAsync(
@@ -84,21 +85,21 @@ public sealed class GyanFfmpegInstallerService : IFfmpegInstallerService, IDispo
         CancellationToken cancellationToken = default)
     {
         if (!OperatingSystem.IsWindows())
-            throw new PlatformNotSupportedException("FFmpeg 自动下载仅支持 Windows。");
+            throw new PlatformNotSupportedException(RuntimeLocalization.Get("Ffmpeg.Error.WindowsOnly", "FFmpeg 自动下载仅支持 Windows。"));
 
         if (!Environment.Is64BitOperatingSystem)
         {
             throw new PlatformNotSupportedException(
-                "gyan.dev 的 Windows 构建为 64 位，当前系统无法使用自动安装。");
+                RuntimeLocalization.Get("Ffmpeg.Error.X64Only", "gyan.dev 的 Windows 构建为 64 位，当前系统无法使用自动安装。"));
         }
 
         var architecture = RuntimeInformation.OSArchitecture.ToString();
         progress?.Report(new FfmpegInstallProgress(
-            $"正在访问 gyan.dev FFmpeg Windows 构建页（系统架构：{architecture}）…"));
+            RuntimeLocalization.Format("Ffmpeg.Install.AccessBuildPage", "正在访问 gyan.dev FFmpeg Windows 构建页（系统架构：{0}）…", architecture)));
 
         var packageUri = await ResolvePackageUriAsync(cancellationToken);
         progress?.Report(new FfmpegInstallProgress(
-            $"已找到 release essentials 压缩包：{packageUri.AbsolutePath.Split('/').Last()}"));
+            RuntimeLocalization.Format("Ffmpeg.Install.PackageFound", "已找到 release essentials 压缩包：{0}", packageUri.AbsolutePath.Split('/').Last())));
 
         var temporaryRoot = Path.Combine(
             Path.GetTempPath(),
@@ -116,7 +117,7 @@ public sealed class GyanFfmpegInstallerService : IFfmpegInstallerService, IDispo
                 archivePath,
                 progress,
                 cancellationToken);
-            progress?.Report(new FfmpegInstallProgress("下载完成，正在校验 ZIP 结构并解压 FFmpeg…"));
+            progress?.Report(new FfmpegInstallProgress(RuntimeLocalization.Get("Ffmpeg.Install.DownloadDoneExtract", "下载完成，正在校验 ZIP 结构并解压 FFmpeg…")));
 
             Directory.CreateDirectory(extractPath);
             await ExtractArchiveAsync(archivePath, extractPath, cancellationToken);
@@ -125,13 +126,13 @@ public sealed class GyanFfmpegInstallerService : IFfmpegInstallerService, IDispo
             var sourceFfmpeg = Path.Combine(sourceBinDirectory, "ffmpeg.exe");
             var sourceFfprobe = Path.Combine(sourceBinDirectory, "ffprobe.exe");
             if (!IsUsableFile(sourceFfmpeg) || !IsUsableFile(sourceFfprobe))
-                throw new InvalidDataException("压缩包中没有找到有效的 ffmpeg.exe 和 ffprobe.exe。");
+                throw new InvalidDataException(RuntimeLocalization.Get("Ffmpeg.Error.ExecutablesMissing", "压缩包中没有找到有效的 ffmpeg.exe 和 ffprobe.exe。"));
 
             var destinationBinDirectory = Path.Combine(InstallDirectory, "bin");
             Directory.CreateDirectory(destinationBinDirectory);
 
             progress?.Report(new FfmpegInstallProgress(
-                $"正在安装到程序目录：{destinationBinDirectory}"));
+                RuntimeLocalization.Format("Ffmpeg.Install.ToDirectory", "正在安装到程序目录：{0}", destinationBinDirectory)));
 
             var destinationFfmpeg = Path.Combine(destinationBinDirectory, "ffmpeg.exe");
             var destinationFfprobe = Path.Combine(destinationBinDirectory, "ffprobe.exe");
@@ -149,9 +150,9 @@ public sealed class GyanFfmpegInstallerService : IFfmpegInstallerService, IDispo
                 cancellationToken);
 
             if (!IsInstalled)
-                throw new IOException("FFmpeg 文件复制完成，但安装结果校验失败。");
+                throw new IOException(RuntimeLocalization.Get("Ffmpeg.Error.ValidationFailed", "FFmpeg 文件复制完成，但安装结果校验失败。"));
 
-            progress?.Report(new FfmpegInstallProgress("FFmpeg 安装完成。"));
+            progress?.Report(new FfmpegInstallProgress(RuntimeLocalization.Get("Ffmpeg.Install.CompletedMessage", "FFmpeg 安装完成。")));
             return new FfmpegInstallResult(
                 InstallDirectory,
                 destinationFfmpeg,
@@ -162,7 +163,7 @@ public sealed class GyanFfmpegInstallerService : IFfmpegInstallerService, IDispo
         catch (UnauthorizedAccessException ex)
         {
             throw new UnauthorizedAccessException(
-                $"无法写入程序目录“{InstallDirectory}”。请把程序放到可写目录，或以管理员身份运行后重试。",
+                RuntimeLocalization.Format("Ffmpeg.Error.DirectoryWrite", "无法写入程序目录“{0}”。请把程序放到可写目录，或以管理员身份运行后重试。", InstallDirectory),
                 ex);
         }
         finally
@@ -218,7 +219,7 @@ public sealed class GyanFfmpegInstallerService : IFfmpegInstallerService, IDispo
 
         var totalBytes = response.Content.Headers.ContentLength;
         if (totalBytes is > MaximumPackageBytes)
-            throw new InvalidDataException("FFmpeg 压缩包大小异常，已取消下载。");
+            throw new InvalidDataException(RuntimeLocalization.Get("Ffmpeg.Error.PackageSizeAbnormal", "FFmpeg 压缩包大小异常，已取消下载。"));
 
         await using var input = await response.Content.ReadAsStreamAsync(cancellationToken);
         await using var output = new FileStream(
@@ -241,7 +242,7 @@ public sealed class GyanFfmpegInstallerService : IFfmpegInstallerService, IDispo
 
             received += read;
             if (received > MaximumPackageBytes)
-                throw new InvalidDataException("FFmpeg 压缩包超过允许的最大大小，已取消下载。");
+                throw new InvalidDataException(RuntimeLocalization.Get("Ffmpeg.Error.PackageTooLarge", "FFmpeg 压缩包超过允许的最大大小，已取消下载。"));
 
             await output.WriteAsync(buffer.AsMemory(0, read), cancellationToken);
 
@@ -250,7 +251,7 @@ public sealed class GyanFfmpegInstallerService : IFfmpegInstallerService, IDispo
             {
                 lastReportAt = now;
                 progress?.Report(new FfmpegInstallProgress(
-                    "正在下载 FFmpeg",
+                    RuntimeLocalization.Get("Ffmpeg.Install.Downloading", "正在下载 FFmpeg"),
                     received,
                     totalBytes,
                     CalculateBytesPerSecond(received, downloadTimer.Elapsed)));
@@ -259,10 +260,10 @@ public sealed class GyanFfmpegInstallerService : IFfmpegInstallerService, IDispo
 
         await output.FlushAsync(cancellationToken);
         if (received == 0)
-            throw new InvalidDataException("FFmpeg 下载结果为空。");
+            throw new InvalidDataException(RuntimeLocalization.Get("Ffmpeg.Error.EmptyDownload", "FFmpeg 下载结果为空。"));
 
         progress?.Report(new FfmpegInstallProgress(
-            "正在下载 FFmpeg",
+            RuntimeLocalization.Get("Ffmpeg.Install.Downloading", "正在下载 FFmpeg"),
             received,
             totalBytes,
             CalculateBytesPerSecond(received, downloadTimer.Elapsed)));
@@ -282,7 +283,7 @@ public sealed class GyanFfmpegInstallerService : IFfmpegInstallerService, IDispo
             if (!response.IsSuccessStatusCode)
             {
                 progress?.Report(new FfmpegInstallProgress(
-                    "未能获取 gyan.dev SHA-256 校验值，将继续执行 ZIP 结构校验。"));
+                    RuntimeLocalization.Get("Ffmpeg.Checksum.Unavailable", "未能获取 gyan.dev SHA-256 校验值，将继续执行 ZIP 结构校验。")));
                 return;
             }
 
@@ -294,11 +295,11 @@ public sealed class GyanFfmpegInstallerService : IFfmpegInstallerService, IDispo
             if (!match.Success)
             {
                 progress?.Report(new FfmpegInstallProgress(
-                    "gyan.dev SHA-256 文件格式无法识别，将继续执行 ZIP 结构校验。"));
+                    RuntimeLocalization.Get("Ffmpeg.Checksum.FormatInvalid", "gyan.dev SHA-256 文件格式无法识别，将继续执行 ZIP 结构校验。")));
                 return;
             }
 
-            progress?.Report(new FfmpegInstallProgress("正在校验 FFmpeg 压缩包 SHA-256…"));
+            progress?.Report(new FfmpegInstallProgress(RuntimeLocalization.Get("Ffmpeg.Checksum.Verifying", "正在校验 FFmpeg 压缩包 SHA-256…")));
             await using var stream = new FileStream(
                 archivePath,
                 FileMode.Open,
@@ -313,10 +314,10 @@ public sealed class GyanFfmpegInstallerService : IFfmpegInstallerService, IDispo
             if (!actualHash.Equals(expectedHash, StringComparison.OrdinalIgnoreCase))
             {
                 throw new InvalidDataException(
-                    "FFmpeg 压缩包 SHA-256 校验失败，文件可能下载不完整或已被篡改。");
+                    RuntimeLocalization.Get("Ffmpeg.Checksum.Failed", "FFmpeg 压缩包 SHA-256 校验失败，文件可能下载不完整或已被篡改。"));
             }
 
-            progress?.Report(new FfmpegInstallProgress("FFmpeg 压缩包 SHA-256 校验通过。"));
+            progress?.Report(new FfmpegInstallProgress(RuntimeLocalization.Get("Ffmpeg.Checksum.Passed", "FFmpeg 压缩包 SHA-256 校验通过。")));
         }
         catch (OperationCanceledException)
         {
@@ -329,7 +330,7 @@ public sealed class GyanFfmpegInstallerService : IFfmpegInstallerService, IDispo
         catch
         {
             progress?.Report(new FfmpegInstallProgress(
-                "无法完成在线 SHA-256 校验，将继续执行 ZIP 结构校验。"));
+                RuntimeLocalization.Get("Ffmpeg.Checksum.OnlineFailed", "无法完成在线 SHA-256 校验，将继续执行 ZIP 结构校验。")));
         }
     }
 
@@ -357,7 +358,7 @@ public sealed class GyanFfmpegInstallerService : IFfmpegInstallerService, IDispo
             var rootWithSeparator = Path.GetFullPath(extractPath)
                                     + Path.DirectorySeparatorChar;
             if (!targetPath.StartsWith(rootWithSeparator, StringComparison.OrdinalIgnoreCase))
-                throw new InvalidDataException("FFmpeg 压缩包包含非法路径。");
+                throw new InvalidDataException(RuntimeLocalization.Get("Ffmpeg.Error.IllegalArchivePath", "FFmpeg 压缩包包含非法路径。"));
 
             var directory = Path.GetDirectoryName(targetPath);
             if (!string.IsNullOrWhiteSpace(directory))
@@ -388,7 +389,7 @@ public sealed class GyanFfmpegInstallerService : IFfmpegInstallerService, IDispo
                     StringComparison.OrdinalIgnoreCase));
 
         return ffmpegPath is null
-            ? throw new InvalidDataException("解压后没有找到 FFmpeg bin 目录。" )
+            ? throw new InvalidDataException(RuntimeLocalization.Get("Ffmpeg.Error.BinMissing", "解压后没有找到 FFmpeg bin 目录。"))
             : Path.GetDirectoryName(ffmpegPath)!;
     }
 
@@ -444,7 +445,7 @@ public sealed class GyanFfmpegInstallerService : IFfmpegInstallerService, IDispo
                 "ffmpeg-release-essentials.zip",
                 StringComparison.OrdinalIgnoreCase))
         {
-            throw new InvalidDataException("构建页返回了不受信任的 FFmpeg 下载地址。");
+            throw new InvalidDataException(RuntimeLocalization.Get("Ffmpeg.Error.UntrustedPackageUrl", "构建页返回了不受信任的 FFmpeg 下载地址。"));
         }
     }
 
@@ -456,7 +457,7 @@ public sealed class GyanFfmpegInstallerService : IFfmpegInstallerService, IDispo
                 "ffmpeg-release-essentials.zip.sha256",
                 StringComparison.OrdinalIgnoreCase))
         {
-            throw new InvalidDataException("生成了不受信任的 FFmpeg 校验地址。");
+            throw new InvalidDataException(RuntimeLocalization.Get("Ffmpeg.Error.UntrustedChecksumUrl", "生成了不受信任的 FFmpeg 校验地址。"));
         }
     }
 

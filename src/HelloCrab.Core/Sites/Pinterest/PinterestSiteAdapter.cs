@@ -1,3 +1,4 @@
+using HelloCrab.Core.Services.Localization;
 using System.Collections.Concurrent;
 using System.Globalization;
 using System.Net;
@@ -102,7 +103,7 @@ public sealed partial class PinterestSiteAdapter : ISiteAdapter
             var pageContext = ReadPageContext(pageUrl);
             if (!TryGetResourceData(document.RootElement, out var data))
             {
-                diagnostic = $"Pinterest {resourceName} 中没有 resource_response.data。";
+                diagnostic = RuntimeLocalization.Format("Pinterest.NoResourceData", "Pinterest {0} 中没有 resource_response.data。", resourceName);
                 return true;
             }
 
@@ -112,7 +113,7 @@ public sealed partial class PinterestSiteAdapter : ISiteAdapter
                 if (TryGetObject(board, "owner", out var owner))
                 {
                     CacheProfile(owner, pageContext?.Username);
-                    diagnostic = "已获取 Pinterest 画板作者资料。";
+                    diagnostic = RuntimeLocalization.Get("Pinterest.ProfileBoardLoaded", "已获取 Pinterest 画板作者资料。");
                 }
                 return true;
             }
@@ -121,7 +122,7 @@ public sealed partial class PinterestSiteAdapter : ISiteAdapter
             var profile = ParseProfile(user, pageContext?.Username);
             if (profile is null)
             {
-                diagnostic = "Pinterest 作者资料响应中没有可识别的用户信息。";
+                diagnostic = RuntimeLocalization.Get("Pinterest.ProfileUnrecognized", "Pinterest 作者资料响应中没有可识别的用户信息。");
                 return true;
             }
 
@@ -135,13 +136,13 @@ public sealed partial class PinterestSiteAdapter : ISiteAdapter
 
             CacheProfile(profile);
             diagnostic = string.IsNullOrWhiteSpace(profile.AvatarUrl)
-                ? $"已获取 Pinterest 作者资料：{profile.DisplayName}，但没有头像。"
-                : $"已获取 Pinterest 作者头像：{profile.DisplayName}。";
+                ? RuntimeLocalization.Format("Pinterest.ProfileNoAvatar", "已获取 Pinterest 作者资料：{0}，但没有头像。", profile.DisplayName)
+                : RuntimeLocalization.Format("Pinterest.ProfileAvatarLoaded", "已获取 Pinterest 作者头像：{0}。", profile.DisplayName);
             return true;
         }
         catch (JsonException ex)
         {
-            diagnostic = $"解析 Pinterest 作者资料失败：{ex.Message}";
+            diagnostic = RuntimeLocalization.Format("Pinterest.ProfileParseFailed", "解析 Pinterest 作者资料失败：{0}", ex.Message);
             return true;
         }
     }
@@ -159,7 +160,7 @@ public sealed partial class PinterestSiteAdapter : ISiteAdapter
                 Array.Empty<WorkItem>(),
                 false,
                 null,
-                "无法从当前 Pinterest 页面识别作者用户名。请打开作者主页、Created 页面或具体画板页。 ");
+                RuntimeLocalization.Get("Pinterest.Error.AuthorUnknown", "无法从当前 Pinterest 页面识别作者用户名。请打开作者主页、Created 页面或具体画板页。"));
         }
 
         using var document = JsonDocument.Parse(responseJson);
@@ -170,7 +171,7 @@ public sealed partial class PinterestSiteAdapter : ISiteAdapter
                 Array.Empty<WorkItem>(),
                 null,
                 null,
-                "Pinterest 接口响应中没有 resource_response.data。可能是登录页、风控响应或非作品接口。 ");
+                RuntimeLocalization.Get("Pinterest.Error.NoResponseData", "Pinterest 接口响应中没有 resource_response.data。可能是登录页、风控响应或非作品接口。"));
         }
 
         var works = new List<WorkItem>();
@@ -186,11 +187,11 @@ public sealed partial class PinterestSiteAdapter : ISiteAdapter
         }
 
         var bookmarkState = ReadBookmarkState(root);
-        var diagnostic = $"Pinterest 本页解析到 {works.Count} 个 Pin。";
+        var diagnostic = RuntimeLocalization.Format("Pinterest.PageSummary", "Pinterest 本页解析到 {0} 个 Pin。", works.Count);
         if (rejected > 0)
-            diagnostic += $" 已过滤 {rejected} 个与当前作者或画板不一致的条目。";
+            diagnostic += " " + RuntimeLocalization.Format("Pinterest.Filtered", "已过滤 {0} 个与当前作者或画板不一致的条目。", rejected);
         if (bookmarkState.HasMore == true)
-            diagnostic += " 页面仍有后续 bookmark，将继续向下滚动。";
+            diagnostic += " " + RuntimeLocalization.Get("Pinterest.MoreBookmark", "页面仍有后续 bookmark，将继续向下滚动。");
 
         return new ParsedWorkBatch(
             works,

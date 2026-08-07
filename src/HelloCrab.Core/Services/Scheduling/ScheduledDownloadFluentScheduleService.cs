@@ -1,6 +1,7 @@
 using FluentScheduler;
 using ScheduleEditor.Models;
 using ScheduleEditor.Services;
+using HelloCrab.Core.Services.Localization;
 
 namespace HelloCrab.Core.Services.Scheduling;
 
@@ -112,7 +113,7 @@ internal sealed class ScheduledDownloadFluentScheduleService : IFluentScheduleSe
             _ => throw new ArgumentOutOfRangeException(
                 nameof(options),
                 appliedOptions.RepeatType,
-                "不支持的重复方式。")
+                RuntimeLocalization.Get("Error.Schedule.UnsupportedRepeat", "不支持的重复方式。"))
         };
 
         _schedule.Start();

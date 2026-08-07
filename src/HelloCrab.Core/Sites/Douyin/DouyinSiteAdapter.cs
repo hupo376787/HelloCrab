@@ -1,3 +1,4 @@
+using HelloCrab.Core.Services.Localization;
 using System.Net;
 using System.Text.Json;
 using HelloCrab.Core.Models;
@@ -9,7 +10,7 @@ namespace HelloCrab.Core.Sites.Douyin;
 public sealed class DouyinSiteAdapter : ISiteAdapter
 {
     public string Id => "douyin";
-    public string DisplayName => "抖音网页版";
+    public string DisplayName => RuntimeLocalization.Get("Platform.douyin", "抖音网页版");
     public string HomeUrl => "https://www.douyin.com/";
 
     public bool CanHandlePage(string pageUrl)
@@ -43,7 +44,7 @@ public sealed class DouyinSiteAdapter : ISiteAdapter
                 Array.Empty<WorkItem>(),
                 null,
                 null,
-                $"已忽略非目标作者接口响应：目标={ShortId(pageSecUserId)}，响应={ShortId(responseSecUserId)}");
+                RuntimeLocalization.Format("Douyin.OtherAuthorIgnored", "已忽略非目标作者接口响应：目标={0}，响应={1}", ShortId(pageSecUserId), ShortId(responseSecUserId)));
         }
 
         // /user/self 等特殊地址无法直接提供 sec_uid 时，以本次 post 请求中的
@@ -84,9 +85,9 @@ public sealed class DouyinSiteAdapter : ISiteAdapter
             var authorId = ReadString(author, "uid")
                            ?? authorSecUserId
                            ?? "unknown-author";
-            var authorName = ReadString(author, "nickname") ?? "未知作者";
+            var authorName = ReadString(author, "nickname") ?? RuntimeLocalization.Get("Common.UnknownAuthor", "未知作者");
             var authorAvatarUrl = ParseAuthorAvatar(author);
-            var description = ReadString(aweme, "desc") ?? "无标题";
+            var description = ReadString(aweme, "desc") ?? RuntimeLocalization.Get("Common.UnknownTitle", "无标题");
             var createTime = ReadInt64(aweme, "create_time");
 
             var assets = ParseImages(aweme);
@@ -122,7 +123,7 @@ public sealed class DouyinSiteAdapter : ISiteAdapter
         }
 
         var diagnostic = rejectedWorkCount > 0
-            ? $"已过滤 {rejectedWorkCount} 个非目标作者作品，未加入下载队列。"
+            ? RuntimeLocalization.Format("Douyin.Filtered", "已过滤 {0} 个非目标作者作品，未加入下载队列。", rejectedWorkCount)
             : null;
 
         return new ParsedWorkBatch(

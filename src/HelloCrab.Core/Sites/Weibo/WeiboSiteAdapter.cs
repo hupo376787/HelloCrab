@@ -1,3 +1,4 @@
+using HelloCrab.Core.Services.Localization;
 using System.Globalization;
 using System.Net;
 using System.Text.Json;
@@ -16,7 +17,7 @@ namespace HelloCrab.Core.Sites.Weibo;
 public sealed class WeiboSiteAdapter : ISiteAdapter
 {
     public string Id => "weibo";
-    public string DisplayName => "微博网页版";
+    public string DisplayName => RuntimeLocalization.Get("Platform.weibo", "微博网页版");
     public string HomeUrl => "https://weibo.com/";
 
     public bool CanHandlePage(string pageUrl)
@@ -69,7 +70,7 @@ public sealed class WeiboSiteAdapter : ISiteAdapter
                 Array.Empty<WorkItem>(),
                 null,
                 null,
-                $"已忽略非目标微博作者响应：当前主页 UID={pageUid}，接口 UID={requestUid}。");
+                RuntimeLocalization.Format("Weibo.OtherAuthorIgnored", "已忽略非目标微博作者响应：当前主页 UID={0}，接口 UID={1}。", pageUid, requestUid));
         }
 
         var expectedUid = requestUid ?? pageUid;
@@ -120,14 +121,14 @@ public sealed class WeiboSiteAdapter : ISiteAdapter
             if (string.IsNullOrWhiteSpace(workId))
                 continue;
 
-            var authorName = ReadFirstString(user, "screen_name", "name") ?? "未知作者";
+            var authorName = ReadFirstString(user, "screen_name", "name") ?? RuntimeLocalization.Get("Common.UnknownAuthor", "未知作者");
             var authorAvatar = ReadFirstString(
                 user,
                 "avatar_hd",
                 "avatar_large",
                 "profile_image_url");
             var description = NormalizeDescription(
-                ReadFirstString(status, "text_raw", "text") ?? "无标题");
+                ReadFirstString(status, "text_raw", "text") ?? RuntimeLocalization.Get("Common.UnknownTitle", "无标题"));
             var createTime = ParseCreatedAt(ReadFirstString(status, "created_at"));
             var mblogId = ReadFirstString(status, "mblogid");
             var sourceUrl = string.IsNullOrWhiteSpace(mblogId)
@@ -158,9 +159,9 @@ public sealed class WeiboSiteAdapter : ISiteAdapter
               && !sinceId.Equals("0", StringComparison.OrdinalIgnoreCase);
         var diagnostics = new List<string>(2);
         if (retweetedCount > 0)
-            diagnostics.Add($"已过滤 {retweetedCount} 条转发微博，仅采集原创微博。");
+            diagnostics.Add(RuntimeLocalization.Format("Weibo.RetweetsFiltered", "已过滤 {0} 条转发微博，仅采集原创微博。", retweetedCount));
         if (rejectedCount > 0)
-            diagnostics.Add($"已过滤 {rejectedCount} 条非目标微博作者内容。");
+            diagnostics.Add(RuntimeLocalization.Format("Weibo.OtherFiltered", "已过滤 {0} 条非目标微博作者内容。", rejectedCount));
 
         var diagnostic = diagnostics.Count > 0
             ? string.Join(" ", diagnostics)
@@ -809,7 +810,7 @@ public sealed class WeiboSiteAdapter : ISiteAdapter
             .Replace("\u200B", string.Empty, StringComparison.Ordinal)
             .Replace("\uFEFF", string.Empty, StringComparison.Ordinal);
         var collapsed = Regex.Replace(withoutInvisible, @"\s+", " ").Trim();
-        return string.IsNullOrWhiteSpace(collapsed) ? "无标题" : collapsed;
+        return string.IsNullOrWhiteSpace(collapsed) ? RuntimeLocalization.Get("Common.UnknownTitle", "无标题") : collapsed;
     }
 
     private static string? TryReadProfileUid(Uri uri)

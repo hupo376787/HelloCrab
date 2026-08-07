@@ -1,4 +1,5 @@
-﻿using System.Collections.Concurrent;
+using HelloCrab.Core.Services.Localization;
+using System.Collections.Concurrent;
 using System.Threading.Channels;
 
 namespace HelloCrab.Core.Services.Images;
@@ -38,7 +39,7 @@ public sealed class PersonDetectionQueueService : IAsyncDisposable
     {
         ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
         if (!_sessions.TryAdd(sessionId, new SessionState(sessionId)))
-            throw new InvalidOperationException($"人像检测会话已存在：{sessionId}");
+            throw new InvalidOperationException(RuntimeLocalization.Format("Error.Person.SessionExists", "人像检测会话已存在：{0}", sessionId));
     }
 
     /// <summary>
@@ -54,12 +55,12 @@ public sealed class PersonDetectionQueueService : IAsyncDisposable
     {
         ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
         if (!_sessions.TryGetValue(sessionId, out var session))
-            throw new InvalidOperationException($"未找到人像检测会话：{sessionId}");
+            throw new InvalidOperationException(RuntimeLocalization.Format("Error.Person.SessionMissing", "未找到人像检测会话：{0}", sessionId));
 
         if (string.IsNullOrWhiteSpace(pendingPath)
             || !pendingPath.EndsWith(PendingSuffix, StringComparison.OrdinalIgnoreCase))
         {
-            throw new ArgumentException("待检测文件必须以 .pending 结尾。", nameof(pendingPath));
+            throw new ArgumentException(RuntimeLocalization.Get("Error.Person.PendingSuffix", "待检测文件必须以 .pending 结尾。"), nameof(pendingPath));
         }
 
         var normalizedPendingPath = Path.GetFullPath(pendingPath);
@@ -81,7 +82,7 @@ public sealed class PersonDetectionQueueService : IAsyncDisposable
             return;
 
         var rejected = PersonDetectionFileResult.CreateCanceled(
-            "人像检测队列已关闭，待检测文件将保留为 .pending，程序下次启动时会继续处理。");
+            RuntimeLocalization.Get("Log.Person.QueueClosed", "人像检测队列已关闭，待检测文件将保留为 .pending，程序下次启动时会继续处理。"));
         candidate.Completion.TrySetResult(rejected);
         _pathStates.TryRemove(normalizedPendingPath, out _);
     }
@@ -125,7 +126,7 @@ public sealed class PersonDetectionQueueService : IAsyncDisposable
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            RaiseLog($"扫描遗留待检测图片失败：{ex.Message}");
+            RaiseLog(RuntimeLocalization.Format("Log.Person.RecoveryScanFailed", "扫描遗留待检测图片失败：{0}", ex.Message));
             return PersonDetectionSessionResult.Empty(Guid.Empty);
         }
 
@@ -146,12 +147,13 @@ public sealed class PersonDetectionQueueService : IAsyncDisposable
             queued++;
         }
 
-        RaiseLog($"发现 {queued} 张上次未完成的人像检测图片，已恢复到后台队列。");
+        RaiseLog(RuntimeLocalization.Format("Log.Person.RecoveredQueued", "发现 {0} 张上次未完成的人像检测图片，已恢复到后台队列。", queued));
         var ticket = CompleteSession(sessionId);
         var result = await ticket.Completion;
-        RaiseLog(
-            $"遗留人像检测处理完成：保留 {result.KeptCount} 张，删除 {result.DeletedCount} 张，" +
-            $"检测失败保留 {result.DetectionFailureCount} 张。 ");
+        RaiseLog(RuntimeLocalization.Format(
+            "Log.Person.RecoveryComplete",
+            "遗留人像检测处理完成：保留 {0} 张，删除 {1} 张，检测失败保留 {2} 张。",
+            result.KeptCount, result.DeletedCount, result.DetectionFailureCount));
         return result;
     }
 
@@ -190,7 +192,7 @@ public sealed class PersonDetectionQueueService : IAsyncDisposable
                 catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
                 {
                     result = PersonDetectionFileResult.CreateCanceled(
-                        "程序正在退出，待检测文件保持为 .pending，下次启动继续处理。");
+                        RuntimeLocalization.Get("Log.Person.ExitPending", "程序正在退出，待检测文件保持为 .pending，下次启动继续处理。"));
                 }
                 catch (Exception ex)
                 {
@@ -207,7 +209,7 @@ public sealed class PersonDetectionQueueService : IAsyncDisposable
         finally
         {
             var canceled = PersonDetectionFileResult.CreateCanceled(
-                "人像检测队列已停止，待检测文件保持为 .pending。");
+                RuntimeLocalization.Get("Log.Person.QueueStopped", "人像检测队列已停止，待检测文件保持为 .pending。"));
             foreach (var pair in _pathStates)
             {
                 pair.Value.Completion.TrySetResult(canceled);
@@ -225,7 +227,7 @@ public sealed class PersonDetectionQueueService : IAsyncDisposable
             if (File.Exists(job.FinalPath))
                 return PersonDetectionFileResult.CreateKept();
 
-            return PersonDetectionFileResult.CreateFailed("待检测图片和最终图片均不存在。");
+            return PersonDetectionFileResult.CreateFailed(RuntimeLocalization.Get("Error.Person.FilesMissing", "待检测图片和最终图片均不存在。"));
         }
 
         var result = await _detector.DetectAsync(
@@ -238,20 +240,20 @@ public sealed class PersonDetectionQueueService : IAsyncDisposable
         {
             return await FailSafeKeepAsync(
                 job,
-                result.ErrorMessage ?? "未知检测错误");
+                result.ErrorMessage ?? RuntimeLocalization.Get("Common.UnknownError", "未知检测错误"));
         }
 
         if (result.ContainsPerson)
         {
             PromotePendingFile(job.PendingPath, job.FinalPath);
-            RaiseLog($"检测到人物，已保留图片：{Path.GetFileName(job.FinalPath)}");
+            RaiseLog(RuntimeLocalization.Format("Log.Person.Kept", "检测到人物，已保留图片：{0}", Path.GetFileName(job.FinalPath)));
             return PersonDetectionFileResult.CreateKept();
         }
 
         try
         {
             File.Delete(job.PendingPath);
-            RaiseLog($"未检测到人物，已删除图片：{Path.GetFileName(job.FinalPath)}");
+            RaiseLog(RuntimeLocalization.Format("Log.Person.Deleted", "未检测到人物，已删除图片：{0}", Path.GetFileName(job.FinalPath)));
             return PersonDetectionFileResult.CreateDeleted();
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -259,16 +261,18 @@ public sealed class PersonDetectionQueueService : IAsyncDisposable
             try
             {
                 PromotePendingFile(job.PendingPath, job.FinalPath);
-                RaiseLog(
-                    $"未检测到人物，但删除图片失败；为避免遗留待处理文件，已恢复并保留图片：" +
-                    $"{Path.GetFileName(job.FinalPath)}；{ex.Message}");
+                RaiseLog(RuntimeLocalization.Format(
+                    "Log.Person.DeleteFailedRestored",
+                    "未检测到人物，但删除图片失败；为避免遗留待处理文件，已恢复并保留图片：{0}；{1}",
+                    Path.GetFileName(job.FinalPath), ex.Message));
                 return PersonDetectionFileResult.CreateDetectionFailed(ex.Message);
             }
             catch (Exception restoreEx) when (restoreEx is IOException or UnauthorizedAccessException)
             {
-                RaiseLog(
-                    $"未检测到人物，但删除和恢复文件名均失败，文件仍保留为 .pending：" +
-                    $"{Path.GetFileName(job.PendingPath)}；{restoreEx.Message}");
+                RaiseLog(RuntimeLocalization.Format(
+                    "Log.Person.DeleteRestoreFailed",
+                    "未检测到人物，但删除和恢复文件名均失败，文件仍保留为 .pending：{0}；{1}",
+                    Path.GetFileName(job.PendingPath), restoreEx.Message));
                 return PersonDetectionFileResult.CreateFailed(restoreEx.Message);
             }
         }
@@ -283,16 +287,18 @@ public sealed class PersonDetectionQueueService : IAsyncDisposable
             if (File.Exists(job.PendingPath))
                 PromotePendingFile(job.PendingPath, job.FinalPath);
 
-            RaiseLog(
-                $"人像检测失败，为避免误删已保留图片：{Path.GetFileName(job.FinalPath)}；" +
-                errorMessage);
+            RaiseLog(RuntimeLocalization.Format(
+                "Log.Person.DetectionFailedKept",
+                "人像检测失败，为避免误删已保留图片：{0}；{1}",
+                Path.GetFileName(job.FinalPath), errorMessage));
             return Task.FromResult(PersonDetectionFileResult.CreateDetectionFailed(errorMessage));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            RaiseLog(
-                $"人像检测失败且恢复最终文件名失败，文件仍保留为 .pending：" +
-                $"{Path.GetFileName(job.PendingPath)}；{ex.Message}");
+            RaiseLog(RuntimeLocalization.Format(
+                "Log.Person.DetectionFailedPending",
+                "人像检测失败且恢复最终文件名失败，文件仍保留为 .pending：{0}；{1}",
+                Path.GetFileName(job.PendingPath), ex.Message));
             return Task.FromResult(PersonDetectionFileResult.CreateFailed(ex.Message));
         }
     }
@@ -300,7 +306,7 @@ public sealed class PersonDetectionQueueService : IAsyncDisposable
     public static string GetFinalPath(string pendingPath)
     {
         if (!pendingPath.EndsWith(PendingSuffix, StringComparison.OrdinalIgnoreCase))
-            throw new ArgumentException("路径不是 .pending 文件。", nameof(pendingPath));
+            throw new ArgumentException(RuntimeLocalization.Get("Error.Person.NotPendingPath", "路径不是 .pending 文件。"), nameof(pendingPath));
         return pendingPath[..^PendingSuffix.Length];
     }
 
@@ -378,7 +384,7 @@ public sealed class PersonDetectionQueueService : IAsyncDisposable
             lock (_gate)
             {
                 if (_downloadsCompleted)
-                    throw new InvalidOperationException("下载阶段已经结束，不能继续加入人像检测任务。");
+                    throw new InvalidOperationException(RuntimeLocalization.Get("Error.Person.DownloadsEnded", "下载阶段已经结束，不能继续加入人像检测任务。"));
                 _totalQueued++;
                 _pending++;
             }

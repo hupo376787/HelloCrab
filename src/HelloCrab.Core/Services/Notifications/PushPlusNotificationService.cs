@@ -2,6 +2,7 @@ using System.Net;
 using System.Reflection;
 using System.Text.Json;
 using HelloCrab.Core.Models;
+using HelloCrab.Core.Services.Localization;
 
 namespace HelloCrab.Core.Services.Notifications;
 
@@ -25,7 +26,7 @@ public sealed class PushPlusNotificationService : IDisposable
         ArgumentNullException.ThrowIfNull(history);
 
         var nickName = string.IsNullOrWhiteSpace(history.UserName)
-            ? "未知作者"
+            ? RuntimeLocalization.Get("PushPlus.UnknownAuthor", "未知作者")
             : history.UserName.Trim();
         var uid = string.IsNullOrWhiteSpace(history.UserId)
             ? "unknown"
@@ -35,16 +36,22 @@ public sealed class PushPlusNotificationService : IDisposable
         var currentVersion = GetCurrentVersion();
         var normalizedCount = Math.Max(0, downloadedWorkCount);
         var completionSummary = isUpdate
-            ? $"下载完成，更新了{normalizedCount}个作品"
-            : $"下载完成，共{normalizedCount}个作品";
+            ? RuntimeLocalization.Format("PushPlus.Summary.Update", "下载完成，更新了 {0} 个作品", normalizedCount)
+            : RuntimeLocalization.Format("PushPlus.Summary.New", "下载完成，共 {0} 个作品", normalizedCount);
 
         var title = $"HelloCrab({nickName}){completionSummary}";
-        var content =
-            $"作者：{WebUtility.HtmlEncode(nickName)}({WebUtility.HtmlEncode(uid)})，" +
-            $"<a href=\"{WebUtility.HtmlEncode(parsedUrl)}\">{WebUtility.HtmlEncode(parsedUrl)}</a>" +
-            $"于{DateTime.Now:HH:mm:ss}{WebUtility.HtmlEncode(completionSummary)}，" +
-            $"当前程序版本 V{WebUtility.HtmlEncode(currentVersion)}。" +
-            $"<br> <img src=\"{WebUtility.HtmlEncode(headUrl)}\">";
+        var linkHtml = $"<a href=\"{WebUtility.HtmlEncode(parsedUrl)}\">{WebUtility.HtmlEncode(parsedUrl)}</a>";
+        var imageHtml = $"<br> <img src=\"{WebUtility.HtmlEncode(headUrl)}\">";
+        var content = RuntimeLocalization.Format(
+            "PushPlus.Body",
+            "作者：{0}（{1}），{2}于 {3} {4}，当前程序版本 V{5}。{6}",
+            WebUtility.HtmlEncode(nickName),
+            WebUtility.HtmlEncode(uid),
+            linkHtml,
+            DateTime.Now.ToString("HH:mm:ss"),
+            WebUtility.HtmlEncode(completionSummary),
+            WebUtility.HtmlEncode(currentVersion),
+            imageHtml);
 
         var requestUrl =
             "http://www.pushplus.plus/send" +
@@ -57,7 +64,12 @@ public sealed class PushPlusNotificationService : IDisposable
         if (!response.IsSuccessStatusCode)
         {
             throw new HttpRequestException(
-                $"PushPlus HTTP {(int)response.StatusCode} {response.ReasonPhrase}：{TrimResponse(responseText)}");
+                RuntimeLocalization.Format(
+                    "PushPlus.HttpFailed",
+                    "PushPlus HTTP {0} {1}：{2}",
+                    (int)response.StatusCode,
+                    response.ReasonPhrase,
+                    TrimResponse(responseText)));
         }
 
         if (TryReadPushPlusError(responseText, out var error))
@@ -93,8 +105,12 @@ public sealed class PushPlusNotificationService : IDisposable
                 ? msgElement.ToString()
                 : root.TryGetProperty("message", out var messageElement)
                     ? messageElement.ToString()
-                    : "未知错误";
-            error = $"PushPlus 返回失败（code={code}）：{message}";
+                    : RuntimeLocalization.Get("PushPlus.UnknownError", "未知错误");
+            error = RuntimeLocalization.Format(
+                    "PushPlus.ApiFailed",
+                    "PushPlus 返回失败（code={0}）：{1}",
+                    code,
+                    message);
             return true;
         }
         catch (JsonException)

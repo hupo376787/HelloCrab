@@ -1,3 +1,4 @@
+using HelloCrab.Core.Services.Localization;
 using System.Globalization;
 using System.Net;
 using System.Text;
@@ -19,7 +20,7 @@ public sealed class XiaohongshuSiteAdapter : ISiteAdapter
     private const string InitialStateMarker = "window.__INITIAL_STATE__";
 
     public string Id => "xiaohongshu";
-    public string DisplayName => "小红书网页版";
+    public string DisplayName => RuntimeLocalization.Get("Platform.xiaohongshu", "小红书网页版");
     public string HomeUrl => "https://www.xiaohongshu.com/";
 
     public bool CanHandlePage(string pageUrl)
@@ -81,13 +82,13 @@ public sealed class XiaohongshuSiteAdapter : ISiteAdapter
 
         var html = await browser.FetchTextAsync(work.SourceUrl, cancellationToken);
         if (string.IsNullOrWhiteSpace(html))
-            throw new InvalidOperationException("小红书作品详情返回了空文档。");
+            throw new InvalidOperationException(RuntimeLocalization.Get("Xhs.Error.EmptyDetail", "小红书作品详情返回了空文档。"));
 
         using var state = ParseInitialState(html);
         if (!TryFindDetailNote(state.RootElement, work.WorkId, out var note))
         {
             throw new InvalidOperationException(
-                "详情文档中没有找到对应笔记数据，xsec_token 可能已失效或页面要求重新登录。");
+                RuntimeLocalization.Get("Xhs.Error.NoteMissing", "详情文档中没有找到对应笔记数据，xsec_token 可能已失效或页面要求重新登录。"));
         }
 
         var author = TryGetObject(note, "user", out var authorElement)
@@ -388,8 +389,8 @@ public sealed class XiaohongshuSiteAdapter : ISiteAdapter
         }
 
         var diagnostic = rejected > 0
-            ? $"小红书首屏已过滤 {rejected} 条非目标作者笔记。"
-            : $"小红书首屏发现 {works.Count} 条笔记，将逐条读取详情地址。";
+            ? RuntimeLocalization.Format("Xhs.FirstFiltered", "小红书首屏已过滤 {0} 条非目标作者笔记。", rejected)
+            : RuntimeLocalization.Format("Xhs.FirstSummary", "小红书首屏发现 {0} 条笔记，将逐条读取详情地址。", works.Count);
         return new ParsedWorkBatch(works, hasMore, cursor, diagnostic, rejected);
     }
 
@@ -414,7 +415,7 @@ public sealed class XiaohongshuSiteAdapter : ISiteAdapter
         var hasMore = ReadNullableBool(data, "has_more", "hasMore");
         var cursor = ReadFirstString(data, "cursor");
         var diagnostic = rejected > 0
-            ? $"小红书分页已过滤 {rejected} 条非目标作者笔记。"
+            ? RuntimeLocalization.Format("Xhs.PageFiltered", "小红书分页已过滤 {0} 条非目标作者笔记。", rejected)
             : null;
         return new ParsedWorkBatch(works, hasMore, cursor, diagnostic, rejected);
     }
@@ -463,11 +464,11 @@ public sealed class XiaohongshuSiteAdapter : ISiteAdapter
 
             var authorName = ReadFirstString(author, "nickname", "nickName", "nick_name")
                              ?? profileName
-                             ?? "未知作者";
+                             ?? RuntimeLocalization.Get("Common.UnknownAuthor", "未知作者");
             var authorAvatar = NormalizeUrl(ReadFirstString(author, "avatar"))
                                ?? profileAvatar;
             var title = ReadFirstString(note, "displayTitle", "display_title", "title")
-                        ?? "无标题";
+                        ?? RuntimeLocalization.Get("Common.UnknownTitle", "无标题");
             var cover = TryGetObject(note, "cover", out var coverElement)
                 ? ParseCoverAsset(coverElement)
                 : null;
@@ -746,7 +747,7 @@ public sealed class XiaohongshuSiteAdapter : ISiteAdapter
         catch (JsonException ex)
         {
             throw new InvalidOperationException(
-                "无法解析页面中的 window.__INITIAL_STATE__ 数据，网页结构可能已经变化。",
+                RuntimeLocalization.Get("Xhs.Error.InitialStateParse", "无法解析页面中的 window.__INITIAL_STATE__ 数据，网页结构可能已经变化。"),
                 ex);
         }
     }
@@ -757,13 +758,13 @@ public sealed class XiaohongshuSiteAdapter : ISiteAdapter
         if (markerIndex < 0)
         {
             throw new InvalidOperationException(
-                "页面中没有找到 window.__INITIAL_STATE__，请确认网页已登录且未进入验证页面。");
+                RuntimeLocalization.Get("Xhs.Error.InitialStateMissing", "页面中没有找到 window.__INITIAL_STATE__，请确认网页已登录且未进入验证页面。"));
         }
 
         var assignmentIndex = html.IndexOf('=', markerIndex + InitialStateMarker.Length);
         var startIndex = assignmentIndex < 0 ? -1 : html.IndexOf('{', assignmentIndex + 1);
         if (startIndex < 0)
-            throw new InvalidOperationException("页面初始数据没有有效的 JSON 对象起点。");
+            throw new InvalidOperationException(RuntimeLocalization.Get("Xhs.Error.JsonStart", "页面初始数据没有有效的 JSON 对象起点。"));
 
         var depth = 0;
         var inString = false;
@@ -809,7 +810,7 @@ public sealed class XiaohongshuSiteAdapter : ISiteAdapter
                 return html[startIndex..(index + 1)];
         }
 
-        throw new InvalidOperationException("页面初始数据没有完整结束，HTML 可能被截断。");
+        throw new InvalidOperationException(RuntimeLocalization.Get("Xhs.Error.JsonEnd", "页面初始数据没有完整结束，HTML 可能被截断。"));
     }
 
     private static string NormalizeJavaScriptJson(string source)

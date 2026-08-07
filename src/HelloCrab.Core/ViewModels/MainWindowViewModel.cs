@@ -1,4 +1,4 @@
-﻿using System.Collections.ObjectModel;
+using System.Collections.ObjectModel;
 using System.Text.RegularExpressions;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
@@ -758,29 +758,31 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
                 : SelectedPlatform.HomeUrl;
 
             CurrentUrl = targetUrl;
-            StatusText = IsHeadlessMode ? "正在启动无头浏览器…" : "正在启动浏览器…";
+            StatusText = IsHeadlessMode
+                ? _localization.Get("Status.BrowserStartingHeadless")
+                : _localization.Get("Status.BrowserStarting");
             await _browser.StartAsync(targetUrl, IsHeadlessMode);
 
             if (_browser.IsLoginRecoveryActive)
             {
-                StatusText = "登录已失效，请在显示的浏览器中完成登录";
+                StatusText = _localization.Get("Status.BrowserLoginRequired");
             }
             else if (_browser.IsHeadless)
             {
-                StatusText = "无头浏览器已打开并导航到目标 URL";
+                StatusText = _localization.Get("Status.BrowserHeadlessOpened");
             }
             else
             {
-                StatusText = "请在打开的浏览器中登录，然后进入作者主页";
+                StatusText = _localization.Get("Status.BrowserVisibleLoginHint");
             }
 
-            AddLog($"浏览器登录状态保存在程序目录：{Path.Combine(AppContext.BaseDirectory, "browser-profile")}。");
+            AddLocalizedLog("Log.Browser.ProfilePath", Path.Combine(AppContext.BaseDirectory, "browser-profile"));
         }
         catch (Exception ex)
         {
-            StatusText = "浏览器启动失败";
-            AddLog($"打开浏览器失败：{ex.Message}");
-            AddLog($"首次运行请点击“安装 Chromium”。程序会安装到：{_browser.PreferredChromiumInstallDirectory}；若该目录没有浏览器，再兼容查找系统原有的 Playwright 缓存目录。");
+            StatusText = _localization.Get("Status.BrowserStartFailed");
+            AddLocalizedLog("Log.Browser.OpenFailed", ex.Message);
+            AddLocalizedLog("Log.Browser.FirstRunChromiumHint", _browser.PreferredChromiumInstallDirectory);
         }
         finally
         {
@@ -814,8 +816,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
 
         try
         {
-            StatusText = "正在安装 Playwright Chromium…";
-            AddLog($"开始下载并安装 Chromium 到程序目录：{_browser.PreferredChromiumInstallDirectory}。界面会实时显示当前组件的下载百分比。");
+            StatusText = _localization.Get("Status.ChromiumInstalling");
+            AddLocalizedLog("Log.Chromium.InstallStarting", _browser.PreferredChromiumInstallDirectory);
 
             var exitCode = await _browser.InstallChromiumAsync(progress);
             var elapsed = DateTimeOffset.Now - startedAt;
@@ -827,8 +829,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
                 ChromiumInstallProgressText = _localization.Get(
                     "Browser.ChromiumDownloadComplete",
                     "Chromium 下载并安装完成");
-                StatusText = "Chromium 下载并安装完成";
-                AddLog($"Chromium 已安装到程序目录，用时 {FormatElapsed(elapsed)}。现在可以点击“打开浏览器”。");
+                StatusText = _localization.Get("Status.ChromiumInstalled");
+                AddLocalizedLog("Log.Chromium.InstalledElapsed", FormatElapsed(elapsed));
                 var chromiumPath = await _browser.FindInstalledChromiumPathAsync(CancellationToken.None);
                 if (!string.IsNullOrWhiteSpace(chromiumPath))
                 {
@@ -837,7 +839,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
                         chromiumPath,
                         _browser.PreferredChromiumInstallDirectory))
                     {
-                        AddLog("当前正在使用程序目录中的便携 Chromium。关闭 HelloCrab 后，可以删除用户目录下旧的 ms-playwright 缓存。");
+                        AddLocalizedLog("Log.Chromium.PortableUsing");
                     }
                 }
             }
@@ -846,8 +848,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
                 ChromiumInstallProgressText = _localization.Format(
                     "Browser.ChromiumDownloadFailed",
                     exitCode);
-                StatusText = $"Chromium 安装失败，退出码 {exitCode}";
-                AddLog("安装程序已经结束，安装按钮已恢复，可以检查网络后重新尝试。");
+                StatusText = _localization.Format("Status.ChromiumInstallFailedCode", exitCode);
+                AddLocalizedLog("Log.Chromium.RetryHintAfterExit");
             }
         }
         catch (Exception ex)
@@ -855,9 +857,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
             ChromiumInstallProgressText = _localization.Get(
                 "Browser.ChromiumDownloadFailedGeneral",
                 "Chromium 下载或安装失败");
-            StatusText = "Chromium 安装失败";
-            AddLog($"安装失败：{ex.Message}");
-            AddLog("安装按钮已恢复，可以重新尝试。");
+            StatusText = _localization.Get("Status.ChromiumInstallFailed");
+            AddLocalizedLog("Log.Chromium.InstallFailed", ex.Message);
+            AddLocalizedLog("Log.Chromium.RetryHint");
         }
         finally
         {
@@ -1046,30 +1048,32 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
 
         try
         {
-            StatusText = "正在清理图片缓存…";
+            StatusText = _localization.Get("Status.CacheClearing");
             var result = await _imageCache.ClearDiskCacheAsync();
             var releasedText = FormatFileSize(result.ReleasedBytes);
 
             if (result.FailedFileCount == 0)
             {
                 StatusText = result.DeletedFileCount == 0
-                    ? "图片缓存已经是空的"
-                    : $"图片缓存已清空：删除 {result.DeletedFileCount} 个文件，释放 {releasedText}";
+                    ? _localization.Get("Status.CacheEmpty")
+                    : _localization.Format("Status.CacheCleared", result.DeletedFileCount, releasedText);
             }
             else
             {
-                StatusText =
-                    $"图片缓存已部分清理：删除 {result.DeletedFileCount} 个文件，" +
-                    $"释放 {releasedText}，{result.FailedFileCount} 个文件删除失败";
+                StatusText = _localization.Format(
+                    "Status.CachePartial",
+                    result.DeletedFileCount,
+                    releasedText,
+                    result.FailedFileCount);
             }
 
-            AddLog($"图片缓存目录：{result.CacheDirectory}");
-            AddLog("清理图片缓存不会删除已下载作品、History.json、settings.json 或浏览器登录状态。");
+            AddLocalizedLog("Log.Cache.Directory", result.CacheDirectory);
+            AddLocalizedLog("Log.Cache.Preserved");
         }
         catch (Exception ex)
         {
-            StatusText = "清理图片缓存失败";
-            AddLog($"清理图片缓存失败：{ex.Message}");
+            StatusText = _localization.Get("Status.CacheFailed");
+            AddLocalizedLog("Log.Cache.Failed", ex.Message);
         }
         finally
         {
@@ -1080,12 +1084,12 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
         }
     }
 
-    private static string FormatElapsed(TimeSpan elapsed)
+    private string FormatElapsed(TimeSpan elapsed)
     {
         if (elapsed.TotalMinutes >= 1)
-            return $"{(int)elapsed.TotalMinutes} 分 {elapsed.Seconds} 秒";
+            return _localization.Format("Common.DurationMinutesSeconds", (int)elapsed.TotalMinutes, elapsed.Seconds);
 
-        return $"{Math.Max(1, (int)elapsed.TotalSeconds)} 秒";
+        return _localization.Format("Common.DurationSeconds", Math.Max(1, (int)elapsed.TotalSeconds));
     }
 
     private static string FormatFileSize(long bytes)
@@ -1109,7 +1113,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
     {
         if (_browser.IsLoginRecoveryActive)
         {
-            StatusText = "请先完成扫码登录";
+            StatusText = _localization.Get("Status.LoginRequired");
             return;
         }
 
@@ -1135,16 +1139,16 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
         catch (Exception ex)
         {
             authorsKnownBeforeTask = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            AddLog($"读取下载历史失败，本次完成通知按新下载处理：{ex.Message}");
+            AddLocalizedLog("Log.Capture.HistoryReadFailed", ex.Message);
         }
 
         IsCapturing = true;
-        StatusText = "正在采集…";
-        AddLog("点击开始采集。程序会自动刷新作者主页、下载当前批次，然后继续滚动。");
+        StatusText = _localization.Get("Status.Capturing");
+        AddLocalizedLog("Log.Capture.StartInstruction");
         if (DownloadSpeedLimitMBps > 0)
-            AddLog($"已启用下载速度限制：{DownloadSpeedLimitMBps:0.##} MB/s（所有作品媒体共享该上限）。");
+            AddLocalizedLog("Log.Download.SpeedLimit", $"{DownloadSpeedLimitMBps:0.##}");
         if (EnablePersonDetection)
-            AddLog($"人像检测置信度：{PersonDetectionConfidenceText}。");
+            AddLocalizedLog("Log.Person.Confidence", PersonDetectionConfidenceText);
         try
         {
             var options = new CrawlerDownloadOptions(
@@ -1174,9 +1178,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
                 && result.PersonDetection.PendingCount > 0
                 && !result.PersonDetection.Completion.IsCompleted)
             {
-                AddLog(
-                    $"下载线程已释放；{result.PersonDetection.PendingCount} 张图片正在后台排队检测。" +
-                    "现在可以切换作者并开始下一次采集。");
+                AddLocalizedLog("Log.Person.BackgroundQueue", result.PersonDetection.PendingCount);
                 TrackBackgroundFinalization(finalizationTask);
             }
             else
@@ -1186,12 +1188,12 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
         }
         catch (Exception ex)
         {
-            StatusText = "采集失败";
-            AddLog($"采集失败（{ex.GetType().Name}）：{ex.Message}");
+            StatusText = _localization.Get("Status.CaptureFailed");
+            AddLocalizedLog("Log.Capture.Failed", ex.GetType().Name, ex.Message);
             if (ex.InnerException is not null
                 && !string.Equals(ex.InnerException.Message, ex.Message, StringComparison.Ordinal))
             {
-                AddLog($"内部异常（{ex.InnerException.GetType().Name}）：{ex.InnerException.Message}");
+                AddLocalizedLog("Log.Common.InnerException", ex.InnerException.GetType().Name, ex.InnerException.Message);
             }
         }
         finally
@@ -1206,7 +1208,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
 
     private void StopCapture()
     {
-        StatusText = "正在停止…";
+        StatusText = _localization.Get("Status.Stopping");
         if (IsScheduledBatchRunning)
         {
             _scheduledBatchCts?.Cancel();
@@ -1242,20 +1244,20 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
 
         if (token.Length is < 4 or > 64)
         {
-            AddRemoteLog("访问令牌保存失败：请输入 4–64 位字符。");
+            AddRemoteLocalizedLog("Remote.Log.TokenLengthInvalid");
             return;
         }
 
         if (!Regex.IsMatch(token, @"^[A-Za-z0-9._@-]+$"))
         {
-            AddRemoteLog("访问令牌保存失败：仅支持英文字母、数字以及 . _ @ -。");
+            AddRemoteLocalizedLog("Remote.Log.TokenCharsInvalid");
             return;
         }
 
         if (string.Equals(_remoteApiToken, token, StringComparison.Ordinal))
         {
             RemoteApiTokenDraft = token;
-            AddRemoteLog("访问令牌没有变化。");
+            AddRemoteLocalizedLog("Remote.Log.TokenUnchanged");
             return;
         }
 
@@ -1263,7 +1265,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
         RemoteApiTokenDraft = token;
         OnPropertyChanged(nameof(RemoteApiToken));
         QueueSettingsSave();
-        AddRemoteLog("远程访问令牌已更新；网页和手机端需要使用新令牌重新连接。");
+        AddRemoteLocalizedLog("Remote.Log.TokenChanged");
     }
 
     public void SetRemoteApiStatus(string message)
@@ -1424,7 +1426,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
         var pending = Interlocked.Exchange(ref _settingsSaveCts, null);
         pending?.Cancel();
         await _settingsService.SaveAsync(CreateSettingsSnapshot(), cancellationToken);
-        AddLog("远程端设置已同步到桌面界面并保存到 settings.json。");
+        AddLocalizedLog("Remote.Log.SettingsSynced");
     }
 
     private void ApplyTheme()
@@ -1446,7 +1448,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
         }
         catch (Exception ex)
         {
-            AddLog($"打开目录失败：{ex.Message}");
+            AddLocalizedLog("Log.Shell.OpenDirectoryFailed", ex.Message);
         }
     }
 
@@ -1454,25 +1456,25 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
     {
         if (IsCapturing || IsBusy)
         {
-            AddLog("当前作者正在采集或下载。为避免切换页面打断当前任务，请先停止或等待任务完成后再查看其他作者主页。");
+            AddLocalizedLog("Log.History.CaptureBusy");
             return;
         }
 
         var url = ExtractFirstUrl(item.OriginalUrl);
         if (string.IsNullOrWhiteSpace(url))
         {
-            AddLog($"历史记录中没有可用的作者主页地址：{item.UserName}");
+            AddLocalizedLog("Log.History.HomeUrlMissing", item.UserName);
             return;
         }
 
         try
         {
             await _browser.StartAsync(url, IsHeadlessMode);
-            AddLog($"已打开作者主页：{item.UserName}");
+            AddLocalizedLog("Log.History.HomeOpened", item.UserName);
         }
         catch (Exception ex)
         {
-            AddLog($"打开作者主页失败：{ex.Message}");
+            AddLocalizedLog("Log.History.HomeOpenFailed", ex.Message);
         }
     }
 
@@ -1492,7 +1494,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
         }
         catch (Exception ex)
         {
-            AddLog($"打开作者文件夹失败：{ex.Message}");
+            AddLocalizedLog("Log.History.FolderOpenFailed", ex.Message);
         }
     }
 
@@ -1500,7 +1502,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
     {
         if (IsCapturing || IsBusy)
         {
-            AddLog("当前已有任务运行，不能同时重新采集历史作者。");
+            AddLocalizedLog("Log.History.RecollectBusy");
             return;
         }
 
@@ -1557,7 +1559,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
                     && !string.IsNullOrWhiteSpace(CurrentAuthorDirectory)
                     && PathsEqual(authorFolder, CurrentAuthorDirectory))
                 {
-                    throw new InvalidOperationException("当前作者正在采集或下载，请先停止任务后再删除磁盘文件。");
+                    throw new InvalidOperationException(_localization.Get("Error.History.DeleteBusy"));
                 }
 
                 EnsureSafeAuthorFolderForDeletion(authorFolder);
@@ -1576,20 +1578,20 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
 
             if (diskFolderDeleted)
             {
-                AddLog($"已移除作者历史并删除磁盘文件：{item.UserName}（{authorFolder}）。");
+                AddLocalizedLog("Log.History.RemovedAndDeleted", item.UserName, authorFolder);
             }
             else if (diskFolderMissing)
             {
-                AddLog($"已移除作者历史：{item.UserName}。磁盘目录不存在：{authorFolder}。");
+                AddLocalizedLog("Log.History.RemovedMissingFolder", item.UserName, authorFolder);
             }
             else
             {
-                AddLog($"已从下载历史移除：{item.UserName}。作者文件未删除。");
+                AddLocalizedLog("Log.History.RemovedKeepFiles", item.UserName);
             }
         }
         catch (Exception ex)
         {
-            AddLog($"移除历史记录失败：{ex.Message}");
+            AddLocalizedLog("Log.History.RemoveFailed", ex.Message);
         }
     }
 
@@ -1609,7 +1611,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
             || PathsEqual(fullPath, appRoot)
             || PathsEqual(fullPath, currentDownloadRoot))
         {
-            throw new InvalidOperationException("为避免误删，不能删除磁盘根目录、程序目录或下载根目录。");
+            throw new InvalidOperationException(_localization.Get("Error.History.UnsafeDelete"));
         }
     }
 
@@ -1671,7 +1673,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
         }
         catch (Exception ex)
         {
-            AddLog($"保存历史排序失败：{ex.Message}");
+            AddLocalizedLog("Log.History.SortSaveFailed", ex.Message);
         }
     }
 
@@ -1694,7 +1696,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
 
             if (e.IsLoginRecoveryActive && IsCapturing)
             {
-                AddLog("登录状态失效，正在停止当前采集并切换到显示模式扫码登录。");
+                AddLocalizedLog("Log.Browser.LoginExpiredStopping");
                 _coordinator.Stop();
             }
 
@@ -1742,16 +1744,11 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
             {
                 if (detectionResult.CanceledCount > 0)
                 {
-                    AddLog(
-                        $"后台人像检测已中断，仍有 {detectionResult.CanceledCount} 张 .pending 图片，" +
-                        "程序下次启动会继续处理。");
+                    AddLocalizedLog("Log.Person.BackgroundCanceled", detectionResult.CanceledCount);
                 }
                 else
                 {
-                    AddLog(
-                        $"作者后台人像检测完成：排队 {detectionResult.QueuedCount} 张，" +
-                        $"保留 {detectionResult.KeptCount} 张，删除 {detectionResult.DeletedCount} 张，" +
-                        $"检测失败保留 {detectionResult.DetectionFailureCount} 张。 ");
+                    AddLocalizedLog("Log.Person.AuthorComplete", detectionResult.QueuedCount, detectionResult.KeptCount, detectionResult.DeletedCount, detectionResult.DetectionFailureCount);
                 }
             }
 
@@ -1776,7 +1773,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
         catch (Exception ex)
         {
             // 后台收尾失败不能影响已经开始的下一位作者采集。
-            AddLog($"作者下载后台收尾失败：{ex.Message}");
+            AddLocalizedLog("Log.Capture.FinalizationFailed", ex.Message);
         }
     }
 
@@ -1789,7 +1786,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
            && detectionResult.CanceledCount == 0
            && !string.Equals(
                result.CompletionMessage,
-               "采集已停止",
+               RuntimeLocalization.Get("Status.CaptureStopped", "采集已停止"),
                StringComparison.Ordinal);
 
     private async Task SendPushPlusDownloadCompletedAsync(
@@ -1799,7 +1796,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
     {
         if (string.IsNullOrWhiteSpace(result.AuthorId))
         {
-            AddLog("PushPlus 通知未发送：本次任务没有识别到作者 UID。");
+            AddLocalizedLog("PushPlus.Log.NoAuthorUid");
             return;
         }
 
@@ -1811,7 +1808,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
                 CancellationToken.None);
             if (history is null)
             {
-                AddLog("PushPlus 通知未发送：History.json 中没有找到本次作者记录。");
+                AddLocalizedLog("PushPlus.Log.NoHistory");
                 return;
             }
 
@@ -1821,12 +1818,12 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
                 result.DownloadedWorkCount,
                 isUpdate,
                 CancellationToken.None);
-            AddLog($"PushPlus 微信通知已发送：{history.UserName}（UID {history.UserId}）");
+            AddLocalizedLog("PushPlus.Log.Sent", history.UserName, history.UserId);
         }
         catch (Exception ex)
         {
             // 通知失败不能把已经完成的下载任务改成“采集失败”。
-            AddLog($"PushPlus 微信通知发送失败：{ex.Message}");
+            AddLocalizedLog("PushPlus.Log.Failed", ex.Message);
         }
     }
 
@@ -1857,7 +1854,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
         }
         catch (Exception ex)
         {
-            AddLog($"恢复遗留人像检测任务失败：{ex.Message}");
+            AddLocalizedLog("Log.Person.RecoveryFailed", ex.Message);
         }
     }
 
@@ -2132,7 +2129,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
 
         var candidate = text?.Trim();
         if (string.IsNullOrWhiteSpace(candidate) || IsBrowserUrlPlaceholder(candidate))
-            throw new InvalidOperationException("无头模式下请在“当前页面”文本框输入目标 URL。");
+            throw new InvalidOperationException(_localization.Get("Error.Browser.HeadlessUrlRequired"));
 
         if (!candidate.Contains("://", StringComparison.Ordinal))
             candidate = "https://" + candidate.TrimStart('/');
@@ -2140,7 +2137,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
         if (!Uri.TryCreate(candidate, UriKind.Absolute, out var uri)
             || uri.Scheme is not ("http" or "https"))
         {
-            throw new InvalidOperationException("请输入有效的 HTTP 或 HTTPS URL。");
+            throw new InvalidOperationException(_localization.Get("Error.Browser.InvalidHttpUrl"));
         }
 
         return uri.ToString();
@@ -2301,7 +2298,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
         }
         catch (Exception ex)
         {
-            Ui(() => AddLog($"保存 settings.json 失败：{ex.Message}"));
+            Ui(() => AddLocalizedLog("Log.Settings.SaveFailed", ex.Message));
         }
         finally
         {
@@ -2372,7 +2369,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
         }
         catch (Exception ex)
         {
-            AddLog($"保存 settings.json 失败：{ex.Message}");
+            AddLocalizedLog("Log.Settings.SaveFailed", ex.Message);
         }
 
         _browser.StateChanged -= OnBrowserStateChanged;

@@ -1,3 +1,4 @@
+using HelloCrab.Core.Services.Localization;
 using System.Net;
 using System.Text.Json;
 using HelloCrab.Core.Models;
@@ -16,7 +17,7 @@ namespace HelloCrab.Core.Sites.Kuaishou;
 public sealed class KuaishouSiteAdapter : ISiteAdapter
 {
     public string Id => "kuaishou";
-    public string DisplayName => "快手网页版";
+    public string DisplayName => RuntimeLocalization.Get("Platform.kuaishou", "快手网页版");
     public string HomeUrl => "https://www.kuaishou.com/";
 
     public bool CanHandlePage(string pageUrl)
@@ -133,12 +134,12 @@ public sealed class KuaishouSiteAdapter : ISiteAdapter
                 continue;
             }
 
-            var authorName = ReadFirstString(author, "name", "nickname", "userName") ?? "未知作者";
+            var authorName = ReadFirstString(author, "name", "nickname", "userName") ?? RuntimeLocalization.Get("Common.UnknownAuthor", "未知作者");
             var authorAvatar = ParseAuthorAvatar(author);
             var caption = ReadFirstString(photo, "caption", "title", "description", "desc")
                           ?? ReadFirstString(feed, "caption", "title", "description", "desc")
                           ?? ReadFirstString(feed, "musicName", "music_name")
-                          ?? "无标题";
+                          ?? RuntimeLocalization.Get("Common.UnknownTitle", "无标题");
             var timestamp = NormalizeTimestamp(ReadFirstInt64(photo, "timestamp", "createTime", "create_time"));
             if (timestamp == 0)
                 timestamp = NormalizeTimestamp(ReadFirstInt64(feed, "timestamp", "createTime", "create_time"));
@@ -178,7 +179,7 @@ public sealed class KuaishouSiteAdapter : ISiteAdapter
         }
 
         var diagnostic = rejected > 0
-            ? $"已过滤 {rejected} 个非目标快手作者作品，未加入下载队列。"
+            ? RuntimeLocalization.Format("Kuaishou.Filtered", "已过滤 {0} 个非目标快手作者作品，未加入下载队列。", rejected)
             : null;
 
         return new ParsedWorkBatch(

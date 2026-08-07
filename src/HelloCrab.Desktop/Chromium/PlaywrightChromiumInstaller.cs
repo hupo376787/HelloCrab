@@ -1,3 +1,4 @@
+using HelloCrab.Core.Services.Localization;
 using System.Text;
 using System.Text.RegularExpressions;
 using HelloCrab.Core.Services.Browser;
@@ -152,8 +153,10 @@ public sealed class PlaywrightChromiumInstaller
         catch (Exception ex)
         {
             throw new InvalidOperationException(
-                $"无法在程序目录安装 Chromium：{PreferredInstallDirectory}。"
-                + "请把 HelloCrab 放到当前用户可写的目录，或以具有写入权限的方式运行。",
+                RuntimeLocalization.Format(
+                    "Error.Chromium.InstallDirectory",
+                    "无法在程序目录安装 Chromium：{0}。请把 HelloCrab 放到当前用户可写的目录，或以具有写入权限的方式运行。",
+                    PreferredInstallDirectory),
                 ex);
         }
     }

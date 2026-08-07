@@ -1,4 +1,5 @@
-﻿using System.Net;
+using HelloCrab.Core.Services.Localization;
+using System.Net;
 using System.Text.Json;
 using HelloCrab.Core.Models;
 using HelloCrab.Core.Services.Browser;
@@ -117,7 +118,7 @@ public sealed class InstagramSiteAdapter : ISiteAdapter
         }
 
         var diagnostic = rejectedWorkCount > 0
-            ? $"已过滤 {rejectedWorkCount} 个非目标 Instagram 作者作品，未加入下载队列。"
+            ? RuntimeLocalization.Format("Instagram.Filtered", "已过滤 {0} 个非目标 Instagram 作者作品，未加入下载队列。", rejectedWorkCount)
             : null;
 
         return new ParsedWorkBatch(
@@ -231,7 +232,7 @@ public sealed class InstagramSiteAdapter : ISiteAdapter
                        ?? "unknown-author";
         var authorName = ReadString(user, "full_name")
                          ?? username
-                         ?? "未知作者";
+                         ?? RuntimeLocalization.Get("Common.UnknownAuthor", "未知作者");
         var authorAvatarUrl = ReadNestedString(user, "hd_profile_pic_url_info", "url")
                               ?? ReadString(user, "profile_pic_url");
         var description = ReadCaptionText(node)

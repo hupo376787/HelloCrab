@@ -1,3 +1,4 @@
+using HelloCrab.Core.Services.Localization;
 using System.Collections.Concurrent;
 using System.Net;
 using System.Security.Cryptography;
@@ -36,7 +37,10 @@ public sealed class ImageCacheService : IDisposable
         catch (Exception ex)
         {
             throw new InvalidOperationException(
-                $"无法在程序目录创建图片缓存目录：{_cacheDirectory}。请将 HelloCrab 放到当前用户可写的目录。",
+                RuntimeLocalization.Format(
+                    "Error.ImageCache.CreateDirectory",
+                    "无法在程序目录创建图片缓存目录：{0}。请将 HelloCrab 放到当前用户可写的目录。",
+                    _cacheDirectory),
                 ex);
         }
     }

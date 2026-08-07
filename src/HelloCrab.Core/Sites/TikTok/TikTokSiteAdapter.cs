@@ -1,3 +1,4 @@
+using HelloCrab.Core.Services.Localization;
 using System.Net;
 using System.Text.Json;
 using HelloCrab.Core.Models;
@@ -53,7 +54,7 @@ public sealed class TikTokSiteAdapter : ISiteAdapter
                 works,
                 ReadBoolean(root, "hasMore"),
                 ReadStringOrNumber(root, "cursor"),
-                "TikTok 作品接口中没有 itemList。可能是登录、风控或页面尚未加载完成。");
+                RuntimeLocalization.Get("TikTok.Error.NoItemList", "TikTok 作品接口中没有 itemList。可能是登录、风控或页面尚未加载完成。"));
         }
 
         foreach (var item in itemList.EnumerateArray())
@@ -134,10 +135,10 @@ public sealed class TikTokSiteAdapter : ISiteAdapter
 
         var diagnosticParts = new List<string>
         {
-            $"TikTok 本页解析到 {works.Count} 个视频。"
+            RuntimeLocalization.Format("TikTok.PageSummary", "TikTok 本页解析到 {0} 个视频。", works.Count)
         };
         if (rejected > 0)
-            diagnosticParts.Add($"已过滤 {rejected} 个非目标作者作品。");
+            diagnosticParts.Add(RuntimeLocalization.Format("TikTok.Filtered", "已过滤 {0} 个非目标作者作品。", rejected));
 
         return new ParsedWorkBatch(
             works,

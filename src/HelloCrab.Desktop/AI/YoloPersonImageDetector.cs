@@ -1,3 +1,4 @@
+using HelloCrab.Core.Services.Localization;
 using System.Reflection;
 using System.Text.RegularExpressions;
 using HelloCrab.Core.Services.Images;
@@ -61,7 +62,7 @@ public sealed class YoloPersonImageDetector : IPersonImageDetector
             return new PersonImageDetectionResult(
                 DetectionSucceeded: false,
                 ContainsPerson: false,
-                ErrorMessage: "待检测图片不存在。");
+                ErrorMessage: RuntimeLocalization.Get("Person.Error.FileMissing", "待检测图片不存在。"));
         }
 
         ObjectDisposedException.ThrowIf(_disposed, this);
@@ -77,10 +78,9 @@ public sealed class YoloPersonImageDetector : IPersonImageDetector
                 return new PersonImageDetectionResult(
                     DetectionSucceeded: false,
                     ContainsPerson: false,
-                    ErrorMessage:
-                        "未找到人像检测 ONNX 模型。请在 Models 文件夹中放置 " +
-                        "person-detection.onnx，或名称为 yolo11 加任意单个字母的 ONNX 模型" +
-                        "（例如 yolo11n.onnx、yolo11m.onnx）。检测已跳过，图片会保留。");
+                    ErrorMessage: RuntimeLocalization.Get(
+                        "Person.Error.ModelMissing",
+                        "未找到人像检测 ONNX 模型。请在 Models 文件夹中放置 person-detection.onnx，或名称为 yolo11 加任意单个字母的 ONNX 模型（例如 yolo11n.onnx、yolo11m.onnx）。检测已跳过，图片会保留。"));
             }
 
             EnsureModelLoaded(modelPath);
@@ -144,7 +144,7 @@ public sealed class YoloPersonImageDetector : IPersonImageDetector
             return new PersonImageDetectionResult(
                 DetectionSucceeded: false,
                 ContainsPerson: false,
-                ErrorMessage: "SkiaSharp 无法解码该图片格式。");
+                ErrorMessage: RuntimeLocalization.Get("Person.Error.DecodeFailed", "SkiaSharp 无法解码该图片格式。"));
         }
 
         var normalizedConfidence = Math.Clamp(
