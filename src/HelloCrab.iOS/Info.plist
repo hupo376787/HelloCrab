@@ -5,7 +5,7 @@
   <key>CFBundleDisplayName</key>
   <string>HelloCrab Remote</string>
   <key>CFBundleIdentifier</key>
-  <string>com.hellocrab.remote</string>
+  <string>com.xiaowei.hellocrab</string>
   <key>CFBundleVersion</key>
   <string>1</string>
   <key>CFBundleShortVersionString</key>
