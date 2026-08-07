@@ -1,0 +1,124 @@
+name: Apply Runtime I18n Patch
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/apply-runtime-i18n.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Reassemble and verify patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            cat .i18n-patch/part01.b64
+            cat .i18n-patch/part02.b64
+            cat .i18n-patch/part03.b64
+            cat .i18n-patch/part04.b64
+            cat .i18n-patch/part05.b64
+            head -c 5000 .i18n-patch/part06.b64
+            cat .i18n-patch/part07.b64
+            cat .i18n-patch/part08a.b64
+            cat .i18n-patch/part08b.b64
+            cat .i18n-patch/part09a.b64
+            cat .i18n-patch/part09b.b64
+            cat .i18n-patch/part10a.b64
+            cat .i18n-patch/part10b.b64
+            cat .i18n-patch/part11a.b64
+            cat .i18n-patch/part11b.b64
+          } | tr -d '\r\n ' > /tmp/hellocrab-i18n.b64
+
+          test "$(wc -c < /tmp/hellocrab-i18n.b64)" -eq 83624
+          base64 --decode /tmp/hellocrab-i18n.b64 > /tmp/hellocrab-i18n.patch.gz
+          echo 'ee760d5b27b23032c617ba868ba9292358c854813d4a4800e9b6034ef2f29ce3  /tmp/hellocrab-i18n.patch.gz' | sha256sum --check
+          gzip --decompress --stdout /tmp/hellocrab-i18n.patch.gz > /tmp/hellocrab-i18n.patch
+          echo 'c055189b1f1bd234be4b3da6d5273ca5dad5bf8c09d27676776635211be7117b  /tmp/hellocrab-i18n.patch' | sha256sum --check
+          git apply --check -p2 /tmp/hellocrab-i18n.patch
+          git apply -p2 /tmp/hellocrab-i18n.patch
+
+      - name: Validate localization resources
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import pathlib
+          import re
+
+          root = pathlib.Path('src/HelloCrab.Core')
+          packs = {}
+          for code in ('zh-CN', 'en-US', 'ja-JP'):
+              path = root / 'Languages' / f'{code}.json'
+              data = json.loads(path.read_text(encoding='utf-8-sig'))
+              strings = data['strings'] if 'strings' in data else data['Strings']
+              packs[code] = strings
+
+          key_sets = [set(v) for v in packs.values()]
+          if not (key_sets[0] == key_sets[1] == key_sets[2]):
+              raise SystemExit('Language key sets are not identical.')
+          if len(key_sets[0]) != 563:
+              raise SystemExit(f'Unexpected localization key count: {len(key_sets[0])}')
+
+          expected = {
+              'zh-CN': '批量采集并自动下载',
+              'en-US': 'Batch collect and auto-download',
+              'ja-JP': '一括収集して自動ダウンロード',
+          }
+          for code, value in expected.items():
+              if packs[code].get('Batch.Button') != value:
+                  raise SystemExit(f'Batch.Button mismatch for {code}')
+
+          refs = set()
+          patterns = [
+              re.compile(r'RuntimeLocalization\.(?:Get|Format)\(\s*"([^"]+)"'),
+              re.compile(r'_localization\.(?:Get|Format)\(\s*"([^"]+)"'),
+              re.compile(r'Localize\(\s*"([^"]+)"'),
+              re.compile(r'AddLocalizedLog\(\s*"([^"]+)"'),
+          ]
+          for path in pathlib.Path('src').rglob('*.cs'):
+              text = path.read_text(encoding='utf-8-sig', errors='ignore')
+              for pattern in patterns:
+                  refs.update(pattern.findall(text))
+          missing = sorted(refs - key_sets[0])
+          if missing:
+              raise SystemExit('Missing localization keys: ' + ', '.join(missing))
+
+          print(f'Localization OK: {len(key_sets[0])} keys, {len(refs)} referenced literal keys.')
+          PY
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Build Desktop
+        shell: bash
+        run: |
+          set -euo pipefail
+          dotnet restore src/HelloCrab.Desktop/HelloCrab.Desktop.csproj
+          dotnet build src/HelloCrab.Desktop/HelloCrab.Desktop.csproj -c Release --no-restore
+
+      - name: Commit localization changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf .i18n-patch
+          rm -f .github/workflows/apply-runtime-i18n.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'Localize batch UI and runtime logs'
+          git push origin HEAD:main
