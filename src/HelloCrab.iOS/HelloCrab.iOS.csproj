@@ -6,7 +6,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <SupportedOSPlatformVersion>13.0</SupportedOSPlatformVersion>
     <ApplicationTitle>HelloCrab Remote</ApplicationTitle>
-    <ApplicationId>com.hellocrab.remote</ApplicationId>
+    <ApplicationId>com.xiaowei.hellocrab</ApplicationId>
     <ApplicationVersion>1</ApplicationVersion>
     <ApplicationDisplayVersion>1.0.0</ApplicationDisplayVersion>
     <!-- GitHub Actions always creates an unsigned Simulator package. -->
