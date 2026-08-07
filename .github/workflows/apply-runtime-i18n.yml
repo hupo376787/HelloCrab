@@ -29,7 +29,7 @@ jobs:
             cat .i18n-patch/part03.b64
             cat .i18n-patch/part04.b64
             cat .i18n-patch/part05.b64
-            head -c 5000 .i18n-patch/part06.b64
+            cat .i18n-patch/part06.b64
             cat .i18n-patch/part07.b64
             cat .i18n-patch/part08a.b64
             cat .i18n-patch/part08b.b64
