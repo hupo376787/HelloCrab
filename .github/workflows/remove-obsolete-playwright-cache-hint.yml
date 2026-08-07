@@ -1,0 +1,80 @@
+name: Remove obsolete Playwright cache hint
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/remove-obsolete-playwright-cache-hint.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Remove obsolete runtime hint and translations
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import pathlib
+          import re
+
+          vm_path = pathlib.Path('src/HelloCrab.Core/ViewModels/MainWindowViewModel.cs')
+          text = vm_path.read_text(encoding='utf-8-sig')
+          pattern = re.compile(
+              r'\s*if \(IsPathInsideDirectory\(\s*chromiumPath,\s*_browser\.PreferredChromiumInstallDirectory\)\)\s*\{\s*AddLocalizedLog\("Log\.Chromium\.PortableUsing"\);\s*\}',
+              re.MULTILINE,
+          )
+          text, count = pattern.subn('', text, count=1)
+          if count != 1:
+              raise SystemExit(f'Expected to remove exactly one Log.Chromium.PortableUsing block, removed {count}.')
+          vm_path.write_text(text, encoding='utf-8')
+
+          for code in ('zh-CN', 'en-US', 'ja-JP'):
+              path = pathlib.Path('src/HelloCrab.Core/Languages') / f'{code}.json'
+              data = json.loads(path.read_text(encoding='utf-8-sig'))
+              key_name = 'strings' if 'strings' in data else 'Strings'
+              strings = data[key_name]
+              if 'Log.Chromium.PortableUsing' not in strings:
+                  raise SystemExit(f'Missing expected key in {code}.')
+              del strings['Log.Chromium.PortableUsing']
+              path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+          PY
+
+      - name: Validate removal
+        shell: bash
+        run: |
+          set -euo pipefail
+          ! grep -R --line-number --fixed-strings 'Log.Chromium.PortableUsing' src
+          ! grep -R --line-number --fixed-strings 'After closing HelloCrab, the old ms-playwright cache in the user profile can be deleted.' src
+          python3 - <<'PY'
+          import json
+          import pathlib
+          packs = []
+          for code in ('zh-CN', 'en-US', 'ja-JP'):
+              data = json.loads((pathlib.Path('src/HelloCrab.Core/Languages') / f'{code}.json').read_text(encoding='utf-8-sig'))
+              strings = data['strings'] if 'strings' in data else data['Strings']
+              packs.append(set(strings))
+          if not (packs[0] == packs[1] == packs[2]):
+              raise SystemExit('Language key sets differ after deletion.')
+          print(f'Localization key count: {len(packs[0])}')
+          PY
+
+      - name: Commit change
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f .github/workflows/remove-obsolete-playwright-cache-hint.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'Remove obsolete Playwright cache hint'
+          git push origin HEAD:main
