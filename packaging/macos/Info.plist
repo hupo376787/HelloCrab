@@ -11,7 +11,7 @@
   <key>CFBundleIconFile</key>
   <string>app-icon.icns</string>
   <key>CFBundleIdentifier</key>
-  <string>com.hellocrab.desktop</string>
+  <string>com.xiaowei.hellocrab</string>
   <key>CFBundleInfoDictionaryVersion</key>
   <string>6.0</string>
   <key>CFBundleName</key>
