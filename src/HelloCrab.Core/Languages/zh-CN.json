@@ -566,6 +566,8 @@
     "Error.Schedule.UnsupportedRepeat": "不支持的重复方式。",
     "PushPlus.HttpFailed": "PushPlus HTTP {0} {1}：{2}",
     "Download.LongFileNames": "解除长路径限制",
-    "Download.LongFileNamesDescription": "开启后作品标题文件名最长由 170 提高到 220 个字符；仍受操作系统和文件系统限制。"
+    "Download.LongFileNamesDescription": "开启后作品标题文件名最长由 170 提高到 220 个字符；仍受操作系统和文件系统限制。",
+    "Download.LivePhoto": "下载Live图",
+    "Error.Download.LivePhotoContentType": "Live 图动态资源 Content-Type 异常：{0}"
   }
 }

@@ -34,6 +34,7 @@ public sealed class JsonDownloadIndex
             options.IncludeWorkId,
             options.DownloadCover,
             options.DownloadMusic,
+            options.DownloadLivePhoto,
             options.CheckVideoAudio,
             options.EnablePersonDetection);
 
@@ -204,6 +205,7 @@ public sealed class JsonDownloadIndex
             ["workId"] = false,
             ["cover"] = false,
             ["music"] = false,
+            ["live"] = false,
             ["audio"] = defaultAudio,
             ["person"] = defaultPerson
         };
@@ -227,6 +229,7 @@ public sealed class JsonDownloadIndex
             flags["workId"],
             flags["cover"],
             flags["music"],
+            flags["live"],
             flags["audio"],
             flags["person"]);
         return true;
@@ -269,12 +272,14 @@ public sealed class JsonDownloadIndex
         bool includeWorkId,
         bool downloadCover,
         bool downloadMusic,
+        bool downloadLivePhoto,
         bool checkVideoAudio,
         bool enablePersonDetection)
         => $"{platformId}:{authorId}:{workId}:" +
            $"workId={(includeWorkId ? 1 : 0)}:" +
            $"cover={(downloadCover ? 1 : 0)}:" +
            $"music={(downloadMusic ? 1 : 0)}:" +
+           $"live={(downloadLivePhoto ? 1 : 0)}:" +
            $"audio={(checkVideoAudio ? 1 : 0)}:" +
            $"person={(enablePersonDetection ? 1 : 0)}";
 

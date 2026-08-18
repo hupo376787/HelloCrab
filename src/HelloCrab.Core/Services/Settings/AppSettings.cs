@@ -1,8 +1,8 @@
-﻿namespace HelloCrab.Core.Services.Settings;
+namespace HelloCrab.Core.Services.Settings;
 
 public sealed class AppSettings
 {
-    public int Version { get; set; } = 12;
+    public int Version { get; set; } = 13;
 
     /// <summary>
     /// Light 或 Dark。
@@ -17,6 +17,7 @@ public sealed class AppSettings
     public bool IncludeWorkId { get; set; } = false;
     public bool DownloadCover { get; set; }
     public bool DownloadMusic { get; set; }
+    public bool DownloadLivePhoto { get; set; } = false;
 
     /// <summary>作品媒体下载速度上限，单位 MB/s；0 表示不限速。</summary>
     public decimal DownloadSpeedLimitMBps { get; set; }

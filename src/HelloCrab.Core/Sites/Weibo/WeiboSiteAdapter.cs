@@ -10,7 +10,7 @@ namespace HelloCrab.Core.Sites.Weibo;
 
 /// <summary>
 /// 解析微博作者主页的 /ajax/statuses/mymblog 响应。
-/// 图片严格优先使用 pic_infos.{picId}.largest.url，并按 pic_ids 保持原始图集顺序；
+/// 图片严格优先使用 pic_infos.{picId}.largest.url，并按 pic_ids 保持原始图集顺序；type=livephoto 时同时解析同级 video 动态资源；
 /// 视频优先解析 page_info/mix_media_info 中 media_info.playback_list，按实际分辨率、
 /// 清晰度索引、码率和文件大小选择最高画质 MP4。
 /// </summary>
@@ -512,6 +512,8 @@ public sealed class WeiboSiteAdapter : ISiteAdapter
                 if (TryParseLargestImageAsset(itemData, index, seenUrls, out var image))
                 {
                     mixedAssets.Add(image);
+                    if (TryParseLivePhotoAsset(itemData, index, seenUrls, out var livePhoto))
+                        mixedAssets.Add(livePhoto);
                     index++;
                 }
             }
@@ -573,10 +575,13 @@ public sealed class WeiboSiteAdapter : ISiteAdapter
 
             assets.Add(new MediaAsset(
                 MediaAssetType.Image,
-                index++,
+                index,
                 new[] { url },
                 Width: (int)ReadInt64(largest, "width"),
                 Height: (int)ReadInt64(largest, "height")));
+            if (TryParseLivePhotoAsset(info, index, seenUrls, out var livePhoto))
+                assets.Add(livePhoto);
+            index++;
         }
 
         return assets;
@@ -614,6 +619,28 @@ public sealed class WeiboSiteAdapter : ISiteAdapter
             new[] { url },
             Width: (int)ReadInt64(largest, "width"),
             Height: (int)ReadInt64(largest, "height"));
+        return true;
+    }
+
+    private static bool TryParseLivePhotoAsset(
+        JsonElement info,
+        int index,
+        HashSet<string> seenUrls,
+        out MediaAsset asset)
+    {
+        asset = default!;
+        var type = ReadFirstString(info, "type", "object_type");
+        if (!string.Equals(type, "livephoto", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        var url = NormalizeMediaUrl(ReadFirstString(info, "video"));
+        if (string.IsNullOrWhiteSpace(url) || !seenUrls.Add(url))
+            return false;
+
+        asset = new MediaAsset(
+            MediaAssetType.LivePhoto,
+            index,
+            new[] { url });
         return true;
     }
 

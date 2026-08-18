@@ -1,4 +1,4 @@
-﻿using Avalonia.Media;
+using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -10,7 +10,8 @@ public enum MediaAssetType
     Video,
     Image,
     Cover,
-    Music
+    Music,
+    LivePhoto
 }
 
 public sealed record MediaAsset(
@@ -50,6 +51,7 @@ public sealed record CrawlerDownloadOptions(
     bool IncludeWorkId = false,
     bool DownloadCover = false,
     bool DownloadMusic = false,
+    bool DownloadLivePhoto = false,
     bool CheckVideoAudio = false,
     bool EnablePersonDetection = false,
     bool StopOnDuplicateThreshold = true,

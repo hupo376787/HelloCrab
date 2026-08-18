@@ -77,6 +77,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
     private bool _includeWorkId;
     private bool _downloadCover;
     private bool _downloadMusic;
+    private bool _downloadLivePhoto;
     private decimal _downloadSpeedLimitMBps;
     private bool _checkVideoAudio;
     private bool _enablePersonDetection;
@@ -152,6 +153,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
         _includeWorkId = settings.IncludeWorkId;
         _downloadCover = settings.DownloadCover;
         _downloadMusic = settings.DownloadMusic;
+        _downloadLivePhoto = settings.DownloadLivePhoto;
         _downloadSpeedLimitMBps = Math.Clamp(settings.DownloadSpeedLimitMBps, 0m, 10000m);
         _checkVideoAudio = settings.CheckVideoAudio;
         _enablePersonDetection = settings.EnablePersonDetection;
@@ -517,6 +519,16 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
         set
         {
             if (SetProperty(ref _downloadMusic, value))
+                QueueSettingsSave();
+        }
+    }
+
+    public bool DownloadLivePhoto
+    {
+        get => _downloadLivePhoto;
+        set
+        {
+            if (SetProperty(ref _downloadLivePhoto, value))
                 QueueSettingsSave();
         }
     }
@@ -1149,6 +1161,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
                 IncludeWorkId,
                 DownloadCover,
                 DownloadMusic,
+                DownloadLivePhoto,
                 CheckVideoAudio,
                 EnablePersonDetection,
                 StopOnDuplicateThreshold,
@@ -1302,6 +1315,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
                 IncludeWorkId = IncludeWorkId,
                 DownloadCover = DownloadCover,
                 DownloadMusic = DownloadMusic,
+                DownloadLivePhoto = DownloadLivePhoto,
                 CheckVideoAudio = CheckVideoAudio,
                 EnablePersonDetection = EnablePersonDetection,
                 PersonDetectionConfidence = PersonDetectionConfidence,
@@ -1405,6 +1419,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
             IncludeWorkId = settings.IncludeWorkId;
             DownloadCover = settings.DownloadCover;
             DownloadMusic = settings.DownloadMusic;
+            DownloadLivePhoto = settings.DownloadLivePhoto;
             CheckVideoAudio = settings.CheckVideoAudio;
             EnablePersonDetection = settings.EnablePersonDetection;
             PersonDetectionConfidence = settings.PersonDetectionConfidence;
@@ -2256,6 +2271,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
             IncludeWorkId = IncludeWorkId,
             DownloadCover = DownloadCover,
             DownloadMusic = DownloadMusic,
+            DownloadLivePhoto = DownloadLivePhoto,
             DownloadSpeedLimitMBps = DownloadSpeedLimitMBps,
             CheckVideoAudio = CheckVideoAudio,
             EnablePersonDetection = EnablePersonDetection,

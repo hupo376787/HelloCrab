@@ -1,4 +1,4 @@
-﻿namespace HelloCrab.Core.Contracts;
+namespace HelloCrab.Core.Contracts;
 
 public sealed class RemoteHealthDto
 {
@@ -44,6 +44,7 @@ public sealed class RemoteSettingsDto
     public bool IncludeWorkId { get; set; } = false;
     public bool DownloadCover { get; set; }
     public bool DownloadMusic { get; set; }
+    public bool DownloadLivePhoto { get; set; }
     public bool CheckVideoAudio { get; set; }
     public bool EnablePersonDetection { get; set; }
     public double PersonDetectionConfidence { get; set; } = 0.60;

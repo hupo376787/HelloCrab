@@ -566,6 +566,8 @@
     "Error.Schedule.UnsupportedRepeat": "Unsupported recurrence type.",
     "PushPlus.HttpFailed": "PushPlus HTTP {0} {1}: {2}",
     "Download.LongFileNames": "Allow longer file names",
-    "Download.LongFileNamesDescription": "When enabled, work title file names can grow from 170 to 220 characters. Operating-system and file-system limits still apply."
+    "Download.LongFileNamesDescription": "When enabled, work title file names can grow from 170 to 220 characters. Operating-system and file-system limits still apply.",
+    "Download.LivePhoto": "Download Live Photos",
+    "Error.Download.LivePhotoContentType": "Unexpected Live Photo motion resource Content-Type: {0}"
   }
 }

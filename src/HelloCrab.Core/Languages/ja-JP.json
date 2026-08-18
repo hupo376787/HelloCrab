@@ -566,6 +566,8 @@
     "Error.Schedule.UnsupportedRepeat": "サポートされていない繰り返し方式です。",
     "PushPlus.HttpFailed": "PushPlus HTTP {0} {1}：{2}",
     "Download.LongFileNames": "長いファイル名を許可",
-    "Download.LongFileNamesDescription": "有効にすると、作品タイトルのファイル名上限を 170 文字から 220 文字へ拡張します。OS とファイルシステムの制限は引き続き適用されます。"
+    "Download.LongFileNamesDescription": "有効にすると、作品タイトルのファイル名上限を 170 文字から 220 文字へ拡張します。OS とファイルシステムの制限は引き続き適用されます。",
+    "Download.LivePhoto": "Live Photos をダウンロード",
+    "Error.Download.LivePhotoContentType": "Live Photo 動画リソースの Content-Type が不正です: {0}"
   }
 }

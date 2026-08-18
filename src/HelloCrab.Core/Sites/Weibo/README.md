@@ -17,3 +17,5 @@ https://weibo.com/ajax/statuses/mymblog?uid={UID}&page={page}&feature=0
 - 分页标识：`data.since_id`
 
 仅解析当前微博自身的 `pic_infos`，不会递归下载 `retweeted_status` 中其他作者的媒体。
+
+- `pic_infos[picId].type == "livephoto"` 时，除最高质量静态图外还会解析同级 `video` 动态资源；仅在“下载Live图”开启时额外保存。

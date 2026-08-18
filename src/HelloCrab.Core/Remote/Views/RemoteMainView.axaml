@@ -1,4 +1,4 @@
-﻿<UserControl
+<UserControl
     x:Class="HelloCrab.Core.Remote.Views.RemoteMainView"
     xmlns="https://github.com/avaloniaui"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
@@ -264,6 +264,7 @@
                     Margin="0,4,0,2"
                     Background="{DynamicResource RemoteSeparatorBrush}" />
             <CheckBox Content="文件名中添加作品 ID" IsChecked="{Binding IncludeWorkId, Mode=TwoWay}" />
+            <CheckBox Content="下载Live图" IsChecked="{Binding DownloadLivePhoto, Mode=TwoWay}" />
             <CheckBox Content="下载作品封面" IsChecked="{Binding DownloadCover, Mode=TwoWay}" />
             <CheckBox Content="下载背景音乐" IsChecked="{Binding DownloadMusic, Mode=TwoWay}" />
             <CheckBox Content="检测视频是否有声音，并自动修复无声视频"

@@ -1,4 +1,4 @@
-﻿using System.Collections.ObjectModel;
+using System.Collections.ObjectModel;
 using Avalonia;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
@@ -48,6 +48,7 @@ public sealed class RemoteMainViewModel : ObservableObject, IAsyncDisposable
     private bool _includeWorkId;
     private bool _downloadCover;
     private bool _downloadMusic;
+    private bool _downloadLivePhoto;
     private bool _checkVideoAudio;
     private bool _enablePersonDetection;
     private double _personDetectionConfidence = 0.60;
@@ -286,6 +287,12 @@ public sealed class RemoteMainViewModel : ObservableObject, IAsyncDisposable
         set { if (SetProperty(ref _downloadMusic, value)) MarkSettingsDirty(); }
     }
 
+    public bool DownloadLivePhoto
+    {
+        get => _downloadLivePhoto;
+        set { if (SetProperty(ref _downloadLivePhoto, value)) MarkSettingsDirty(); }
+    }
+
     public bool CheckVideoAudio
     {
         get => _checkVideoAudio;
@@ -409,6 +416,7 @@ public sealed class RemoteMainViewModel : ObservableObject, IAsyncDisposable
                 IncludeWorkId = IncludeWorkId,
                 DownloadCover = DownloadCover,
                 DownloadMusic = DownloadMusic,
+                DownloadLivePhoto = DownloadLivePhoto,
                 CheckVideoAudio = CheckVideoAudio,
                 EnablePersonDetection = EnablePersonDetection,
                 PersonDetectionConfidence = PersonDetectionConfidence,
@@ -460,6 +468,7 @@ public sealed class RemoteMainViewModel : ObservableObject, IAsyncDisposable
                 IncludeWorkId = snapshot.Settings.IncludeWorkId;
                 DownloadCover = snapshot.Settings.DownloadCover;
                 DownloadMusic = snapshot.Settings.DownloadMusic;
+                DownloadLivePhoto = snapshot.Settings.DownloadLivePhoto;
                 CheckVideoAudio = snapshot.Settings.CheckVideoAudio;
                 EnablePersonDetection = snapshot.Settings.EnablePersonDetection;
                 PersonDetectionConfidence = snapshot.Settings.PersonDetectionConfidence;

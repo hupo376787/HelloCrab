@@ -112,6 +112,10 @@ public sealed class MediaDownloadService : IAsyncDisposable
             .ToArray();
         var cover = work.Assets.FirstOrDefault(x => x.Type == MediaAssetType.Cover);
         var music = work.Assets.FirstOrDefault(x => x.Type == MediaAssetType.Music);
+        var livePhotos = work.Assets
+            .Where(x => x.Type == MediaAssetType.LivePhoto)
+            .OrderBy(x => x.Index)
+            .ToArray();
         var requiresDashAudioMerge =
             work.PlatformId.Equals("bilibili", StringComparison.OrdinalIgnoreCase)
             && primaryAssets.Any(x => x.Type == MediaAssetType.Video)
@@ -184,6 +188,28 @@ public sealed class MediaDownloadService : IAsyncDisposable
             }
 
             sequence++;
+        }
+
+
+        if (options.DownloadLivePhoto && livePhotos.Length > 0)
+        {
+            foreach (var livePhoto in livePhotos)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var primaryPosition = Array.FindIndex(
+                    primaryAssets,
+                    asset => asset.Index == livePhoto.Index);
+                var sequenceNumber = primaryPosition >= 0
+                    ? primaryPosition + 1
+                    : Math.Max(1, livePhoto.Index + 1);
+                var suffix = appendSequence ? $"_{sequenceNumber:00}" : string.Empty;
+                await DownloadAssetAsync(
+                    livePhoto,
+                    Path.Combine(authorFolder, baseName + suffix + "_live"),
+                    browserContext,
+                    publishedAt,
+                    cancellationToken);
+            }
         }
 
         if (options.DownloadCover)
@@ -390,7 +416,7 @@ public sealed class MediaDownloadService : IAsyncDisposable
                         1024 * 128,
                         FileOptions.Asynchronous | FileOptions.SequentialScan))
                     {
-                        if (asset.Type is MediaAssetType.Video or MediaAssetType.Music)
+                        if (asset.Type is MediaAssetType.Video or MediaAssetType.Music or MediaAssetType.LivePhoto)
                         {
                             await CopyStreamWithProgressAsync(
                                 input,
@@ -432,13 +458,13 @@ public sealed class MediaDownloadService : IAsyncDisposable
                         ? RuntimeLocalization.Get("Status.ImageAwaitPerson", "图片下载完成，等待后台人像检测")
                         : completionLabel ?? RuntimeLocalization.Get("Common.DownloadComplete", "下载完成");
                     RaiseLog(RuntimeLocalization.Format("Log.Download.CompletedFile", "{0}：{1}", completedLabel, completedFileName));
-                    if (asset.Type is MediaAssetType.Video or MediaAssetType.Music)
+                    if (asset.Type is MediaAssetType.Video or MediaAssetType.Music or MediaAssetType.LivePhoto)
                         ClearTransferProgress(completedFileName, asset.Type);
                     return targetPath;
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException)
                 {
-                    if (asset.Type is MediaAssetType.Video or MediaAssetType.Music)
+                    if (asset.Type is MediaAssetType.Video or MediaAssetType.Music or MediaAssetType.LivePhoto)
                         ClearTransferProgress(Path.GetFileName(targetWithoutExtension), asset.Type);
                     lastError = ex;
                     RaiseLog(RuntimeLocalization.Format("Log.Download.RetryFailed", "下载失败，第 {0}/3 次：{1}", attempt, ex.Message));
@@ -1228,6 +1254,13 @@ public sealed class MediaDownloadService : IAsyncDisposable
             throw new IOException(RuntimeLocalization.Format("Error.Download.ImageContentType", "图片资源 Content-Type 异常：{0}", mediaType));
         }
 
+        if (type == MediaAssetType.LivePhoto
+            && !mediaType.StartsWith("video/", StringComparison.Ordinal)
+            && mediaType != "application/octet-stream")
+        {
+            throw new IOException(RuntimeLocalization.Format("Error.Download.LivePhotoContentType", "Live 图动态资源 Content-Type 异常：{0}", mediaType));
+        }
+
         if (type == MediaAssetType.Music
             && !mediaType.StartsWith("audio/", StringComparison.Ordinal)
             && !mediaType.StartsWith("video/", StringComparison.Ordinal)
@@ -1254,8 +1287,15 @@ public sealed class MediaDownloadService : IAsyncDisposable
         string sourceUrl)
     {
         var mediaType = contentType?.MediaType?.ToLowerInvariant();
-        if (type == MediaAssetType.Video)
+        if (type is MediaAssetType.Video or MediaAssetType.LivePhoto)
         {
+            if (type == MediaAssetType.LivePhoto
+                && Uri.TryCreate(sourceUrl, UriKind.Absolute, out var livePhotoUri)
+                && Path.GetExtension(livePhotoUri.AbsolutePath).Equals(".mov", StringComparison.OrdinalIgnoreCase))
+            {
+                return ".mov";
+            }
+
             return mediaType switch
             {
                 "video/webm" => ".webm",
