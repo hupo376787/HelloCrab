@@ -1,0 +1,307 @@
+# trigger
+name: Apply Live Photo support
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/apply-livephoto-support.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Apply Live Photo support
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import json
+          import re
+
+          root = Path('.')
+
+          def read(path):
+              return (root / path).read_text(encoding='utf-8-sig')
+
+          def write(path, text):
+              (root / path).write_text(text, encoding='utf-8')
+
+          def replace_once(text, old, new, label):
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{label}: expected exactly 1 match, got {count}')
+              return text.replace(old, new, 1)
+
+          path = 'src/HelloCrab.Core/Models/MediaModels.cs'
+          text = read(path)
+          text = replace_once(text,
+              '    Video,\n    Image,\n    Cover,\n    Music\n',
+              '    Video,\n    Image,\n    Cover,\n    Music,\n    LivePhoto\n',
+              'MediaAssetType')
+          text = replace_once(text,
+              '    bool DownloadCover = false,\n    bool DownloadMusic = false,\n    bool CheckVideoAudio = false,',
+              '    bool DownloadCover = false,\n    bool DownloadMusic = false,\n    bool DownloadLivePhoto = false,\n    bool CheckVideoAudio = false,',
+              'CrawlerDownloadOptions')
+          write(path, text)
+
+          path = 'src/HelloCrab.Core/Services/Settings/AppSettings.cs'
+          text = read(path)
+          text = replace_once(text, 'public int Version { get; set; } = 12;', 'public int Version { get; set; } = 13;', 'AppSettings version')
+          text = replace_once(text,
+              '    public bool DownloadCover { get; set; }\n    public bool DownloadMusic { get; set; }\n',
+              '    public bool DownloadCover { get; set; }\n    public bool DownloadMusic { get; set; }\n    public bool DownloadLivePhoto { get; set; } = false;\n',
+              'AppSettings LivePhoto')
+          write(path, text)
+
+          path = 'src/HelloCrab.Core/Services/Settings/SettingsService.cs'
+          text = read(path)
+          text = replace_once(text,
+              'v11 增加下载速度限制；v12 增加人像检测置信度。',
+              'v11 增加下载速度限制；v12 增加人像检测置信度；v13 增加 Live 图下载开关。',
+              'SettingsService version comment')
+          text = replace_once(text,
+              '            if (settings.Version < 12)\n                settings.Version = 12;',
+              '            if (settings.Version < 13)\n                settings.Version = 13;',
+              'SettingsService version migration')
+          write(path, text)
+
+          path = 'src/HelloCrab.Core/Services/Downloading/JsonDownloadIndex.cs'
+          text = read(path)
+          text = replace_once(text,
+              '            options.DownloadCover,\n            options.DownloadMusic,\n            options.CheckVideoAudio,',
+              '            options.DownloadCover,\n            options.DownloadMusic,\n            options.DownloadLivePhoto,\n            options.CheckVideoAudio,',
+              'Index BuildKey')
+          text = replace_once(text,
+              '            ["music"] = false,\n            ["audio"] = defaultAudio,',
+              '            ["music"] = false,\n            ["live"] = false,\n            ["audio"] = defaultAudio,',
+              'Index flags')
+          text = replace_once(text,
+              '            flags["cover"],\n            flags["music"],\n            flags["audio"],',
+              '            flags["cover"],\n            flags["music"],\n            flags["live"],\n            flags["audio"],',
+              'Index canonical call')
+          text = replace_once(text,
+              '        bool downloadCover,\n        bool downloadMusic,\n        bool checkVideoAudio,',
+              '        bool downloadCover,\n        bool downloadMusic,\n        bool downloadLivePhoto,\n        bool checkVideoAudio,',
+              'Index canonical signature')
+          text = replace_once(text,
+              '           $"cover={(downloadCover ? 1 : 0)}:" +\n           $"music={(downloadMusic ? 1 : 0)}:" +\n           $"audio={(checkVideoAudio ? 1 : 0)}:" +',
+              '           $"cover={(downloadCover ? 1 : 0)}:" +\n           $"music={(downloadMusic ? 1 : 0)}:" +\n           $"live={(downloadLivePhoto ? 1 : 0)}:" +\n           $"audio={(checkVideoAudio ? 1 : 0)}:" +',
+              'Index canonical output')
+          write(path, text)
+
+          path = 'src/HelloCrab.Core/Sites/Weibo/WeiboSiteAdapter.cs'
+          text = read(path)
+          text = replace_once(text,
+              '                if (TryParseLargestImageAsset(itemData, index, seenUrls, out var image))\n                {\n                    mixedAssets.Add(image);\n                    index++;\n                }',
+              '                if (TryParseLargestImageAsset(itemData, index, seenUrls, out var image))\n                {\n                    mixedAssets.Add(image);\n                    if (TryParseLivePhotoAsset(itemData, index, seenUrls, out var livePhoto))\n                        mixedAssets.Add(livePhoto);\n                    index++;\n                }',
+              'Weibo mixed LivePhoto')
+          text = replace_once(text,
+              '            assets.Add(new MediaAsset(\n                MediaAssetType.Image,\n                index++,\n                new[] { url },\n                Width: (int)ReadInt64(largest, "width"),\n                Height: (int)ReadInt64(largest, "height")));',
+              '            assets.Add(new MediaAsset(\n                MediaAssetType.Image,\n                index,\n                new[] { url },\n                Width: (int)ReadInt64(largest, "width"),\n                Height: (int)ReadInt64(largest, "height")));\n            if (TryParseLivePhotoAsset(info, index, seenUrls, out var livePhoto))\n                assets.Add(livePhoto);\n            index++;',
+              'Weibo pic_infos LivePhoto')
+          marker = '    private static bool TryParseBestVideoAsset(\n'
+          helper = '''    private static bool TryParseLivePhotoAsset(\n        JsonElement info,\n        int index,\n        HashSet<string> seenUrls,\n        out MediaAsset asset)\n    {\n        asset = default!;\n        var type = ReadFirstString(info, "type", "object_type");\n        if (!string.Equals(type, "livephoto", StringComparison.OrdinalIgnoreCase))\n            return false;\n\n        var url = NormalizeMediaUrl(ReadFirstString(info, "video"));\n        if (string.IsNullOrWhiteSpace(url) || !seenUrls.Add(url))\n            return false;\n\n        asset = new MediaAsset(\n            MediaAssetType.LivePhoto,\n            index,\n            new[] { url });\n        return true;\n    }\n\n'''
+          if helper.strip() not in text:
+              text = replace_once(text, marker, helper + marker, 'Weibo LivePhoto helper')
+          text = text.replace(
+              '/// 图片严格优先使用 pic_infos.{picId}.largest.url，并按 pic_ids 保持原始图集顺序；',
+              '/// 图片严格优先使用 pic_infos.{picId}.largest.url，并按 pic_ids 保持原始图集顺序；type=livephoto 时同时解析同级 video 动态资源；')
+          write(path, text)
+
+          path = 'src/HelloCrab.Core/Services/Downloading/MediaDownloadService.cs'
+          text = read(path)
+          text = replace_once(text,
+              '        var cover = work.Assets.FirstOrDefault(x => x.Type == MediaAssetType.Cover);\n        var music = work.Assets.FirstOrDefault(x => x.Type == MediaAssetType.Music);',
+              '        var cover = work.Assets.FirstOrDefault(x => x.Type == MediaAssetType.Cover);\n        var music = work.Assets.FirstOrDefault(x => x.Type == MediaAssetType.Music);\n        var livePhotos = work.Assets\n            .Where(x => x.Type == MediaAssetType.LivePhoto)\n            .OrderBy(x => x.Index)\n            .ToArray();',
+              'Downloader live list')
+          insert_before_cover = '''\n        if (options.DownloadLivePhoto && livePhotos.Length > 0)\n        {\n            foreach (var livePhoto in livePhotos)\n            {\n                cancellationToken.ThrowIfCancellationRequested();\n                var primaryPosition = Array.FindIndex(\n                    primaryAssets,\n                    asset => asset.Index == livePhoto.Index);\n                var sequenceNumber = primaryPosition >= 0\n                    ? primaryPosition + 1\n                    : Math.Max(1, livePhoto.Index + 1);\n                var suffix = appendSequence ? $"_{sequenceNumber:00}" : string.Empty;\n                await DownloadAssetAsync(\n                    livePhoto,\n                    Path.Combine(authorFolder, baseName + suffix + "_live"),\n                    browserContext,\n                    publishedAt,\n                    cancellationToken);\n            }\n        }\n\n'''
+          marker = '        if (options.DownloadCover)\n'
+          if insert_before_cover.strip() not in text:
+              text = replace_once(text, marker, insert_before_cover + marker, 'Downloader LivePhoto block')
+          text = text.replace(
+              'asset.Type is MediaAssetType.Video or MediaAssetType.Music',
+              'asset.Type is MediaAssetType.Video or MediaAssetType.Music or MediaAssetType.LivePhoto')
+          text = replace_once(text,
+              '        if (type == MediaAssetType.Music\n            && !mediaType.StartsWith("audio/", StringComparison.Ordinal)',
+              '        if (type == MediaAssetType.LivePhoto\n            && !mediaType.StartsWith("video/", StringComparison.Ordinal)\n            && mediaType != "application/octet-stream")\n        {\n            throw new IOException(RuntimeLocalization.Format("Error.Download.LivePhotoContentType", "Live 图动态资源 Content-Type 异常：{0}", mediaType));\n        }\n\n        if (type == MediaAssetType.Music\n            && !mediaType.StartsWith("audio/", StringComparison.Ordinal)',
+              'Downloader LivePhoto content type')
+          text = replace_once(text,
+              '        if (type == MediaAssetType.Video)\n        {\n            return mediaType switch\n            {\n                "video/webm" => ".webm",\n                "video/quicktime" => ".mov",\n                _ => ".mp4"\n            };\n        }',
+              '        if (type is MediaAssetType.Video or MediaAssetType.LivePhoto)\n        {\n            if (type == MediaAssetType.LivePhoto\n                && Uri.TryCreate(sourceUrl, UriKind.Absolute, out var livePhotoUri)\n                && Path.GetExtension(livePhotoUri.AbsolutePath).Equals(".mov", StringComparison.OrdinalIgnoreCase))\n            {\n                return ".mov";\n            }\n\n            return mediaType switch\n            {\n                "video/webm" => ".webm",\n                "video/quicktime" => ".mov",\n                _ => ".mp4"\n            };\n        }',
+              'Downloader LivePhoto extension')
+          write(path, text)
+
+          path = 'src/HelloCrab.Core/ViewModels/MainWindowViewModel.cs'
+          text = read(path)
+          text = replace_once(text,
+              '    private bool _downloadCover;\n    private bool _downloadMusic;\n    private decimal _downloadSpeedLimitMBps;',
+              '    private bool _downloadCover;\n    private bool _downloadMusic;\n    private bool _downloadLivePhoto;\n    private decimal _downloadSpeedLimitMBps;',
+              'VM backing field')
+          text = replace_once(text,
+              '        _downloadCover = settings.DownloadCover;\n        _downloadMusic = settings.DownloadMusic;\n        _downloadSpeedLimitMBps',
+              '        _downloadCover = settings.DownloadCover;\n        _downloadMusic = settings.DownloadMusic;\n        _downloadLivePhoto = settings.DownloadLivePhoto;\n        _downloadSpeedLimitMBps',
+              'VM initial setting')
+          property_marker = '    public decimal DownloadSpeedLimitMBps\n'
+          live_property = '''    public bool DownloadLivePhoto\n    {\n        get => _downloadLivePhoto;\n        set\n        {\n            if (SetProperty(ref _downloadLivePhoto, value))\n                QueueSettingsSave();\n        }\n    }\n\n'''
+          if live_property.strip() not in text:
+              text = replace_once(text, property_marker, live_property + property_marker, 'VM LivePhoto property')
+          text = text.replace(
+              '                DownloadCover,\n                DownloadMusic,\n                CheckVideoAudio,',
+              '                DownloadCover,\n                DownloadMusic,\n                DownloadLivePhoto,\n                CheckVideoAudio,')
+          text = text.replace(
+              '                DownloadCover = DownloadCover,\n                DownloadMusic = DownloadMusic,\n                CheckVideoAudio = CheckVideoAudio,',
+              '                DownloadCover = DownloadCover,\n                DownloadMusic = DownloadMusic,\n                DownloadLivePhoto = DownloadLivePhoto,\n                CheckVideoAudio = CheckVideoAudio,')
+          text = text.replace(
+              '            DownloadCover = DownloadCover,\n            DownloadMusic = DownloadMusic,\n            DownloadSpeedLimitMBps = DownloadSpeedLimitMBps,',
+              '            DownloadCover = DownloadCover,\n            DownloadMusic = DownloadMusic,\n            DownloadLivePhoto = DownloadLivePhoto,\n            DownloadSpeedLimitMBps = DownloadSpeedLimitMBps,')
+          text = text.replace(
+              '            DownloadCover = settings.DownloadCover;\n            DownloadMusic = settings.DownloadMusic;\n            CheckVideoAudio = settings.CheckVideoAudio;',
+              '            DownloadCover = settings.DownloadCover;\n            DownloadMusic = settings.DownloadMusic;\n            DownloadLivePhoto = settings.DownloadLivePhoto;\n            CheckVideoAudio = settings.CheckVideoAudio;')
+          if 'DownloadLivePhoto = DownloadLivePhoto' not in text:
+              raise SystemExit('VM remote/settings mapping was not updated')
+          write(path, text)
+
+          path = 'src/HelloCrab.Core/Views/MainWindow.axaml'
+          text = read(path)
+          text = replace_once(text,
+              '                <CheckBox Content="{DynamicResource Lang.Download.IncludeWorkId}" IsChecked="{Binding IncludeWorkId}" />\n                <Grid ColumnDefinitions="*,*" ColumnSpacing="14">',
+              '                <Grid ColumnDefinitions="*,*" ColumnSpacing="14">\n                  <CheckBox Content="{DynamicResource Lang.Download.IncludeWorkId}"\n                            IsChecked="{Binding IncludeWorkId}"\n                            VerticalAlignment="Center" />\n                  <CheckBox Grid.Column="1"\n                            Content="{DynamicResource Lang.Download.LivePhoto}"\n                            IsChecked="{Binding DownloadLivePhoto}"\n                            VerticalAlignment="Center" />\n                </Grid>\n                <Grid ColumnDefinitions="*,*" ColumnSpacing="14">',
+              'Desktop LivePhoto checkbox')
+          write(path, text)
+
+          path = 'src/HelloCrab.Core/Contracts/RemoteContracts.cs'
+          text = read(path)
+          text = replace_once(text,
+              '    public bool DownloadCover { get; set; }\n    public bool DownloadMusic { get; set; }\n    public bool CheckVideoAudio { get; set; }',
+              '    public bool DownloadCover { get; set; }\n    public bool DownloadMusic { get; set; }\n    public bool DownloadLivePhoto { get; set; }\n    public bool CheckVideoAudio { get; set; }',
+              'RemoteSettingsDto LivePhoto')
+          write(path, text)
+
+          path = 'src/HelloCrab.Core/Remote/ViewModels/RemoteMainViewModel.cs'
+          text = read(path)
+          text = replace_once(text,
+              '    private bool _downloadCover;\n    private bool _downloadMusic;\n    private bool _checkVideoAudio;',
+              '    private bool _downloadCover;\n    private bool _downloadMusic;\n    private bool _downloadLivePhoto;\n    private bool _checkVideoAudio;',
+              'Remote VM field')
+          property_marker = '    public bool CheckVideoAudio\n'
+          live_property = '''    public bool DownloadLivePhoto\n    {\n        get => _downloadLivePhoto;\n        set { if (SetProperty(ref _downloadLivePhoto, value)) MarkSettingsDirty(); }\n    }\n\n'''
+          if live_property.strip() not in text:
+              text = replace_once(text, property_marker, live_property + property_marker, 'Remote VM property')
+          text = replace_once(text,
+              '                DownloadCover = DownloadCover,\n                DownloadMusic = DownloadMusic,\n                CheckVideoAudio = CheckVideoAudio,',
+              '                DownloadCover = DownloadCover,\n                DownloadMusic = DownloadMusic,\n                DownloadLivePhoto = DownloadLivePhoto,\n                CheckVideoAudio = CheckVideoAudio,',
+              'Remote VM save mapping')
+          text = replace_once(text,
+              '                DownloadCover = snapshot.Settings.DownloadCover;\n                DownloadMusic = snapshot.Settings.DownloadMusic;\n                CheckVideoAudio = snapshot.Settings.CheckVideoAudio;',
+              '                DownloadCover = snapshot.Settings.DownloadCover;\n                DownloadMusic = snapshot.Settings.DownloadMusic;\n                DownloadLivePhoto = snapshot.Settings.DownloadLivePhoto;\n                CheckVideoAudio = snapshot.Settings.CheckVideoAudio;',
+              'Remote VM snapshot mapping')
+          write(path, text)
+
+          path = 'src/HelloCrab.Core/Remote/Views/RemoteMainView.axaml'
+          text = read(path)
+          text = replace_once(text,
+              '            <CheckBox Content="文件名中添加作品 ID" IsChecked="{Binding IncludeWorkId, Mode=TwoWay}" />\n            <CheckBox Content="下载作品封面"',
+              '            <CheckBox Content="文件名中添加作品 ID" IsChecked="{Binding IncludeWorkId, Mode=TwoWay}" />\n            <CheckBox Content="下载Live图" IsChecked="{Binding DownloadLivePhoto, Mode=TwoWay}" />\n            <CheckBox Content="下载作品封面"',
+              'Remote LivePhoto checkbox')
+          write(path, text)
+
+          translations = {
+              'zh-CN': {
+                  'Download.LivePhoto': '下载Live图',
+                  'Error.Download.LivePhotoContentType': 'Live 图动态资源 Content-Type 异常：{0}',
+              },
+              'en-US': {
+                  'Download.LivePhoto': 'Download Live Photos',
+                  'Error.Download.LivePhotoContentType': 'Unexpected Live Photo motion resource Content-Type: {0}',
+              },
+              'ja-JP': {
+                  'Download.LivePhoto': 'Live Photos をダウンロード',
+                  'Error.Download.LivePhotoContentType': 'Live Photo 動画リソースの Content-Type が不正です: {0}',
+              },
+          }
+          for code, additions in translations.items():
+              path = root / 'src/HelloCrab.Core/Languages' / f'{code}.json'
+              data = json.loads(path.read_text(encoding='utf-8-sig'))
+              key = 'strings' if 'strings' in data else 'Strings'
+              data[key].update(additions)
+              path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+
+          path = 'src/HelloCrab.Core/Sites/Weibo/README.md'
+          text = read(path)
+          note = '\n- `pic_infos[picId].type == "livephoto"` 时，除最高质量静态图外还会解析同级 `video` 动态资源；仅在“下载Live图”开启时额外保存。\n'
+          if 'pic_infos[picId].type == "livephoto"' not in text:
+              text = text.rstrip() + '\n' + note
+          write(path, text)
+          PY
+
+      - name: Validate source changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import pathlib
+          root = pathlib.Path('.')
+          model = (root/'src/HelloCrab.Core/Models/MediaModels.cs').read_text(encoding='utf-8-sig')
+          assert 'LivePhoto' in model
+          assert 'bool DownloadLivePhoto = false' in model
+          settings = (root/'src/HelloCrab.Core/Services/Settings/AppSettings.cs').read_text(encoding='utf-8-sig')
+          assert 'Version { get; set; } = 13' in settings
+          assert 'DownloadLivePhoto { get; set; } = false' in settings
+          weibo = (root/'src/HelloCrab.Core/Sites/Weibo/WeiboSiteAdapter.cs').read_text(encoding='utf-8-sig')
+          assert '"livephoto"' in weibo and 'ReadFirstString(info, "video")' in weibo
+          assert 'MediaAssetType.LivePhoto' in weibo
+          downloader = (root/'src/HelloCrab.Core/Services/Downloading/MediaDownloadService.cs').read_text(encoding='utf-8-sig')
+          assert 'options.DownloadLivePhoto' in downloader
+          assert '+ "_live"' in downloader
+          index = (root/'src/HelloCrab.Core/Services/Downloading/JsonDownloadIndex.cs').read_text(encoding='utf-8-sig')
+          assert 'live={(downloadLivePhoto ? 1 : 0)}' in index
+          xaml = (root/'src/HelloCrab.Core/Views/MainWindow.axaml').read_text(encoding='utf-8-sig')
+          assert 'Lang.Download.LivePhoto' in xaml and 'Binding DownloadLivePhoto' in xaml
+          packs = {}
+          for code in ('zh-CN','en-US','ja-JP'):
+              data = json.loads((root/'src/HelloCrab.Core/Languages'/f'{code}.json').read_text(encoding='utf-8-sig'))
+              strings = data.get('strings', data.get('Strings'))
+              packs[code] = strings
+              assert strings['Download.LivePhoto']
+              assert strings['Error.Download.LivePhotoContentType']
+          assert set(packs['zh-CN']) == set(packs['en-US']) == set(packs['ja-JP'])
+          for path in (root/'src/HelloCrab.Core/Sites').rglob('*SiteAdapter.cs'):
+              txt = path.read_text(encoding='utf-8-sig', errors='ignore').lower()
+              if 'livephoto' in txt and 'weibo' not in str(path).lower():
+                  print('Additional Live Photo parser found:', path)
+          print('Static Live Photo validation passed.')
+          PY
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Build Desktop
+        shell: bash
+        run: |
+          set -euo pipefail
+          dotnet restore src/HelloCrab.Desktop/HelloCrab.Desktop.csproj
+          dotnet build src/HelloCrab.Desktop/HelloCrab.Desktop.csproj -c Release --no-restore
+
+      - name: Commit changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f .github/workflows/apply-livephoto-support.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'Add optional Live Photo downloads'
+          git push origin HEAD:main
