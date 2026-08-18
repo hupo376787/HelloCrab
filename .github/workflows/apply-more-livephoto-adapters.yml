@@ -1,0 +1,229 @@
+name: Apply more Live Photo adapters
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/apply-more-livephoto-adapters.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Update adapters
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          root = Path('.')
+          def read(p): return (root/p).read_text(encoding='utf-8-sig')
+          def write(p,s): (root/p).write_text(s, encoding='utf-8')
+          def once(s,a,b,label):
+              n=s.count(a)
+              if n != 1: raise SystemExit(f'{label}: expected 1 match, got {n}')
+              return s.replace(a,b,1)
+
+          # Douyin: each image keeps the still image and may add an image.video companion as LivePhoto.
+          p='src/HelloCrab.Core/Sites/Douyin/DouyinSiteAdapter.cs'
+          s=read(p)
+          s=once(s,
+'''            result.Add(new MediaAsset(
+                MediaAssetType.Image,
+                index++,
+                urls,
+                Width: (int)ReadInt64(image, "width"),
+                Height: (int)ReadInt64(image, "height")));''',
+'''            result.Add(new MediaAsset(
+                MediaAssetType.Image,
+                index,
+                urls,
+                Width: (int)ReadInt64(image, "width"),
+                Height: (int)ReadInt64(image, "height")));
+
+            var livePhoto = ParseImageLivePhoto(image, index);
+            if (livePhoto is not null)
+                result.Add(livePhoto);
+            index++;''','Douyin image loop')
+
+          marker='    private static MediaAsset? ParseBestVideo(JsonElement aweme)\n'
+          helper='''    private static MediaAsset? ParseImageLivePhoto(JsonElement image, int index)
+    {
+        var urls = new List<string>();
+        var width = (int)ReadInt64(image, "width");
+        var height = (int)ReadInt64(image, "height");
+
+        // 抖音实况图的静态图仍在 images[] 中；动态部分通常挂在同一图片项的 video。
+        // 只检查图片项自身的动态资源字段，避免把作品主视频误判成 Live Photo。
+        if (TryGetObject(image, "video", out var video))
+        {
+            urls.AddRange(ReadUrlListFromKnownContainers(video,
+                "play_addr_265", "play_addr_bytevc1", "play_addr_h264", "play_addr", "download_addr"));
+
+            if (TryGetArray(video, "bit_rate", out var bitRates))
+            {
+                foreach (var bitrate in bitRates.EnumerateArray()
+                             .OrderByDescending(item => ReadInt64(item, "bit_rate")))
+                {
+                    urls.AddRange(ReadUrlListFromKnownContainers(bitrate,
+                        "play_addr_265", "play_addr_bytevc1", "play_addr_h264", "play_addr"));
+                }
+            }
+        }
+
+        if (TryGetObject(image, "clip_video", out var clipVideo))
+        {
+            urls.AddRange(ReadUrlListFromKnownContainers(clipVideo,
+                "play_addr_265", "play_addr_bytevc1", "play_addr_h264", "play_addr", "download_addr"));
+        }
+
+        // 兼容网页实验字段或后续接口把动态地址直接放在图片项上的情况。
+        AddUrlsFromFlexibleProperty(image, "video_url", urls);
+        AddUrlsFromFlexibleProperty(image, "videoUrl", urls);
+        AddUrlsFromFlexibleProperty(image, "live_url", urls);
+        AddUrlsFromFlexibleProperty(image, "liveUrl", urls);
+        AddUrlsFromFlexibleProperty(image, "motion_url", urls);
+        AddUrlsFromFlexibleProperty(image, "motionUrl", urls);
+
+        var normalized = NormalizeUrls(urls);
+        return normalized.Count == 0
+            ? null
+            : new MediaAsset(MediaAssetType.LivePhoto, index, normalized, Width: width, Height: height);
+    }
+
+'''
+          if 'ParseImageLivePhoto(JsonElement image' not in s:
+              s=once(s,marker,helper+marker,'Douyin live helper')
+          write(p,s)
+
+          # Xiaohongshu: livePhoto.media.stream, legacy stream, and direct live URL fields.
+          p='src/HelloCrab.Core/Sites/Xiaohongshu/XiaohongshuSiteAdapter.cs'
+          s=read(p)
+          s=once(s,
+'''            assets.Add(new MediaAsset(
+                MediaAssetType.Image,
+                index++,
+                urls,
+                Width: (int)ReadFirstInt64(image, "width", "w"),
+                Height: (int)ReadFirstInt64(image, "height", "h")));''',
+'''            assets.Add(new MediaAsset(
+                MediaAssetType.Image,
+                index,
+                urls,
+                Width: (int)ReadFirstInt64(image, "width", "w"),
+                Height: (int)ReadFirstInt64(image, "height", "h")));
+
+            var livePhoto = ParseImageLivePhoto(image, index);
+            if (livePhoto is not null)
+                assets.Add(livePhoto);
+            index++;''','XHS image loop')
+
+          marker='    private static MediaAsset? ParseCover(JsonElement note, WorkItem listingWork)\n'
+          helper='''    private static MediaAsset? ParseImageLivePhoto(JsonElement image, int index)
+    {
+        var candidates = new List<VideoCandidate>();
+
+        // 新版常见结构：imageList[n].livePhoto.media.stream；兼容 snake_case。
+        if (TryGetObject(image, "livePhoto", out var livePhoto)
+            || TryGetObject(image, "live_photo", out livePhoto))
+        {
+            CollectVideoCandidates(livePhoto, "image.livePhoto", 0, 0, 0, candidates);
+        }
+
+        // 旧版会把实况流直接挂在 imageList[n].stream。
+        if (image.TryGetProperty("stream", out var stream))
+            CollectVideoCandidates(stream, "image.stream", 0, 0, 0, candidates);
+
+        // 部分版本提供直接地址字段。
+        foreach (var field in new[]
+                 {
+                     "streamUrl", "stream_url",
+                     "livePhotoVideo", "live_photo_video",
+                     "liveUrl", "live_url"
+                 })
+        {
+            if (image.TryGetProperty(field, out var value))
+                CollectVideoCandidates(value, $"image.{field}", 0, 0, 0, candidates);
+        }
+
+        var ordered = candidates
+            .Where(item => !string.IsNullOrWhiteSpace(item.Url))
+            .GroupBy(item => item.Url, StringComparer.Ordinal)
+            .Select(group => group
+                .OrderBy(item => CodecRank(item.Codec))
+                .ThenByDescending(item => item.Bitrate)
+                .ThenByDescending(item => (long)item.Width * item.Height)
+                .First())
+            .OrderBy(item => CodecRank(item.Codec))
+            .ThenByDescending(item => item.Bitrate)
+            .ThenByDescending(item => (long)item.Width * item.Height)
+            .ToArray();
+
+        if (ordered.Length == 0)
+            return null;
+
+        var first = ordered[0];
+        return new MediaAsset(
+            MediaAssetType.LivePhoto,
+            index,
+            ordered.Select(item => item.Url).ToArray(),
+            first.Bitrate,
+            first.Width,
+            first.Height,
+            first.Codec);
+    }
+
+'''
+          if 'ParseImageLivePhoto(JsonElement image' not in s:
+              s=once(s,marker,helper+marker,'XHS live helper')
+          write(p,s)
+          PY
+
+      - name: Static validation
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          d=Path('src/HelloCrab.Core/Sites/Douyin/DouyinSiteAdapter.cs').read_text(encoding='utf-8-sig')
+          x=Path('src/HelloCrab.Core/Sites/Xiaohongshu/XiaohongshuSiteAdapter.cs').read_text(encoding='utf-8-sig')
+          assert 'ParseImageLivePhoto(image, index)' in d
+          assert 'TryGetObject(image, "video"' in d
+          assert 'MediaAssetType.LivePhoto' in d
+          assert 'ParseImageLivePhoto(image, index)' in x
+          assert 'TryGetObject(image, "livePhoto"' in x
+          assert 'TryGetProperty("stream"' in x
+          assert 'MediaAssetType.LivePhoto' in x
+          print('Douyin/Xiaohongshu Live Photo static validation passed.')
+          PY
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Build Desktop
+        shell: bash
+        run: |
+          set -euo pipefail
+          dotnet restore src/HelloCrab.Desktop/HelloCrab.Desktop.csproj
+          dotnet build src/HelloCrab.Desktop/HelloCrab.Desktop.csproj -c Release --no-restore
+
+      - name: Commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f .github/workflows/apply-more-livephoto-adapters.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'Support Live Photos on Douyin and Xiaohongshu'
+          git push origin HEAD:main
