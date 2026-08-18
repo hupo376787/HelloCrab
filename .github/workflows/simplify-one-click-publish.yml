@@ -1,0 +1,164 @@
+name: Simplify one-click publishing
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/simplify-one-click-publish.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Replace old one-click entry points
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          import shutil
+
+          root = Path('.')
+
+          cmd = r'''@echo off
+chcp 65001 >nul
+setlocal
+cd /d "%~dp0"
+
+echo ============================================================
+echo HelloCrab 一键打包发布
+echo ============================================================
+echo 将发布：
+echo   Windows x64 / ARM64
+echo   Linux x64 / ARM64
+echo   macOS x64 / ARM64
+echo   Browser WebAssembly
+echo   Android APK + AAB
+echo.
+echo iOS 不包含在此一键发布流程中。
+echo 所有产物输出到 artifacts 目录。
+echo.
+
+powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\validate-publish-scripts.ps1" -Quiet
+if errorlevel 1 goto :validation_failed
+
+powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\publish-all-platforms.ps1" -Configuration Release
+set "EXIT_CODE=%ERRORLEVEL%"
+
+echo.
+if "%EXIT_CODE%"=="0" (
+    echo ============================================================
+    echo 发布完成。产物目录：%~dp0artifacts
+    echo ============================================================
+) else (
+    echo ============================================================
+    echo 发布未全部成功，错误代码：%EXIT_CODE%
+    echo 请查看上方日志定位失败的平台。
+    echo ============================================================
+)
+goto :finish
+
+:validation_failed
+set "EXIT_CODE=%ERRORLEVEL%"
+echo.
+echo 发布脚本检查失败，错误代码：%EXIT_CODE%
+
+:finish
+echo.
+pause
+exit /b %EXIT_CODE%
+'''
+          (root / 'one-click-publish.cmd').write_bytes(cmd.encode('utf-8-sig'))
+
+          old_dir = root / 'one-click-publish'
+          if old_dir.exists():
+              shutil.rmtree(old_dir)
+
+          workflow_path = root / '.github/workflows/build-all-platforms.yml'
+          workflow = workflow_path.read_text(encoding='utf-8-sig')
+          workflow = workflow.replace("          find one-click-publish -maxdepth 1 \\( -name '*.sh' -o -name '*.command' \\) -exec chmod +x {} +\n", '')
+          workflow_path.write_text(workflow, encoding='utf-8')
+
+          validator_path = root / 'scripts/validate-publish-scripts.ps1'
+          validator = validator_path.read_text(encoding='utf-8-sig')
+          start = validator.index('$missingTargets = New-Object System.Collections.Generic.List[string]')
+          end = validator.index('\nif ($parseFailures.Count', start)
+          replacement = r'''$missingTargets = New-Object System.Collections.Generic.List[string]
+$entryPoint = Join-Path $root 'one-click-publish.cmd'
+if (-not (Test-Path -LiteralPath $entryPoint -PathType Leaf)) {
+    $missingTargets.Add('one-click-publish.cmd 不存在。')
+}
+else {
+    $content = Get-Content -LiteralPath $entryPoint -Raw
+    $matches = [regex]::Matches($content, '-File\s+"%~dp0scripts\\([^\"]+\.ps1)"')
+    foreach ($match in $matches) {
+        $target = Join-Path $PSScriptRoot $match.Groups[1].Value
+        if (-not (Test-Path -LiteralPath $target -PathType Leaf)) {
+            $missingTargets.Add(('one-click-publish.cmd -> {0}' -f $target))
+        }
+    }
+}
+'''
+          validator = validator[:start] + replacement + validator[end:]
+          validator = validator.replace('BAT 引用的脚本不存在：$failure', '一键发布入口引用的脚本不存在：$failure')
+          validator_path.write_text(validator, encoding='utf-8')
+
+          readme_path = root / 'README.md'
+          readme = readme_path.read_text(encoding='utf-8-sig')
+          old = 'Windows 可直接双击 `one-click-publish/*.bat`，macOS 可双击 `.command`。Android 会同时收集 APK 与 AAB；iOS 需要 macOS/Xcode 或配对 Mac，并需要有效签名。完整说明见 [PUBLISH-ALL-PLATFORMS.md](PUBLISH-ALL-PLATFORMS.md)。'
+          new = 'Windows 最简单的发布方式是直接双击项目根目录的 `one-click-publish.cmd`，会依次发布 Windows、Linux、macOS、Browser 和 Android，产物统一写入 `artifacts/`。Android 会同时收集 APK 与 AAB；iOS 不包含在该一键发布流程中。完整说明见 [PUBLISH-ALL-PLATFORMS.md](PUBLISH-ALL-PLATFORMS.md)。'
+          if old not in readme:
+              raise SystemExit('README old one-click publishing text was not found.')
+          readme = readme.replace(old, new)
+          readme_path.write_text(readme, encoding='utf-8')
+
+          publish_path = root / 'PUBLISH-ALL-PLATFORMS.md'
+          publish = publish_path.read_text(encoding='utf-8-sig')
+          anchor = '## 一次发布全部可用平台\n\n'
+          intro = ('Windows 上推荐直接双击项目根目录的 `one-click-publish.cmd`。它会先执行发布脚本自检，然后以 Release 模式依次发布 Windows x64/ARM64、Linux x64/ARM64、macOS x64/ARM64、Browser 和 Android。iOS 不包含在此一键流程中。\n\n')
+          if intro not in publish:
+              publish = publish.replace(anchor, anchor + intro, 1)
+
+          publish = re.sub(
+              r'## 修改默认版本号\n.*?## 发布脚本自检\n\nWindows 可先双击 `one-click-publish/Validate-scripts\.bat`，它会使用 PowerShell 自带解析器检查全部 `\.ps1` 文件，并检查 BAT 引用路径。\n',
+              '## Windows 一键发布\n\n直接双击项目根目录的 `one-click-publish.cmd` 即可。默认使用 Release 配置和 `1.0.0` 版本号，发布前会自动执行 `scripts/validate-publish-scripts.ps1`。如需指定版本号，可继续直接调用 `scripts/publish-all-platforms.ps1 -Version x.y.z`。\n\n',
+              publish,
+              flags=re.S,
+          )
+          publish = publish.replace(
+              '仓库包含 `.github/workflows/build-all-platforms.yml`，可自动构建桌面端、Browser、Android 和 iOS，并在推送 `v*` 标签时将全部产物发布到同一个 Release。完整配置和 iOS Secret 说明见 `GITHUB-ACTIONS-RELEASE.md`。',
+              '仓库包含 `.github/workflows/build-all-platforms.yml`，可自动构建桌面端、Browser 和 Android，并在推送 `v*` 标签时将全部产物发布到同一个 Release。iOS 已从 GitHub Actions 构建中移除。完整配置见 `GITHUB-ACTIONS-RELEASE.md`。')
+          publish_path.write_text(publish, encoding='utf-8')
+          PY
+
+      - name: Validate simplified publishing setup
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f one-click-publish.cmd
+          test ! -d one-click-publish
+          grep -Fq 'scripts\publish-all-platforms.ps1' one-click-publish.cmd
+          grep -Fq 'scripts\validate-publish-scripts.ps1' one-click-publish.cmd
+          ! grep -Fq 'find one-click-publish' .github/workflows/build-all-platforms.yml
+          ! grep -R --line-number --fixed-strings 'one-click-publish/' README.md PUBLISH-ALL-PLATFORMS.md .github/workflows scripts || true
+          pwsh -NoLogo -NoProfile -File scripts/validate-publish-scripts.ps1
+
+      - name: Commit changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f .github/workflows/simplify-one-click-publish.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'Simplify one-click publishing'
+          git push origin HEAD:main
