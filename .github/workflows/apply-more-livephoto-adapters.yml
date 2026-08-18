@@ -1,3 +1,4 @@
+# trigger
 name: Apply more Live Photo adapters
 
 on:
@@ -32,7 +33,6 @@ jobs:
               if n != 1: raise SystemExit(f'{label}: expected 1 match, got {n}')
               return s.replace(a,b,1)
 
-          # Douyin: each image keeps the still image and may add an image.video companion as LivePhoto.
           p='src/HelloCrab.Core/Sites/Douyin/DouyinSiteAdapter.cs'
           s=read(p)
           s=once(s,
@@ -61,8 +61,6 @@ jobs:
         var width = (int)ReadInt64(image, "width");
         var height = (int)ReadInt64(image, "height");
 
-        // 抖音实况图的静态图仍在 images[] 中；动态部分通常挂在同一图片项的 video。
-        // 只检查图片项自身的动态资源字段，避免把作品主视频误判成 Live Photo。
         if (TryGetObject(image, "video", out var video))
         {
             urls.AddRange(ReadUrlListFromKnownContainers(video,
@@ -85,7 +83,6 @@ jobs:
                 "play_addr_265", "play_addr_bytevc1", "play_addr_h264", "play_addr", "download_addr"));
         }
 
-        // 兼容网页实验字段或后续接口把动态地址直接放在图片项上的情况。
         AddUrlsFromFlexibleProperty(image, "video_url", urls);
         AddUrlsFromFlexibleProperty(image, "videoUrl", urls);
         AddUrlsFromFlexibleProperty(image, "live_url", urls);
@@ -104,7 +101,6 @@ jobs:
               s=once(s,marker,helper+marker,'Douyin live helper')
           write(p,s)
 
-          # Xiaohongshu: livePhoto.media.stream, legacy stream, and direct live URL fields.
           p='src/HelloCrab.Core/Sites/Xiaohongshu/XiaohongshuSiteAdapter.cs'
           s=read(p)
           s=once(s,
@@ -131,18 +127,15 @@ jobs:
     {
         var candidates = new List<VideoCandidate>();
 
-        // 新版常见结构：imageList[n].livePhoto.media.stream；兼容 snake_case。
         if (TryGetObject(image, "livePhoto", out var livePhoto)
             || TryGetObject(image, "live_photo", out livePhoto))
         {
             CollectVideoCandidates(livePhoto, "image.livePhoto", 0, 0, 0, candidates);
         }
 
-        // 旧版会把实况流直接挂在 imageList[n].stream。
         if (image.TryGetProperty("stream", out var stream))
             CollectVideoCandidates(stream, "image.stream", 0, 0, 0, candidates);
 
-        // 部分版本提供直接地址字段。
         foreach (var field in new[]
                  {
                      "streamUrl", "stream_url",
