@@ -1,4 +1,0 @@
-<Solution>
-  <Project Path="src/HelloCrab.Core/HelloCrab.Core.csproj" />
-  <Project Path="src/HelloCrab.iOS/HelloCrab.iOS.csproj" />
-</Solution>
