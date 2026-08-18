@@ -39,24 +39,27 @@ Get-ChildItem -LiteralPath $PSScriptRoot -File |
     }
 
 $missingTargets = New-Object System.Collections.Generic.List[string]
-Get-ChildItem -LiteralPath (Join-Path $root 'one-click-publish') -Filter '*.bat' -File |
-    ForEach-Object {
-        $content = Get-Content -LiteralPath $_.FullName -Raw
-        $matches = [regex]::Matches($content, '-File\s+"%~dp0\.\.\\scripts\\([^\"]+\.ps1)"')
-        foreach ($match in $matches) {
-            $target = Join-Path $PSScriptRoot $match.Groups[1].Value
-            if (-not (Test-Path -LiteralPath $target -PathType Leaf)) {
-                $missingTargets.Add(('{0} -> {1}' -f $_.Name, $target))
-            }
+$entryPoint = Join-Path $root 'one-click-publish.cmd'
+if (-not (Test-Path -LiteralPath $entryPoint -PathType Leaf)) {
+    $missingTargets.Add('one-click-publish.cmd 不存在。')
+}
+else {
+    $content = Get-Content -LiteralPath $entryPoint -Raw
+    $matches = [regex]::Matches($content, '-File\s+"%~dp0scripts\\([^\"]+\.ps1)"')
+    foreach ($match in $matches) {
+        $target = Join-Path $PSScriptRoot $match.Groups[1].Value
+        if (-not (Test-Path -LiteralPath $target -PathType Leaf)) {
+            $missingTargets.Add(('one-click-publish.cmd -> {0}' -f $target))
         }
     }
+}
 
 if ($parseFailures.Count -gt 0 -or $missingTargets.Count -gt 0 -or $unsafeMsBuildArguments.Count -gt 0) {
     foreach ($failure in $parseFailures) {
         Write-Host "PowerShell 语法错误：$failure" -ForegroundColor Red
     }
     foreach ($failure in $missingTargets) {
-        Write-Host "BAT 引用的脚本不存在：$failure" -ForegroundColor Red
+        Write-Host "一键发布入口引用的脚本不存在：$failure" -ForegroundColor Red
     }
     foreach ($failure in $unsafeMsBuildArguments) {
         Write-Host "MSBuild 参数错误：$failure" -ForegroundColor Red

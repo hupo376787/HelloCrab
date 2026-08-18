@@ -1,30 +1,34 @@
 # 各平台一键打包发布
 
-## 产物
+## 最简单的发布方式
 
-统一输出到：
+Windows 上直接双击项目根目录的：
+
+```text
+one-click-publish.cmd
+```
+
+它会先执行发布脚本自检，然后以 Release 模式依次发布：
+
+```text
+Windows x64 / ARM64
+Linux x64 / ARM64
+macOS x64 / ARM64
+Browser WebAssembly
+Android APK + AAB
+```
+
+iOS 不包含在这个一键发布流程中。所有产物统一输出到：
 
 ```text
 artifacts/
 ```
 
-默认版本号为 `1.0.0`，文件示例：
+默认版本号为 `1.0.0`。
 
-```text
-HelloCrab-Desktop-win-x64-1.0.0.zip
-HelloCrab-Desktop-linux-arm64-1.0.0.zip
-HelloCrab-Desktop-osx-arm64-1.0.0.zip
-HelloCrab-Browser-1.0.0.zip
-HelloCrab-Android-1.0.0.zip
-HelloCrab-iOS-Simulator-arm64-1.0.0.zip
-HelloCrab-iOS-1.0.0.zip
-```
+## 命令行发布
 
-Android 汇总 ZIP 内包含生成的 APK 和 AAB。`ios-simulator` 会生成无需证书的模拟器测试包；`ios` 汇总 ZIP 内包含签名后的 IPA。
-
-## 单个平台
-
-PowerShell：
+需要单独发布某个平台时，可继续使用底层脚本：
 
 ```powershell
 ./scripts/publish-platform.ps1 -Target win-x64
@@ -32,8 +36,6 @@ PowerShell：
 ./scripts/publish-platform.ps1 -Target osx-arm64
 ./scripts/publish-platform.ps1 -Target browser
 ./scripts/publish-platform.ps1 -Target android
-./scripts/publish-platform.ps1 -Target ios-simulator
-./scripts/publish-platform.ps1 -Target ios
 ```
 
 指定版本号：
@@ -42,53 +44,20 @@ PowerShell：
 ./scripts/publish-platform.ps1 -Target win-x64 -Version 1.2.0
 ```
 
-Bash：
+一次发布全部一键目标：
+
+```powershell
+./scripts/publish-all-platforms.ps1 -Configuration Release -Version 1.0.0
+```
+
+Bash 入口仍保留给 GitHub Actions、Linux 和 macOS 构建环境：
 
 ```bash
 ./scripts/publish-platform.sh linux-x64 Release 1.0.0
 ./scripts/publish-platform.sh osx-arm64 Release 1.0.0
 ./scripts/publish-platform.sh browser Release 1.0.0
 ./scripts/publish-platform.sh android Release 1.0.0
-./scripts/publish-platform.sh ios-simulator Release 1.0.0
-./scripts/publish-platform.sh ios Release 1.0.0
 ```
-
-## 一次发布全部可用平台
-
-PowerShell：
-
-```powershell
-./scripts/publish-all-platforms.ps1 -Version 1.0.0
-```
-
-默认包括：
-
-```text
-win-x64, win-arm64
-linux-x64, linux-arm64
-osx-x64, osx-arm64
-browser, android
-```
-
-在 macOS 上会额外包含 iOS。在 Windows 上通过配对 Mac 构建 iOS 时：
-
-```powershell
-./scripts/publish-all-platforms.ps1 -IncludeIos
-```
-
-Bash：
-
-```bash
-./scripts/publish-all-platforms.sh Release 1.0.0
-```
-
-强制包含 iOS：
-
-```bash
-INCLUDE_IOS=1 ./scripts/publish-all-platforms.sh Release 1.0.0
-```
-
-批量脚本会继续处理其他平台，最后汇总失败目标并返回非零退出代码。
 
 ## 环境要求
 
@@ -98,12 +67,11 @@ INCLUDE_IOS=1 ./scripts/publish-all-platforms.sh Release 1.0.0
 dotnet --list-sdks
 ```
 
-需要 .NET 10 SDK。额外 workload：
+需要 .NET 10 SDK。Browser 和 Android 还需要对应 workload：
 
 ```bash
 dotnet workload install wasm-tools
 dotnet workload install android
-dotnet workload install ios
 ```
 
 脚本不会自动安装 workload，只会执行 `dotnet workload restore`，避免未经确认修改开发环境。
@@ -118,72 +86,24 @@ APK + AAB
 
 还需要可用的 Android SDK、Java/JDK 和签名配置。未配置正式签名时，生成结果只适合测试，不能直接提交应用商店。
 
-### iOS
-
-在 macOS 上，无需 Apple 证书也可以生成 Apple Silicon 模拟器测试包：
-
-```bash
-./scripts/publish-platform.sh ios-simulator Release 1.0.0
-```
-
-该包不能安装到实体 iPhone 或 iPad。iOS IPA 仍需要 Apple 证书和 Provisioning Profile。macOS 可设置：
-
-iOS 项目使用版本浮动的 `net10.0-ios`。GitHub Actions 为保证可重复构建，会固定使用 .NET SDK `10.0.203`、workload set `10.0.203.1` 和 Xcode 26.4.x，并在构建前确认 iOS 26.4 Simulator runtime 已安装。脚本优先使用 `/Applications/Xcode_26.4.1.app` 或 `/Applications/Xcode_26.4.app`，仅通过当前进程的 `DEVELOPER_DIR` 选择 Xcode，不会永久修改系统设置。自定义安装位置时可指定：
-
-```bash
-export HELLOCRAB_XCODE_PATH='/Applications/Xcode_26.4.1.app'
-```
-
-然后再设置签名信息：
-
-```bash
-export HELLOCRAB_IOS_CODESIGN_KEY='Apple Distribution: Company (TEAMID)'
-export HELLOCRAB_IOS_PROVISION='ProvisioningProfileName'
-```
-
-Windows 远程构建还可设置：
-
-```powershell
-$env:HELLOCRAB_IOS_SERVER_ADDRESS = '192.168.1.10'
-$env:HELLOCRAB_IOS_SERVER_USER = 'mac-user'
-$env:HELLOCRAB_IOS_SERVER_PASSWORD = 'password'
-$env:HELLOCRAB_IOS_REMOTE_DOTNET_ROOT = '/Users/mac-user/Library/Caches/Xamarin/XMA/SDKs/dotnet/'
-```
-
-密码可以省略，以便使用已保存的 SSH 密钥。
-
 ### macOS 桌面版
 
-脚本生成 `.app` 并压缩。在 macOS 主机上优先使用 `ditto`，以保留 bundle 元数据。正式公开分发仍需代码签名、公证；需要 DMG 时可在 macOS 上继续运行：
-
-```bash
-hdiutil create -volname HelloCrab -srcfolder artifacts/.staging/HelloCrab-Desktop-osx-arm64-1.0.0/HelloCrab.app -ov HelloCrab.dmg
-```
+脚本生成 `.app` 并压缩。在 macOS 主机上优先使用 `ditto`，以保留 bundle 元数据。正式公开分发仍需代码签名、公证。
 
 ### Linux
 
-桌面发布为自包含文件。目标系统仍需要 Avalonia 使用的图形和字体系统库。现有发布目录中会附带桌面快捷方式模板和安装脚本。
-
-## 修改默认版本号
-
-`one-click-publish` 中的快捷入口默认写为 `1.0.0`。发布新版本时，可以：
-
-1. 直接使用命令行传入 `-Version`；或
-2. 批量替换快捷入口中的 `1.0.0`。
-
-版本号只用于压缩包名称和移动端显示版本，不会自动修改源码中的程序集版本。
-
+桌面发布为自包含文件。目标系统仍需要 Avalonia 使用的图形和字体系统库。
 
 ## 发布脚本自检
 
-Windows 可先双击 `one-click-publish/Validate-scripts.bat`，它会使用 PowerShell 自带解析器检查全部 `.ps1` 文件，并检查 BAT 引用路径。
+`one-click-publish.cmd` 会自动先运行：
 
-### Android APK + AAB 参数说明
+```powershell
+./scripts/validate-publish-scripts.ps1
+```
 
-脚本使用 `-p:AndroidPackageFormats=apk%3Baab`。`%3B` 是 MSBuild 对分号的转义，
-可避免 PowerShell/MSBuild 把 `aab` 误解析为额外开关。最终仍会同时生成 APK 和 AAB。
-
+无需再单独双击旧的 `Validate-scripts.bat`。
 
 ## GitHub Actions 与 Release
 
-仓库包含 `.github/workflows/build-all-platforms.yml`，可自动构建桌面端、Browser、Android 和 iOS，并在推送 `v*` 标签时将全部产物发布到同一个 Release。完整配置和 iOS Secret 说明见 `GITHUB-ACTIONS-RELEASE.md`。
+仓库的 `.github/workflows/build-all-platforms.yml` 自动构建桌面端、Browser 和 Android。iOS 已从 GitHub Actions 构建中移除。推送 `v*` 标签时，会把这些产物和 SHA256 校验文件发布到同一个 GitHub Release。

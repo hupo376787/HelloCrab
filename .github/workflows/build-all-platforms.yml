@@ -68,9 +68,7 @@ jobs:
       - name: Prepare Unix scripts
         if: runner.os != 'Windows'
         shell: bash
-        run: |
-          chmod +x scripts/*.sh
-          find one-click-publish -maxdepth 1 \( -name '*.sh' -o -name '*.command' \) -exec chmod +x {} +
+        run: chmod +x scripts/*.sh
 
       - name: Publish desktop on Windows
         if: runner.os == 'Windows'
