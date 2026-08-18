@@ -8,17 +8,19 @@ Windows 上直接双击项目根目录的：
 one-click-publish.cmd
 ```
 
-它会先执行发布脚本自检，然后以 Release 模式依次发布：
+启动后会先执行发布脚本自检，然后显示平台选择菜单：
 
 ```text
-Windows x64 / ARM64
-Linux x64 / ARM64
-macOS x64 / ARM64
-Browser WebAssembly
-Android APK + AAB
+[1] Windows       x64 + ARM64
+[2] Linux         x64 + ARM64
+[3] macOS         x64 + ARM64
+[4] Browser       WebAssembly
+[5] Android       APK + AAB
+[6] 全部打包       Windows + Linux + macOS + Browser + Android
+[0] 退出
 ```
 
-iOS 不包含在这个一键发布流程中。所有产物统一输出到：
+选择 Windows、Linux 或 macOS 时，会一次生成该平台的 x64 和 ARM64 两个桌面包；也可以只构建 Browser、Android，或选择“全部打包”。iOS 不包含在这个发布菜单中。所有产物统一输出到：
 
 ```text
 artifacts/
