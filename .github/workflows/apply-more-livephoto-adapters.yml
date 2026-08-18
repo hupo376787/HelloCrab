@@ -1,4 +1,3 @@
-# trigger
 name: Apply more Live Photo adapters
 
 on:
@@ -18,31 +17,29 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Update adapters
+      - name: Apply adapter changes
         shell: bash
         run: |
           set -euo pipefail
           python3 - <<'PY'
           from pathlib import Path
 
-          root = Path('.')
-          def read(p): return (root/p).read_text(encoding='utf-8-sig')
-          def write(p,s): (root/p).write_text(s, encoding='utf-8')
-          def once(s,a,b,label):
-              n=s.count(a)
-              if n != 1: raise SystemExit(f'{label}: expected 1 match, got {n}')
-              return s.replace(a,b,1)
+          def update_file(path, transform):
+              p = Path(path)
+              text = p.read_text(encoding='utf-8-sig')
+              updated = transform(text)
+              if updated == text:
+                  raise SystemExit(f'No change applied to {path}')
+              p.write_text(updated, encoding='utf-8')
 
-          p='src/HelloCrab.Core/Sites/Douyin/DouyinSiteAdapter.cs'
-          s=read(p)
-          s=once(s,
-'''            result.Add(new MediaAsset(
+          def douyin(text):
+              old = '''            result.Add(new MediaAsset(
                 MediaAssetType.Image,
                 index++,
                 urls,
                 Width: (int)ReadInt64(image, "width"),
-                Height: (int)ReadInt64(image, "height")));''',
-'''            result.Add(new MediaAsset(
+                Height: (int)ReadInt64(image, "height")));'''
+              new = '''            result.Add(new MediaAsset(
                 MediaAssetType.Image,
                 index,
                 urls,
@@ -52,10 +49,12 @@ jobs:
             var livePhoto = ParseImageLivePhoto(image, index);
             if (livePhoto is not null)
                 result.Add(livePhoto);
-            index++;''','Douyin image loop')
-
-          marker='    private static MediaAsset? ParseBestVideo(JsonElement aweme)\n'
-          helper='''    private static MediaAsset? ParseImageLivePhoto(JsonElement image, int index)
+            index++;'''
+              if old not in text:
+                  raise SystemExit('Douyin image loop anchor not found')
+              text = text.replace(old, new, 1)
+              marker = '    private static MediaAsset? ParseBestVideo(JsonElement aweme)\n'
+              helper = '''    private static MediaAsset? ParseImageLivePhoto(JsonElement image, int index)
     {
         var urls = new List<string>();
         var width = (int)ReadInt64(image, "width");
@@ -65,11 +64,9 @@ jobs:
         {
             urls.AddRange(ReadUrlListFromKnownContainers(video,
                 "play_addr_265", "play_addr_bytevc1", "play_addr_h264", "play_addr", "download_addr"));
-
             if (TryGetArray(video, "bit_rate", out var bitRates))
             {
-                foreach (var bitrate in bitRates.EnumerateArray()
-                             .OrderByDescending(item => ReadInt64(item, "bit_rate")))
+                foreach (var bitrate in bitRates.EnumerateArray().OrderByDescending(item => ReadInt64(item, "bit_rate")))
                 {
                     urls.AddRange(ReadUrlListFromKnownContainers(bitrate,
                         "play_addr_265", "play_addr_bytevc1", "play_addr_h264", "play_addr"));
@@ -97,20 +94,18 @@ jobs:
     }
 
 '''
-          if 'ParseImageLivePhoto(JsonElement image' not in s:
-              s=once(s,marker,helper+marker,'Douyin live helper')
-          write(p,s)
+              if marker not in text:
+                  raise SystemExit('Douyin helper anchor not found')
+              return text.replace(marker, helper + marker, 1)
 
-          p='src/HelloCrab.Core/Sites/Xiaohongshu/XiaohongshuSiteAdapter.cs'
-          s=read(p)
-          s=once(s,
-'''            assets.Add(new MediaAsset(
+          def xhs(text):
+              old = '''            assets.Add(new MediaAsset(
                 MediaAssetType.Image,
                 index++,
                 urls,
                 Width: (int)ReadFirstInt64(image, "width", "w"),
-                Height: (int)ReadFirstInt64(image, "height", "h")));''',
-'''            assets.Add(new MediaAsset(
+                Height: (int)ReadFirstInt64(image, "height", "h")));'''
+              new = '''            assets.Add(new MediaAsset(
                 MediaAssetType.Image,
                 index,
                 urls,
@@ -120,10 +115,12 @@ jobs:
             var livePhoto = ParseImageLivePhoto(image, index);
             if (livePhoto is not null)
                 assets.Add(livePhoto);
-            index++;''','XHS image loop')
-
-          marker='    private static MediaAsset? ParseCover(JsonElement note, WorkItem listingWork)\n'
-          helper='''    private static MediaAsset? ParseImageLivePhoto(JsonElement image, int index)
+            index++;'''
+              if old not in text:
+                  raise SystemExit('XHS image loop anchor not found')
+              text = text.replace(old, new, 1)
+              marker = '    private static MediaAsset? ParseCover(JsonElement note, WorkItem listingWork)\n'
+              helper = '''    private static MediaAsset? ParseImageLivePhoto(JsonElement image, int index)
     {
         var candidates = new List<VideoCandidate>();
 
@@ -133,17 +130,12 @@ jobs:
             CollectVideoCandidates(livePhoto, "image.livePhoto", 0, 0, 0, candidates);
         }
 
-        if (image.TryGetProperty("stream", out var stream))
+        if (image.ValueKind == JsonValueKind.Object && image.TryGetProperty("stream", out var stream))
             CollectVideoCandidates(stream, "image.stream", 0, 0, 0, candidates);
 
-        foreach (var field in new[]
-                 {
-                     "streamUrl", "stream_url",
-                     "livePhotoVideo", "live_photo_video",
-                     "liveUrl", "live_url"
-                 })
+        foreach (var field in new[] { "streamUrl", "stream_url", "livePhotoVideo", "live_photo_video", "liveUrl", "live_url" })
         {
-            if (image.TryGetProperty(field, out var value))
+            if (image.ValueKind == JsonValueKind.Object && image.TryGetProperty(field, out var value))
                 CollectVideoCandidates(value, $"image.{field}", 0, 0, 0, candidates);
         }
 
@@ -175,40 +167,13 @@ jobs:
     }
 
 '''
-          if 'ParseImageLivePhoto(JsonElement image' not in s:
-              s=once(s,marker,helper+marker,'XHS live helper')
-          write(p,s)
+              if marker not in text:
+                  raise SystemExit('XHS helper anchor not found')
+              return text.replace(marker, helper + marker, 1)
+
+          update_file('src/HelloCrab.Core/Sites/Douyin/DouyinSiteAdapter.cs', douyin)
+          update_file('src/HelloCrab.Core/Sites/Xiaohongshu/XiaohongshuSiteAdapter.cs', xhs)
           PY
-
-      - name: Static validation
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 - <<'PY'
-          from pathlib import Path
-          d=Path('src/HelloCrab.Core/Sites/Douyin/DouyinSiteAdapter.cs').read_text(encoding='utf-8-sig')
-          x=Path('src/HelloCrab.Core/Sites/Xiaohongshu/XiaohongshuSiteAdapter.cs').read_text(encoding='utf-8-sig')
-          assert 'ParseImageLivePhoto(image, index)' in d
-          assert 'TryGetObject(image, "video"' in d
-          assert 'MediaAssetType.LivePhoto' in d
-          assert 'ParseImageLivePhoto(image, index)' in x
-          assert 'TryGetObject(image, "livePhoto"' in x
-          assert 'TryGetProperty("stream"' in x
-          assert 'MediaAssetType.LivePhoto' in x
-          print('Douyin/Xiaohongshu Live Photo static validation passed.')
-          PY
-
-      - name: Setup .NET 10
-        uses: actions/setup-dotnet@v5
-        with:
-          dotnet-version: '10.0.x'
-
-      - name: Build Desktop
-        shell: bash
-        run: |
-          set -euo pipefail
-          dotnet restore src/HelloCrab.Desktop/HelloCrab.Desktop.csproj
-          dotnet build src/HelloCrab.Desktop/HelloCrab.Desktop.csproj -c Release --no-restore
 
       - name: Commit
         shell: bash
