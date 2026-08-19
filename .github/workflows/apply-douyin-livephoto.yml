@@ -1,0 +1,173 @@
+name: Apply Douyin Live Photo parser
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/apply-douyin-livephoto.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Update Douyin Live Photo parser
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('src/HelloCrab.Core/Sites/Douyin/DouyinSiteAdapter.cs')
+          text = path.read_text(encoding='utf-8-sig')
+
+          old = '''        var result = new List<MediaAsset>();
+        var seenImages = new HashSet<string>(StringComparer.Ordinal);
+        var index = 1;
+        foreach (var image in imageObjects)
+        {
+            var urls = ReadImageUrls(image);
+            if (urls.Count == 0 || !seenImages.Add(urls[0]))
+                continue;
+
+            result.Add(new MediaAsset(
+                MediaAssetType.Image,
+                index++,
+                urls,
+                Width: (int)ReadInt64(image, "width"),
+                Height: (int)ReadInt64(image, "height")));
+        }
+
+        return result;
+    }
+
+    private static MediaAsset? ParseBestVideo(JsonElement aweme)'''
+
+          new = '''        var result = new List<MediaAsset>();
+        var seenImages = new HashSet<string>(StringComparer.Ordinal);
+        var isLivePhoto = ReadInt64(aweme, "is_live_photo") == 1;
+        var index = 1;
+        foreach (var image in imageObjects)
+        {
+            var urls = ReadImageUrls(image);
+            if (urls.Count == 0 || !seenImages.Add(urls[0]))
+                continue;
+
+            result.Add(new MediaAsset(
+                MediaAssetType.Image,
+                index,
+                urls,
+                Width: (int)ReadInt64(image, "width"),
+                Height: (int)ReadInt64(image, "height")));
+
+            // 抖音实况图作品由 aweme.is_live_photo == 1 明确标记。
+            // 每张图片自己的 image.video.play_addr 才是对应的实况 MP4，
+            // 不使用顶层 aweme.video，避免把图文作品的占位/音乐地址误当实况视频。
+            if (isLivePhoto)
+            {
+                var livePhoto = ParseImageLivePhoto(image, index);
+                if (livePhoto is not null)
+                    result.Add(livePhoto);
+            }
+
+            index++;
+        }
+
+        return result;
+    }
+
+    private static MediaAsset? ParseImageLivePhoto(JsonElement image, int index)
+    {
+        if (!TryGetObject(image, "video", out var video))
+            return null;
+
+        var urls = new List<string>();
+
+        // 与普通视频一致，优先无水印/高效编码地址，再逐级降级。
+        urls.AddRange(ReadUrlListFromKnownContainers(
+            video,
+            "play_addr_265",
+            "play_addr_bytevc1",
+            "play_addr_h264",
+            "play_addr",
+            "download_addr"));
+
+        if (TryGetArray(video, "bit_rate", out var bitRates))
+        {
+            foreach (var item in bitRates.EnumerateArray()
+                         .OrderByDescending(item => ReadInt64(item, "bit_rate")))
+            {
+                urls.AddRange(ReadUrlListFromKnownContainers(
+                    item,
+                    "play_addr_265",
+                    "play_addr_bytevc1",
+                    "play_addr_h264",
+                    "play_addr"));
+            }
+        }
+
+        var normalized = NormalizeUrls(urls);
+        if (normalized.Count == 0)
+            return null;
+
+        var width = (int)ReadInt64(video, "width");
+        var height = (int)ReadInt64(video, "height");
+        if (width <= 0)
+            width = (int)ReadInt64(image, "width");
+        if (height <= 0)
+            height = (int)ReadInt64(image, "height");
+
+        return new MediaAsset(
+            MediaAssetType.LivePhoto,
+            index,
+            normalized,
+            Width: width,
+            Height: height,
+            Codec: "mp4");
+    }
+
+    private static MediaAsset? ParseBestVideo(JsonElement aweme)'''
+
+          if old not in text:
+              raise SystemExit('ParseImages anchor not found')
+
+          text = text.replace(old, new, 1)
+          path.write_text(text, encoding='utf-8')
+          PY
+
+      - name: Validate source
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q 'ReadInt64(aweme, "is_live_photo") == 1' src/HelloCrab.Core/Sites/Douyin/DouyinSiteAdapter.cs
+          grep -q 'MediaAssetType.LivePhoto' src/HelloCrab.Core/Sites/Douyin/DouyinSiteAdapter.cs
+          grep -q 'ParseImageLivePhoto' src/HelloCrab.Core/Sites/Douyin/DouyinSiteAdapter.cs
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Build Desktop
+        shell: bash
+        run: |
+          set -euo pipefail
+          dotnet restore src/HelloCrab.Desktop/HelloCrab.Desktop.csproj
+          dotnet build src/HelloCrab.Desktop/HelloCrab.Desktop.csproj -c Release --no-restore
+
+      - name: Commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f .github/workflows/apply-douyin-livephoto.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'Support Douyin Live Photo downloads'
+          git push origin HEAD:main
