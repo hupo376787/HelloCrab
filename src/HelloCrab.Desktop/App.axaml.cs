@@ -1,4 +1,4 @@
-﻿using Avalonia;
+using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using HelloCrab.Core.Services.Crawling;
@@ -48,7 +48,7 @@ public partial class App : Application
             var adapters = new SiteAdapterRegistry(new ISiteAdapter[]
             {
                 new BilibiliSiteAdapter(),
-                new DouyinSiteAdapter(),
+                new DouyinLivePhotoSiteAdapter(),
                 new InstagramSiteAdapter(),
                 new TikTokSiteAdapter(),
                 new PinterestSiteAdapter(),
