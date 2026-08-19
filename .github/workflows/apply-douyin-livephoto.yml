@@ -1,5 +1,6 @@
 name: Apply Douyin Live Photo parser
 
+# Trigger after workflow creation.
 on:
   push:
     branches: [main]
