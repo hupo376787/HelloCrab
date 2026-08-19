@@ -1,0 +1,246 @@
+name: Apply Kuaishou profile feed parser
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/apply-kuaishou-profile-feed.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Update Kuaishou adapter
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('src/HelloCrab.Core/Sites/Kuaishou/KuaishouSiteAdapter.cs')
+          text = path.read_text(encoding='utf-8-sig')
+
+          old = '''        // 当前快手 PC 作者主页的作品分页接口。查询字符串中的 __NS_hxfalcon
+        // 是动态风控参数，不能参与固定匹配，因此只校验路径。
+        if (IsRestProfileFeed(uri) || IsLivePublicProfile(uri))
+            return true;
+
+        // 保留旧版 GraphQL 兼容，避免不同账号/灰度版本仍使用旧接口时失效。
+        var isGraphQlEndpoint = uri.AbsolutePath.Equals("/graphql", StringComparison.OrdinalIgnoreCase)
+                                || uri.AbsolutePath.EndsWith("/m_graphql", StringComparison.OrdinalIgnoreCase)
+                                || uri.AbsolutePath.Contains("/graphql/", StringComparison.OrdinalIgnoreCase);
+        if (!isGraphQlEndpoint)
+            return false;
+
+        // Playwright 能读取 POST body 时只接收作者作品列表操作，避免资料、推荐、心跳等
+        // 其他 GraphQL 响应被计入“作品页数”并干扰自动结束判断。
+        return string.IsNullOrWhiteSpace(requestBody)
+               || requestBody.Contains("visionProfilePhotoList", StringComparison.OrdinalIgnoreCase)
+               || requestBody.Contains("publicFeeds", StringComparison.OrdinalIgnoreCase);'''
+          new = '''        // 当前快手 PC 作者主页固定监听 Fetch/XHR：
+        // https://www.kuaishou.com/rest/v/profile/feed
+        // 查询字符串可能带动态风控参数，因此只固定 host + path。
+        return uri.Host.Equals("www.kuaishou.com", StringComparison.OrdinalIgnoreCase)
+               && IsRestProfileFeed(uri);'''
+          if old not in text:
+              raise SystemExit('IsTargetResponse anchor not found')
+          text = text.replace(old, new, 1)
+
+          old = '''        using var document = JsonDocument.Parse(responseJson);
+        if (!TryFindPhotoListPayload(document.RootElement, out var payload))
+        {
+            // 作者主页还会产生用户资料、推荐等 GraphQL 响应。它们不是错误，静默忽略。
+            return new ParsedWorkBatch(Array.Empty<WorkItem>(), null, null);
+        }
+
+        if (!TryGetArray(payload, "feeds", out var feeds)
+            && !TryGetArray(payload, "list", out feeds)
+            && !TryGetArray(payload, "photoList", out feeds))
+        {
+            return new ParsedWorkBatch(
+                Array.Empty<WorkItem>(),
+                ReadHasMore(payload),
+                ReadCursor(payload));
+        }
+
+        var pageUserId = TryReadProfileUserId(pageUrl);
+        var requestUserId = TryReadRequestUserId(requestBody);
+        var isRestProfileFeed = Uri.TryCreate(responseUrl, UriKind.Absolute, out var responseUri)
+                                && IsRestProfileFeed(responseUri);
+        var isLivePublicProfile = responseUri is not null && IsLivePublicProfile(responseUri);
+        var usesDominantAuthorLock = isRestProfileFeed || isLivePublicProfile;
+
+        // 两种 REST 接口中的 profileId/principalId 与 feeds/list 中的 author.id 可能不是
+        // 同一种 ID，不能直接相等比较。以本批响应中出现次数最多的 author.id 锁定作者，
+        // 并继续逐条过滤少数混入的推荐作品。GraphQL 仍优先使用请求体中的作者 ID。
+        var batchAuthorId = usesDominantAuthorLock ? FindDominantAuthorId(feeds) : null;
+        var expectedUserId = usesDominantAuthorLock
+            ? batchAuthorId
+            : requestUserId ?? pageUserId;'''
+          new = '''        using var document = JsonDocument.Parse(responseJson);
+        var payload = document.RootElement;
+
+        // /rest/v/profile/feed 的真实响应根节点就是：
+        // { result, pcursor, feeds: [...] }。
+        if (payload.ValueKind != JsonValueKind.Object
+            || ReadFirstInt64(payload, "result") != 1
+            || !TryGetArray(payload, "feeds", out var feeds))
+        {
+            return new ParsedWorkBatch(
+                Array.Empty<WorkItem>(),
+                ReadHasMore(payload),
+                ReadCursor(payload));
+        }
+
+        // profile URL 中的 principalId 与 feed.author.id 不保证是同一种 ID。
+        // 真实 profile/feed 响应中同一批 feeds 的作者一致，因此以占多数的 author.id 锁定。
+        var expectedUserId = FindDominantAuthorId(feeds);'''
+          if old not in text:
+              raise SystemExit('ParseResponse anchor not found')
+          text = text.replace(old, new, 1)
+
+          old = '''    private static MediaAsset? ParseVideo(JsonElement feed, JsonElement photo)
+    {
+        var urls = new List<string>();
+        foreach (var property in new[]
+                 {
+                     "photoUrl", "photoUrls", "playUrl", "playUrls",
+                     "videoUrl", "videoUrls", "downloadUrl", "downloadUrls"
+                 })
+        {
+            AddUrlsFromFlexibleProperty(photo, property, urls);
+            AddUrlsFromFlexibleProperty(feed, property, urls);
+        }
+
+        // 部分返回把播放地址放在 currentWork/playInfo 中。
+        foreach (var containerName in new[] { "currentWork", "playInfo", "videoResource", "video" })
+        {
+            if (!TryGetObject(photo, containerName, out var container)
+                && !TryGetObject(feed, containerName, out container))
+            {
+                continue;
+            }
+
+            foreach (var property in new[] { "playUrl", "photoUrl", "url", "urls", "manifest" })
+                AddUrlsFromFlexibleProperty(container, property, urls);
+        }
+
+        var normalized = NormalizeUrls(urls);
+        return normalized.Count == 0
+            ? null
+            : new MediaAsset(
+                MediaAssetType.Video,
+                1,
+                normalized,
+                Width: (int)ReadFirstInt64(photo, "width"),
+                Height: (int)ReadFirstInt64(photo, "height"));
+    }
+'''
+          new = '''    private static MediaAsset? ParseVideo(JsonElement feed, JsonElement photo)
+    {
+        var manifestCandidates = new List<(string Url, long Bitrate, int Width, int Height, string Codec, int Priority)>();
+
+        // 真实 /rest/v/profile/feed 数据优先使用 manifest 中的 representation。
+        // 普通 manifest 是 AVC/H.264，优先级最高；manifestH265 作为第二候选。
+        AddManifestVideoCandidates(photo, "manifest", "h264", 0, manifestCandidates);
+        AddManifestVideoCandidates(photo, "manifestH265", "h265", 1, manifestCandidates);
+
+        var orderedManifest = manifestCandidates
+            .OrderBy(item => item.Priority)
+            .ThenByDescending(item => (long)item.Width * item.Height)
+            .ThenByDescending(item => item.Bitrate)
+            .ToArray();
+
+        var urls = orderedManifest.Select(item => item.Url).ToList();
+
+        // photoUrls 是当前接口直接给出的 MP4 CDN 地址，作为 manifest 失效时的备用源。
+        AddUrlsFromFlexibleProperty(photo, "photoUrls", urls);
+        AddUrlsFromFlexibleProperty(photo, "photoUrl", urls);
+        AddUrlsFromFlexibleProperty(feed, "photoUrls", urls);
+        AddUrlsFromFlexibleProperty(feed, "photoUrl", urls);
+
+        var normalized = NormalizeUrls(urls);
+        if (normalized.Count == 0)
+            return null;
+
+        var best = orderedManifest.FirstOrDefault();
+        return new MediaAsset(
+            MediaAssetType.Video,
+            1,
+            normalized,
+            Bitrate: best.Bitrate,
+            Width: best.Width > 0 ? best.Width : (int)ReadFirstInt64(photo, "width"),
+            Height: best.Height > 0 ? best.Height : (int)ReadFirstInt64(photo, "height"),
+            Codec: string.IsNullOrWhiteSpace(best.Codec) ? null : best.Codec);
+    }
+
+    private static void AddManifestVideoCandidates(
+        JsonElement photo,
+        string manifestProperty,
+        string codec,
+        int priority,
+        List<(string Url, long Bitrate, int Width, int Height, string Codec, int Priority)> target)
+    {
+        if (!TryGetObject(photo, manifestProperty, out var manifest)
+            || !TryGetArray(manifest, "adaptationSet", out var adaptationSets))
+        {
+            return;
+        }
+
+        foreach (var adaptationSet in adaptationSets.EnumerateArray())
+        {
+            if (!TryGetArray(adaptationSet, "representation", out var representations))
+                continue;
+
+            foreach (var representation in representations.EnumerateArray())
+            {
+                var bitrate = ReadFirstInt64(representation, "avgBitrate", "maxBitrate");
+                var width = (int)ReadFirstInt64(representation, "width");
+                var height = (int)ReadFirstInt64(representation, "height");
+
+                var primaryUrl = ReadFirstString(representation, "url");
+                if (!string.IsNullOrWhiteSpace(primaryUrl))
+                    target.Add((primaryUrl, bitrate, width, height, codec, priority));
+
+                var backupUrls = new List<string>();
+                AddUrlsFromFlexibleProperty(representation, "backupUrl", backupUrls);
+                foreach (var backupUrl in NormalizeUrls(backupUrls))
+                    target.Add((backupUrl, bitrate, width, height, codec, priority));
+            }
+        }
+    }
+'''
+          if old not in text:
+              raise SystemExit('ParseVideo anchor not found')
+          text = text.replace(old, new, 1)
+
+          path.write_text(text, encoding='utf-8')
+          PY
+
+      - name: Build Desktop
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+      - shell: bash
+        run: |
+          set -euo pipefail
+          dotnet restore src/HelloCrab.Desktop/HelloCrab.Desktop.csproj
+          dotnet build src/HelloCrab.Desktop/HelloCrab.Desktop.csproj -c Release --no-restore
+
+      - name: Commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f .github/workflows/apply-kuaishou-profile-feed.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'Align Kuaishou capture with profile feed API'
+          git push origin HEAD:main
