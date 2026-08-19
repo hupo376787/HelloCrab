@@ -17,6 +17,7 @@ using HelloCrab.Core.Sites.Pinterest;
 using HelloCrab.Core.Sites.TikTok;
 using HelloCrab.Core.Sites.Xiaohongshu;
 using HelloCrab.Core.Sites.Weibo;
+using HelloCrab.Core.Utilities;
 using HelloCrab.Core.ViewModels;
 using HelloCrab.Core.Views;
 using HelloCrab.Desktop.Playwright;
@@ -74,6 +75,9 @@ public partial class App : Application
                 platformShell,
                 ffmpegInstaller,
                 personImageDetector);
+
+            // 临时启动迁移：统一历史下载文件末尾的“ 空格+序号”为当前“_序号”。
+            LegacySequenceFileNameMigration.Run(viewModel.DownloadRoot);
 
             _viewModel = viewModel;
             _remoteApiHost = new RemoteApiHostService(viewModel);
