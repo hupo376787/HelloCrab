@@ -52,7 +52,7 @@ public partial class App : Application
                 new InstagramSiteAdapter(),
                 new TikTokSiteAdapter(),
                 new PinterestSiteAdapter(),
-                new KuaishouSiteAdapter(),
+                new KuaishouProfileFeedSiteAdapter(),
                 new XiaohongshuSiteAdapter(),
                 new WeiboSiteAdapter(),
                 new MeipianSiteAdapter()
