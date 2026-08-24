@@ -10,6 +10,18 @@
     <ApplicationVersion>1</ApplicationVersion>
     <ApplicationDisplayVersion>1.0.0</ApplicationDisplayVersion>
   </PropertyGroup>
+
+  <!--
+    Fast Deployment normally places managed assemblies in the app's private
+    data directory. Android "Clear all data" removes those files and can leave
+    a debug-installed app unable to start until it is redeployed.
+    Embed assemblies in the APK for Debug builds so clearing app data does not
+    remove executable assemblies. Debugging from Visual Studio still works.
+  -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Debug'">
+    <EmbedAssembliesIntoApk>true</EmbedAssembliesIntoApk>
+  </PropertyGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\HelloCrab.Core\HelloCrab.Core.csproj" />
     <PackageReference Include="Avalonia.Android" Version="12.1.0" />
