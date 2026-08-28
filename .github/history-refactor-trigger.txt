@@ -1,1 +1,2 @@
 Trigger the temporary lightweight history refactor workflow.
+retry=1
