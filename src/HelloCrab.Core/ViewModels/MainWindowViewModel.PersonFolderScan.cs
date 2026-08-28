@@ -4,6 +4,8 @@ namespace HelloCrab.Core.ViewModels;
 
 public sealed partial class MainWindowViewModel
 {
+    private const int PersonFolderScanMaxParallelism = 5;
+
     private static readonly HashSet<string> PersonFolderScanImageExtensions = new(StringComparer.OrdinalIgnoreCase)
     {
         ".jpg", ".jpeg", ".jfif", ".png", ".webp", ".bmp", ".gif",
@@ -126,15 +128,18 @@ public sealed partial class MainWindowViewModel
                 () => EnumeratePersonFolderScanImages(normalizedFolder),
                 linkedCts.Token);
             totalCount = imagePaths.Length;
+            var confidence = PersonDetectionConfidence;
+            var confidenceText = PersonDetectionConfidenceText;
 
             AddLog(PersonFolderScanText(
                 "PersonScan.Started",
-                "开始人像扫描：{0}；共发现 {1} 张图片；检测置信度 {2}。",
-                "Person scan started: {0}; {1} images found; confidence {2}.",
-                "人物スキャンを開始：{0}；画像 {1} 枚；検出信頼度 {2}。",
+                "开始人像扫描：{0}；共发现 {1} 张图片；检测置信度 {2}；最多 {3} 张并发检测。",
+                "Person scan started: {0}; {1} images found; confidence {2}; up to {3} concurrent detections.",
+                "人物スキャンを開始：{0}；画像 {1} 枚；検出信頼度 {2}；最大 {3} 枚を並列検出。",
                 normalizedFolder,
                 totalCount,
-                PersonDetectionConfidenceText));
+                confidenceText,
+                PersonFolderScanMaxParallelism));
 
             if (totalCount == 0)
             {
@@ -152,65 +157,85 @@ public sealed partial class MainWindowViewModel
                 return;
             }
 
-            var progressClock = Stopwatch.StartNew();
-            foreach (var imagePath in imagePaths)
-            {
-                linkedCts.Token.ThrowIfCancellationRequested();
-
-                try
+            await Parallel.ForEachAsync(
+                imagePaths,
+                new ParallelOptions
                 {
-                    var detection = await _personImageDetector.DetectAsync(
-                        imagePath,
-                        PersonDetectionConfidence,
-                        log: null,
-                        cancellationToken: linkedCts.Token);
-                    scannedCount++;
-
-                    if (!detection.DetectionSucceeded)
+                    MaxDegreeOfParallelism = PersonFolderScanMaxParallelism,
+                    CancellationToken = linkedCts.Token
+                },
+                async (imagePath, scanToken) =>
+                {
+                    var completed = false;
+                    try
                     {
-                        // 与下载时的人像检测策略一致：检测失败绝不删除源图片。
-                        failedCount++;
+                        var detection = await _personImageDetector.DetectAsync(
+                            imagePath,
+                            confidence,
+                            log: null,
+                            cancellationToken: scanToken);
+
+                        if (!detection.DetectionSucceeded)
+                        {
+                            // 与下载时的人像检测策略一致：检测失败绝不删除源图片。
+                            Interlocked.Increment(ref failedCount);
+                        }
+                        else if (!detection.ContainsPerson)
+                        {
+                            try
+                            {
+                                File.Delete(imagePath);
+                                Interlocked.Increment(ref deletedCount);
+                            }
+                            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                            {
+                                // 删除失败同样保留图片，并计入失败。
+                                Interlocked.Increment(ref failedCount);
+                            }
+                        }
+
+                        completed = true;
                     }
-                    else if (!detection.ContainsPerson)
+                    catch (OperationCanceledException) when (scanToken.IsCancellationRequested)
                     {
-                        try
+                        throw;
+                    }
+                    catch
+                    {
+                        // 单张图片异常不影响剩余文件；防误删，原文件保持不动。
+                        Interlocked.Increment(ref failedCount);
+                        completed = true;
+                    }
+                    finally
+                    {
+                        if (completed)
                         {
-                            File.Delete(imagePath);
-                            deletedCount++;
-                        }
-                        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-                        {
-                            // 删除失败同样保留图片，并计入失败。
-                            failedCount++;
+                            var currentScanned = Interlocked.Increment(ref scannedCount);
+                            if (currentScanned == totalCount
+                                || currentScanned % PersonFolderScanMaxParallelism == 0)
+                            {
+                                var currentDeleted = Volatile.Read(ref deletedCount);
+                                var currentFailed = Volatile.Read(ref failedCount);
+                                Ui(() =>
+                                {
+                                    PersonFolderScanStatusText = PersonFolderScanText(
+                                        "PersonScan.Progress",
+                                        "扫描中：{0}/{1}，已删除 {2} 张，检测失败 {3} 张。",
+                                        "Scanning: {0}/{1}, deleted {2}, detection failures {3}.",
+                                        "スキャン中：{0}/{1}、削除 {2} 枚、検出失敗 {3} 枚。",
+                                        currentScanned,
+                                        totalCount,
+                                        currentDeleted,
+                                        currentFailed);
+                                });
+                            }
                         }
                     }
-                }
-                catch (OperationCanceledException) when (linkedCts.IsCancellationRequested)
-                {
-                    throw;
-                }
-                catch
-                {
-                    // 单张图片异常不影响剩余文件；防误删，原文件保持不动。
-                    scannedCount++;
-                    failedCount++;
-                }
+                });
 
-                if (scannedCount == totalCount || progressClock.ElapsedMilliseconds >= 250)
-                {
-                    progressClock.Restart();
-                    PersonFolderScanStatusText = PersonFolderScanText(
-                        "PersonScan.Progress",
-                        "扫描中：{0}/{1}，已删除 {2} 张，检测失败 {3} 张。",
-                        "Scanning: {0}/{1}, deleted {2}, detection failures {3}.",
-                        "スキャン中：{0}/{1}、削除 {2} 枚、検出失敗 {3} 枚。",
-                        scannedCount,
-                        totalCount,
-                        deletedCount,
-                        failedCount);
-                }
-            }
-
+            scannedCount = Volatile.Read(ref scannedCount);
+            deletedCount = Volatile.Read(ref deletedCount);
+            failedCount = Volatile.Read(ref failedCount);
             var keptCount = Math.Max(0, scannedCount - deletedCount);
             var summary = PersonFolderScanText(
                 "PersonScan.Completed",
@@ -223,9 +248,12 @@ public sealed partial class MainWindowViewModel
                 failedCount);
             PersonFolderScanStatusText = summary;
             StatusText = summary;
+            AddLog(summary);
         }
         catch (OperationCanceledException)
         {
+            scannedCount = Volatile.Read(ref scannedCount);
+            deletedCount = Volatile.Read(ref deletedCount);
             var canceled = PersonFolderScanText(
                 "PersonScan.Canceled",
                 "人像扫描已取消：已扫描 {0}/{1} 张，删除 {2} 张。",

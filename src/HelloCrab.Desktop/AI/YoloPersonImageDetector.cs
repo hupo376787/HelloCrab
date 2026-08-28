@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using HelloCrab.Core.Services.Localization;
 using System.Reflection;
 using System.Text.RegularExpressions;
@@ -12,12 +13,13 @@ namespace HelloCrab.Desktop.AI;
 
 /// <summary>
 /// 使用 YoloDotNet 和 CPU 执行人像检测。
-/// 仅在启用人像检测后加载模型，检测失败时不会删除源图片。
+/// 下载后台队列仍为单消费者；手动文件夹扫描可并发调用，最多按需创建 5 个独立 Yolo 实例。
 /// </summary>
 public sealed class YoloPersonImageDetector : IPersonImageDetector
 {
     private const string PreferredModelFileName = "person-detection.onnx";
     private const string Yolo11SearchPattern = "yolo11*.onnx";
+    private const int MaxConcurrentDetections = 5;
 
     private static readonly Regex Yolo11ModelFileNameRegex = new(
         @"^yolo11[a-z]?\.onnx$",
@@ -27,14 +29,11 @@ public sealed class YoloPersonImageDetector : IPersonImageDetector
 
     private const long MinimumModelBytes = 1_000_000;
 
-    /// <summary>
-    /// Yolo 实例不并行执行检测，同时保护模型的加载和释放。
-    /// </summary>
-    private readonly SemaphoreSlim _gate = new(1, 1);
-
-    private Yolo? _yolo;
-    private string? _loadedModelPath;
-    private bool _disposed;
+    private readonly SemaphoreSlim _concurrencyGate = new(
+        MaxConcurrentDetections,
+        MaxConcurrentDetections);
+    private readonly ConcurrentBag<DetectorWorker> _idleWorkers = new();
+    private int _disposed;
 
     public PersonDetectionModelInfo GetModelInfo()
     {
@@ -65,12 +64,15 @@ public sealed class YoloPersonImageDetector : IPersonImageDetector
                 ErrorMessage: RuntimeLocalization.Get("Person.Error.FileMissing", "待检测图片不存在。"));
         }
 
-        ObjectDisposedException.ThrowIf(_disposed, this);
+        ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
 
-        await _gate.WaitAsync(cancellationToken);
+        await _concurrencyGate.WaitAsync(cancellationToken);
+        DetectorWorker? worker = null;
 
         try
         {
+            ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
+
             var modelPath = FindModelPath();
 
             if (modelPath is null)
@@ -83,10 +85,10 @@ public sealed class YoloPersonImageDetector : IPersonImageDetector
                         "未找到人像检测 ONNX 模型。请在 Models 文件夹中放置 person-detection.onnx，或名称为 yolo11 加任意单个字母的 ONNX 模型（例如 yolo11n.onnx、yolo11m.onnx）。检测已跳过，图片会保留。"));
             }
 
-            EnsureModelLoaded(modelPath);
+            worker = RentWorker(modelPath);
 
             return await Task.Run(
-                () => DetectCore(imagePath, confidence),
+                () => DetectCore(worker.Yolo, imagePath, confidence),
                 cancellationToken);
         }
         catch (OperationCanceledException)
@@ -102,32 +104,43 @@ public sealed class YoloPersonImageDetector : IPersonImageDetector
         }
         finally
         {
-            _gate.Release();
+            if (worker is not null)
+                ReturnWorker(worker);
+            _concurrencyGate.Release();
         }
     }
 
-    private void EnsureModelLoaded(string modelPath)
+    private DetectorWorker RentWorker(string modelPath)
     {
-        if (_yolo is not null
-            && string.Equals(
-                _loadedModelPath,
-                modelPath,
-                StringComparison.OrdinalIgnoreCase))
+        while (_idleWorkers.TryTake(out var worker))
         {
+            if (string.Equals(
+                    worker.ModelPath,
+                    modelPath,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return worker;
+            }
+
+            worker.Dispose();
+        }
+
+        return new DetectorWorker(modelPath);
+    }
+
+    private void ReturnWorker(DetectorWorker worker)
+    {
+        if (Volatile.Read(ref _disposed) != 0)
+        {
+            worker.Dispose();
             return;
         }
 
-        _yolo?.Dispose();
-
-        _yolo = new Yolo(new YoloOptions
-        {
-            ExecutionProvider = new CpuExecutionProvider(modelPath)
-        });
-
-        _loadedModelPath = modelPath;
+        _idleWorkers.Add(worker);
     }
 
-    private PersonImageDetectionResult DetectCore(
+    private static PersonImageDetectionResult DetectCore(
+        Yolo yolo,
         string imagePath,
         double confidence)
     {
@@ -152,7 +165,7 @@ public sealed class YoloPersonImageDetector : IPersonImageDetector
             min: 0.10,
             max: 0.95);
 
-        var results = _yolo!.RunObjectDetection(
+        var results = yolo.RunObjectDetection(
             image,
             confidence: normalizedConfidence,
             iou: 0.70);
@@ -314,23 +327,39 @@ public sealed class YoloPersonImageDetector : IPersonImageDetector
 
     public async ValueTask DisposeAsync()
     {
-        if (_disposed)
+        if (Interlocked.Exchange(ref _disposed, 1) != 0)
             return;
 
-        _disposed = true;
-
-        await _gate.WaitAsync();
-
+        var acquiredPermits = 0;
         try
         {
-            _yolo?.Dispose();
-            _yolo = null;
-            _loadedModelPath = null;
+            for (; acquiredPermits < MaxConcurrentDetections; acquiredPermits++)
+                await _concurrencyGate.WaitAsync();
+
+            while (_idleWorkers.TryTake(out var worker))
+                worker.Dispose();
         }
         finally
         {
-            _gate.Release();
-            _gate.Dispose();
+            for (var index = 0; index < acquiredPermits; index++)
+                _concurrencyGate.Release();
         }
+    }
+
+    private sealed class DetectorWorker : IDisposable
+    {
+        public DetectorWorker(string modelPath)
+        {
+            ModelPath = modelPath;
+            Yolo = new Yolo(new YoloOptions
+            {
+                ExecutionProvider = new CpuExecutionProvider(modelPath)
+            });
+        }
+
+        public string ModelPath { get; }
+        public Yolo Yolo { get; }
+
+        public void Dispose() => Yolo.Dispose();
     }
 }
