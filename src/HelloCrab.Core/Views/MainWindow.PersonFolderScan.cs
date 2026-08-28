@@ -74,7 +74,7 @@ public partial class MainWindow
         var scanButton = new Button
         {
             Classes = { "sectionAction" },
-            MinWidth = 110,
+            MinWidth = 180,
             HorizontalAlignment = HorizontalAlignment.Left,
             HorizontalContentAlignment = HorizontalAlignment.Center
         };
