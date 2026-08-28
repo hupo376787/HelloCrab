@@ -1,4 +1,3 @@
-using System.Collections.Specialized;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -28,12 +27,6 @@ public partial class MainWindow
     private int _historyAutoScrollDirection;
     private bool _historyInteractionsInstalled;
     private bool _historyFilterSuppressedForDrag;
-    private bool _historyScrollRestorePending;
-    private Vector _lastHistoryScrollOffset;
-    private bool _lastHistoryWasAtBottom;
-    private Vector _historyScrollOffsetBeforeRefresh;
-    private bool _historyWasAtBottomBeforeRefresh;
-    private long _historyScrollRestoreVersion;
     private long _historyFavoriteRestoreVersion;
 
     private void InstallHistoryInteractions()
@@ -63,10 +56,7 @@ public partial class MainWindow
             RoutingStrategies.Tunnel,
             handledEventsToo: true);
 
-        viewModel.FilteredDownloadHistory.CollectionChanged +=
-            HistoryFilteredCollectionChanged;
         Closed += HistoryInteractionsWindowClosed;
-
         _ = GetHistoryListScrollViewer();
     }
 
@@ -107,8 +97,8 @@ public partial class MainWindow
             return;
         }
 
-        // 完整历史集合在拖动预览期间也会发生 Move。暂时挡住收藏筛选的
-        // 异步重建，避免拖动到一半时列表被 Clear/Add 重置。
+        // 拖动过程中 DownloadHistory 会发生 Move。收藏模式暂时停止异步筛选，
+        // 避免当前被拖动的项目在移动过程中从可见集合里被重新排列。
         if (!_historyFilterSuppressedForDrag)
         {
             _historyFilterSuppressedForDrag = true;
@@ -225,23 +215,6 @@ public partial class MainWindow
         QueueHistoryFavoriteFilterRestore();
     }
 
-    private void HistoryFilteredCollectionChanged(
-        object? sender,
-        NotifyCollectionChangedEventArgs e)
-    {
-        if (!_isHistoryDragging)
-            QueueHistoryScrollRestore();
-
-        // PersistHistoryOrderAsync 完成后，ViewModel 会先按普通搜索规则刷新一次。
-        // 收藏模式下在本轮集合变化结束后重新应用收藏筛选，保持当前视图不变。
-        if (_showFavoritesOnly
-            && !_isApplyingHistoryFavoriteFilter
-            && !_isHistoryDragging)
-        {
-            QueueHistoryFavoriteFilterRestore();
-        }
-    }
-
     private void QueueHistoryFavoriteFilterRestore()
     {
         if (!_showFavoritesOnly)
@@ -263,93 +236,16 @@ public partial class MainWindow
             DispatcherPriority.Background);
     }
 
-    private void QueueHistoryScrollRestore()
-    {
-        var scrollViewer = GetHistoryListScrollViewer();
-        if (scrollViewer is null)
-            return;
-
-        if (!_historyScrollRestorePending)
-        {
-            _historyScrollRestorePending = true;
-            _historyScrollOffsetBeforeRefresh = _lastHistoryScrollOffset;
-            _historyWasAtBottomBeforeRefresh = _lastHistoryWasAtBottom;
-        }
-
-        var version = Interlocked.Increment(ref _historyScrollRestoreVersion);
-        Dispatcher.UIThread.Post(
-            () => RestoreHistoryScrollPosition(version),
-            DispatcherPriority.Background);
-    }
-
-    private void RestoreHistoryScrollPosition(long version)
-    {
-        if (version != Interlocked.Read(ref _historyScrollRestoreVersion)
-            || !_historyScrollRestorePending)
-        {
-            return;
-        }
-
-        var scrollViewer = GetHistoryListScrollViewer();
-        if (scrollViewer is null)
-        {
-            _historyScrollRestorePending = false;
-            return;
-        }
-
-        var maximum = Math.Max(
-            0d,
-            scrollViewer.Extent.Height - scrollViewer.Viewport.Height);
-        var targetY = _historyWasAtBottomBeforeRefresh
-            ? maximum
-            : Math.Clamp(_historyScrollOffsetBeforeRefresh.Y, 0d, maximum);
-
-        scrollViewer.Offset = new Vector(
-            _historyScrollOffsetBeforeRefresh.X,
-            targetY);
-        _historyScrollRestorePending = false;
-        CaptureHistoryScrollSnapshot(scrollViewer);
-    }
-
     private ScrollViewer? GetHistoryListScrollViewer()
     {
         if (_historyListScrollViewer is not null)
             return _historyListScrollViewer;
 
-        var scrollViewer = HistoryList
+        _historyListScrollViewer = HistoryList
             .GetVisualDescendants()
             .OfType<ScrollViewer>()
             .FirstOrDefault();
-        if (scrollViewer is null)
-            return null;
-
-        _historyListScrollViewer = scrollViewer;
-        scrollViewer.ScrollChanged += HistoryListScrollViewer_ScrollChanged;
-        CaptureHistoryScrollSnapshot(scrollViewer);
-        return scrollViewer;
-    }
-
-    private void HistoryListScrollViewer_ScrollChanged(
-        object? sender,
-        ScrollChangedEventArgs e)
-    {
-        // Clear() 会先把集合计数变为 0，并可能立刻把 Offset 改成 0。
-        // 这不是用户滚动，不能覆盖刷新前保存的真实位置。
-        if (!_historyScrollRestorePending
-            && _historyInteractionsViewModel?.FilteredDownloadHistory.Count > 0
-            && sender is ScrollViewer scrollViewer)
-        {
-            CaptureHistoryScrollSnapshot(scrollViewer);
-        }
-    }
-
-    private void CaptureHistoryScrollSnapshot(ScrollViewer scrollViewer)
-    {
-        _lastHistoryScrollOffset = scrollViewer.Offset;
-        var maximum = Math.Max(
-            0d,
-            scrollViewer.Extent.Height - scrollViewer.Viewport.Height);
-        _lastHistoryWasAtBottom = maximum - scrollViewer.Offset.Y <= 2d;
+        return _historyListScrollViewer;
     }
 
     private void HistoryInteractionsWindowClosed(object? sender, EventArgs e)
@@ -359,12 +255,5 @@ public partial class MainWindow
 
         if (_historyAutoScrollTimer is not null)
             _historyAutoScrollTimer.Tick -= HistoryAutoScrollTimer_Tick;
-        if (_historyListScrollViewer is not null)
-            _historyListScrollViewer.ScrollChanged -= HistoryListScrollViewer_ScrollChanged;
-        if (_historyInteractionsViewModel is not null)
-        {
-            _historyInteractionsViewModel.FilteredDownloadHistory.CollectionChanged -=
-                HistoryFilteredCollectionChanged;
-        }
     }
 }

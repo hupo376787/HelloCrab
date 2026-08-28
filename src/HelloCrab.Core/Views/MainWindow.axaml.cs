@@ -326,6 +326,8 @@ public partial class MainWindow : Window
 
     private void EndHistoryDrag(bool saveOrder)
     {
+        var wasDragging = _isHistoryDragging;
+
         if (_dragGhost is not null)
             DragOverlay.Children.Remove(_dragGhost);
 
@@ -336,7 +338,8 @@ public partial class MainWindow : Window
         _historyDragPointer = null;
         _isHistoryDragging = false;
 
-        if (saveOrder && DataContext is MainWindowViewModel viewModel)
+        // 普通失焦不再保存历史顺序；只有真实发生过拖动才持久化。
+        if (saveOrder && wasDragging && DataContext is MainWindowViewModel viewModel)
             _ = viewModel.PersistHistoryOrderAsync();
     }
 

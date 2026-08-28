@@ -12,6 +12,7 @@ using Avalonia.VisualTree;
 using HelloCrab.Core.Models;
 using HelloCrab.Core.Services.History;
 using HelloCrab.Core.Services.Localization;
+using HelloCrab.Core.Utilities;
 using HelloCrab.Core.ViewModels;
 
 namespace HelloCrab.Core.Views;
@@ -328,9 +329,9 @@ public partial class MainWindow
         _isApplyingHistoryFavoriteFilter = true;
         try
         {
-            viewModel.FilteredDownloadHistory.Clear();
-            foreach (var item in filtered)
-                viewModel.FilteredDownloadHistory.Add(item);
+            HistoryCollectionSynchronizer.Sync(
+                viewModel.FilteredDownloadHistory,
+                filtered);
         }
         finally
         {

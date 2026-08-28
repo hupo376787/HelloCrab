@@ -2012,9 +2012,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
             .Where(item => keywords.Length == 0 || keywords.All(keyword => HistoryItemMatchesSearch(item, keyword)))
             .ToArray();
 
-        FilteredDownloadHistory.Clear();
-        foreach (var item in matches)
-            FilteredDownloadHistory.Add(item);
+        HistoryCollectionSynchronizer.Sync(
+            FilteredDownloadHistory,
+            matches);
     }
 
     private static bool HistoryItemMatchesSearch(DownloadHistoryItem item, string keyword)

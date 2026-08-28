@@ -126,17 +126,9 @@ public sealed class DownloadHistoryService
                 };
                 _items.Insert(0, item);
             }
-            else
-            {
-                // 最近发生下载的作者始终移动到列表第一项。
-                var oldIndex = _items.IndexOf(item);
-                if (oldIndex > 0)
-                {
-                    _items.RemoveAt(oldIndex);
-                    _items.Insert(0, item);
-                }
-            }
 
+            // 已有作者只更新卡片内容，不再因为再次下载自动移动到列表顶部。
+            // 新作者仍由上面的 item is null 分支插入顶部；之后只有用户拖动会改变顺序。
             item.Platform = NormalizePlatformName(work.PlatformId);
             item.HeadUrl = work.AuthorAvatarUrl ?? item.HeadUrl;
             item.UserId = work.AuthorId;
@@ -175,6 +167,14 @@ public sealed class DownloadHistoryService
                 && x.UserId.Equals(userId, StringComparison.Ordinal));
             if (item is null)
                 return;
+
+            // 统计没有变化时不重写 History.json，也不触发 HistoryChanged。
+            if (string.Equals(item.FolderPath, authorFolder, StringComparison.Ordinal)
+                && item.ItemsCount == stats.ItemsCount
+                && item.ItemsSize == stats.ItemsSize)
+            {
+                return;
+            }
 
             item.FolderPath = authorFolder;
             item.ItemsCount = stats.ItemsCount;
@@ -243,6 +243,11 @@ public sealed class DownloadHistoryService
             }
 
             reordered.AddRange(byId.Values.OrderBy(x => x.SortOrder));
+
+            // 顺序没有真正变化时直接结束，避免无意义的磁盘写入和 UI 同步。
+            if (_items.Select(x => x.Id).SequenceEqual(reordered.Select(x => x.Id)))
+                return;
+
             _items.Clear();
             _items.AddRange(reordered);
             NormalizeSortOrder();
