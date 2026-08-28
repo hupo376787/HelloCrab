@@ -47,6 +47,8 @@
     "Download.SpeedLimitDescription": "设置作品媒体的总下载速度上限；0 表示不限速。该限制由并行视频、图片、音频和 HLS 分片共同使用，不影响 Chromium 或 FFmpeg 组件安装。",
     "Download.ImageCache": "图片缓存",
     "Download.ImageCacheDescription": "只删除 image-cache 中的头像和封面缓存，不会删除已下载作品、历史、设置或浏览器登录状态。",
+    "Download.Video": "下载视频",
+    "Download.Image": "下载图片",
     "Download.IncludeWorkId": "文件名中添加作品 ID",
     "Download.Cover": "下载作品封面",
     "Download.Music": "下载背景音乐",

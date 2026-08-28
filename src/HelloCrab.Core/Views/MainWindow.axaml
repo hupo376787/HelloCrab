@@ -445,12 +445,21 @@
                         Margin="0,4,0,2"
                         Background="{DynamicResource SettingsDividerColor}" />
                 <Grid ColumnDefinitions="*,*" ColumnSpacing="14">
-                  <CheckBox Content="{DynamicResource Lang.Download.IncludeWorkId}"
-                            IsChecked="{Binding IncludeWorkId}"
+                  <CheckBox Content="{DynamicResource Lang.Download.Video}"
+                            IsChecked="{Binding DownloadVideo}"
                             VerticalAlignment="Center" />
                   <CheckBox Grid.Column="1"
-                            Content="{DynamicResource Lang.Download.LivePhoto}"
+                            Content="{DynamicResource Lang.Download.Image}"
+                            IsChecked="{Binding DownloadImage}"
+                            VerticalAlignment="Center" />
+                </Grid>
+                <Grid ColumnDefinitions="*,*" ColumnSpacing="14">
+                  <CheckBox Content="{DynamicResource Lang.Download.LivePhoto}"
                             IsChecked="{Binding DownloadLivePhoto}"
+                            VerticalAlignment="Center" />
+                  <CheckBox Grid.Column="1"
+                            Content="{DynamicResource Lang.Download.IncludeWorkId}"
+                            IsChecked="{Binding IncludeWorkId}"
                             VerticalAlignment="Center" />
                 </Grid>
                 <Grid ColumnDefinitions="*,*" ColumnSpacing="14">

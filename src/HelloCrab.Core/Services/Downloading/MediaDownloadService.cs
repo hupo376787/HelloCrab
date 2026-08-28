@@ -106,9 +106,17 @@ public sealed class MediaDownloadService : IAsyncDisposable
             work.WorkId,
             options.IncludeWorkId);
 
-        var primaryAssets = work.Assets
+        var availablePrimaryAssets = work.Assets
             .Where(x => x.Type is MediaAssetType.Video or MediaAssetType.Image)
             .OrderBy(x => x.Index)
+            .ToArray();
+        var primaryAssets = availablePrimaryAssets
+            .Where(x => x.Type switch
+            {
+                MediaAssetType.Video => options.DownloadVideo,
+                MediaAssetType.Image => options.DownloadImage,
+                _ => false
+            })
             .ToArray();
         var cover = work.Assets.FirstOrDefault(x => x.Type == MediaAssetType.Cover);
         var music = work.Assets.FirstOrDefault(x => x.Type == MediaAssetType.Music);
@@ -133,12 +141,12 @@ public sealed class MediaDownloadService : IAsyncDisposable
             RaiseLog(RuntimeLocalization.Format("Log.Download.BilibiliDashSelected", "哔哩哔哩已选择最高画质 DASH：{0}，{1}，下载后自动合并音频。", resolution, codec));
         }
 
-        if (primaryAssets.Length == 0)
+        if (availablePrimaryAssets.Length == 0)
             throw new InvalidOperationException(RuntimeLocalization.Get("Error.Download.NoMedia", "作品中没有可下载的视频或图片资源。"));
 
         // 单个视频保持原来的无序号文件名；图片作品以及多媒体/混合轮播统一追加 _01、_02。
-        var appendSequence = primaryAssets.Length > 1
-                             || primaryAssets.Any(x => x.Type == MediaAssetType.Image);
+        var appendSequence = availablePrimaryAssets.Length > 1
+                             || availablePrimaryAssets.Any(x => x.Type == MediaAssetType.Image);
         var sequence = 1;
         var musicRetainedDuringRepair = false;
         foreach (var asset in primaryAssets)
@@ -197,7 +205,7 @@ public sealed class MediaDownloadService : IAsyncDisposable
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 var primaryPosition = Array.FindIndex(
-                    primaryAssets,
+                    availablePrimaryAssets,
                     asset => asset.Index == livePhoto.Index);
                 var sequenceNumber = primaryPosition >= 0
                     ? primaryPosition + 1

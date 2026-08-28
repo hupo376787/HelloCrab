@@ -74,6 +74,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
     private bool _isDownloadProgressIndeterminate;
     private double _downloadProgressPercent;
     private string _downloadProgressText = string.Empty;
+    private bool _downloadVideo = true;
+    private bool _downloadImage = true;
     private bool _includeWorkId;
     private bool _downloadCover;
     private bool _downloadMusic;
@@ -150,6 +152,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
         _currentUrl = ResolveInitialBrowserUrl(settings.LastBrowserUrl, _selectedPlatform, _isHeadlessMode);
         _browserModeStatusText = GetBrowserModeStatusText(_isHeadlessMode, false);
         _downloadRoot = ResolveDownloadRoot(settings.DownloadRoot);
+        _downloadVideo = settings.DownloadVideo;
+        _downloadImage = settings.DownloadImage;
         _includeWorkId = settings.IncludeWorkId;
         _downloadCover = settings.DownloadCover;
         _downloadMusic = settings.DownloadMusic;
@@ -492,6 +496,26 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
     public bool IsDownloadProgressIndeterminate { get => _isDownloadProgressIndeterminate; private set => SetProperty(ref _isDownloadProgressIndeterminate, value); }
     public double DownloadProgressPercent { get => _downloadProgressPercent; private set => SetProperty(ref _downloadProgressPercent, value); }
     public string DownloadProgressText { get => _downloadProgressText; private set => SetProperty(ref _downloadProgressText, value); }
+
+    public bool DownloadVideo
+    {
+        get => _downloadVideo;
+        set
+        {
+            if (SetProperty(ref _downloadVideo, value))
+                QueueSettingsSave();
+        }
+    }
+
+    public bool DownloadImage
+    {
+        get => _downloadImage;
+        set
+        {
+            if (SetProperty(ref _downloadImage, value))
+                QueueSettingsSave();
+        }
+    }
 
     public bool IncludeWorkId
     {
@@ -1167,7 +1191,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
                 StopOnDuplicateThreshold,
                 DuplicateStopThreshold,
                 DownloadSpeedLimitMBps,
-                PersonDetectionConfidence);
+                PersonDetectionConfidence,
+                DownloadVideo,
+                DownloadImage);
             var result = await _coordinator.StartAsync(
                 capturePlatformId,
                 DownloadRoot,
@@ -1312,6 +1338,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
                 HeadlessMode = IsHeadlessMode,
                 BrowserUrl = CurrentUrl,
                 DownloadRoot = DownloadRoot,
+                DownloadVideo = DownloadVideo,
+                DownloadImage = DownloadImage,
                 IncludeWorkId = IncludeWorkId,
                 DownloadCover = DownloadCover,
                 DownloadMusic = DownloadMusic,
@@ -1416,6 +1444,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
                 ? SelectedPlatform.HomeUrl
                 : settings.BrowserUrl.Trim();
             DownloadRoot = settings.DownloadRoot;
+            DownloadVideo = settings.DownloadVideo;
+            DownloadImage = settings.DownloadImage;
             IncludeWorkId = settings.IncludeWorkId;
             DownloadCover = settings.DownloadCover;
             DownloadMusic = settings.DownloadMusic;
@@ -2268,6 +2298,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
             HeadlessMode = IsHeadlessMode,
             LastBrowserUrl = CurrentUrl,
             DownloadRoot = DownloadRoot,
+            DownloadVideo = DownloadVideo,
+            DownloadImage = DownloadImage,
             IncludeWorkId = IncludeWorkId,
             DownloadCover = DownloadCover,
             DownloadMusic = DownloadMusic,

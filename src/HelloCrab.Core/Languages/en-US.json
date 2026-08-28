@@ -47,6 +47,8 @@
     "Download.SpeedLimitDescription": "Sets the total speed limit for work media downloads; 0 means unlimited. Concurrent videos, images, audio, and HLS segments share this limit. Chromium and FFmpeg component installation is not affected.",
     "Download.ImageCache": "Image cache",
     "Download.ImageCacheDescription": "Deletes only avatars and cover images in image-cache. Downloaded works, history, settings, and browser login data are preserved.",
+    "Download.Video": "Download videos",
+    "Download.Image": "Download images",
     "Download.IncludeWorkId": "Add work ID to filenames",
     "Download.Cover": "Download cover images",
     "Download.Music": "Download background music",

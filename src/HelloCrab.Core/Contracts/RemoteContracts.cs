@@ -41,6 +41,8 @@ public sealed class RemoteSettingsDto
     public bool HeadlessMode { get; set; }
     public string BrowserUrl { get; set; } = string.Empty;
     public string DownloadRoot { get; set; } = string.Empty;
+    public bool DownloadVideo { get; set; } = true;
+    public bool DownloadImage { get; set; } = true;
     public bool IncludeWorkId { get; set; } = false;
     public bool DownloadCover { get; set; }
     public bool DownloadMusic { get; set; }

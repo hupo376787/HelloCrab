@@ -57,7 +57,9 @@ public sealed record CrawlerDownloadOptions(
     bool StopOnDuplicateThreshold = true,
     int DuplicateStopThreshold = 20,
     decimal DownloadSpeedLimitMBps = 0,
-    double PersonDetectionConfidence = 0.60);
+    double PersonDetectionConfidence = 0.60,
+    bool DownloadVideo = true,
+    bool DownloadImage = true);
 
 public sealed record ParsedWorkBatch(
     IReadOnlyList<WorkItem> Works,

@@ -32,6 +32,8 @@ public sealed class JsonDownloadIndex
             work.AuthorId,
             work.WorkId,
             options.IncludeWorkId,
+            options.DownloadVideo,
+            options.DownloadImage,
             options.DownloadCover,
             options.DownloadMusic,
             options.DownloadLivePhoto,
@@ -203,6 +205,9 @@ public sealed class JsonDownloadIndex
         var flags = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase)
         {
             ["workId"] = false,
+            // 旧版本没有这两个字段，当时视频和普通图片都是默认下载。
+            ["video"] = true,
+            ["image"] = true,
             ["cover"] = false,
             ["music"] = false,
             ["live"] = false,
@@ -227,6 +232,8 @@ public sealed class JsonDownloadIndex
             parts[1],
             parts[2],
             flags["workId"],
+            flags["video"],
+            flags["image"],
             flags["cover"],
             flags["music"],
             flags["live"],
@@ -270,6 +277,8 @@ public sealed class JsonDownloadIndex
         string authorId,
         string workId,
         bool includeWorkId,
+        bool downloadVideo,
+        bool downloadImage,
         bool downloadCover,
         bool downloadMusic,
         bool downloadLivePhoto,
@@ -277,6 +286,8 @@ public sealed class JsonDownloadIndex
         bool enablePersonDetection)
         => $"{platformId}:{authorId}:{workId}:" +
            $"workId={(includeWorkId ? 1 : 0)}:" +
+           $"video={(downloadVideo ? 1 : 0)}:" +
+           $"image={(downloadImage ? 1 : 0)}:" +
            $"cover={(downloadCover ? 1 : 0)}:" +
            $"music={(downloadMusic ? 1 : 0)}:" +
            $"live={(downloadLivePhoto ? 1 : 0)}:" +

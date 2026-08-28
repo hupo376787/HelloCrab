@@ -47,6 +47,8 @@
     "Download.SpeedLimitDescription": "作品メディア全体のダウンロード速度上限を設定します。0 は無制限です。並行する動画、画像、音声、HLS セグメントで上限を共有し、Chromium と FFmpeg のインストールには影響しません。",
     "Download.ImageCache": "画像キャッシュ",
     "Download.ImageCacheDescription": "image-cache 内のアバターとカバーだけを削除します。作品、履歴、設定、ログイン状態は削除しません。",
+    "Download.Video": "動画をダウンロード",
+    "Download.Image": "画像をダウンロード",
     "Download.IncludeWorkId": "ファイル名に作品 ID を追加",
     "Download.Cover": "カバー画像をダウンロード",
     "Download.Music": "BGM をダウンロード",

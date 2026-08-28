@@ -45,6 +45,8 @@ public sealed class RemoteMainViewModel : ObservableObject, IAsyncDisposable
     private bool _headlessMode;
     private string _browserUrl = string.Empty;
     private string _downloadRoot = string.Empty;
+    private bool _downloadVideo = true;
+    private bool _downloadImage = true;
     private bool _includeWorkId;
     private bool _downloadCover;
     private bool _downloadMusic;
@@ -269,6 +271,18 @@ public sealed class RemoteMainViewModel : ObservableObject, IAsyncDisposable
         set { if (SetProperty(ref _downloadRoot, value)) MarkSettingsDirty(); }
     }
 
+    public bool DownloadVideo
+    {
+        get => _downloadVideo;
+        set { if (SetProperty(ref _downloadVideo, value)) MarkSettingsDirty(); }
+    }
+
+    public bool DownloadImage
+    {
+        get => _downloadImage;
+        set { if (SetProperty(ref _downloadImage, value)) MarkSettingsDirty(); }
+    }
+
     public bool IncludeWorkId
     {
         get => _includeWorkId;
@@ -413,6 +427,8 @@ public sealed class RemoteMainViewModel : ObservableObject, IAsyncDisposable
                 HeadlessMode = HeadlessMode,
                 BrowserUrl = BrowserUrl,
                 DownloadRoot = DownloadRoot,
+                DownloadVideo = DownloadVideo,
+                DownloadImage = DownloadImage,
                 IncludeWorkId = IncludeWorkId,
                 DownloadCover = DownloadCover,
                 DownloadMusic = DownloadMusic,
@@ -465,6 +481,8 @@ public sealed class RemoteMainViewModel : ObservableObject, IAsyncDisposable
                 HeadlessMode = snapshot.Settings.HeadlessMode;
                 BrowserUrl = snapshot.Settings.BrowserUrl;
                 DownloadRoot = snapshot.Settings.DownloadRoot;
+                DownloadVideo = snapshot.Settings.DownloadVideo;
+                DownloadImage = snapshot.Settings.DownloadImage;
                 IncludeWorkId = snapshot.Settings.IncludeWorkId;
                 DownloadCover = snapshot.Settings.DownloadCover;
                 DownloadMusic = snapshot.Settings.DownloadMusic;

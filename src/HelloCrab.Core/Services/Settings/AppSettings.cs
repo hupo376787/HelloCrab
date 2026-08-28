@@ -2,7 +2,7 @@ namespace HelloCrab.Core.Services.Settings;
 
 public sealed class AppSettings
 {
-    public int Version { get; set; } = 13;
+    public int Version { get; set; } = 14;
 
     /// <summary>
     /// Light 或 Dark。
@@ -14,6 +14,8 @@ public sealed class AppSettings
     public bool HeadlessMode { get; set; }
     public string LastBrowserUrl { get; set; } = string.Empty;
     public string DownloadRoot { get; set; } = string.Empty;
+    public bool DownloadVideo { get; set; } = true;
+    public bool DownloadImage { get; set; } = true;
     public bool IncludeWorkId { get; set; } = false;
     public bool DownloadCover { get; set; }
     public bool DownloadMusic { get; set; }
