@@ -1,0 +1,45 @@
+name: Apply download media toggles
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/scripts/apply_download_media_toggles.py'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Apply source patch
+        run: python .github/scripts/apply_download_media_toggles.py
+      - name: Validate diff
+        shell: bash
+        run: |
+          git diff --check
+          grep -q 'IsChecked="{Binding DownloadVideo}"' src/HelloCrab.Core/Views/MainWindow.axaml
+          grep -q 'IsChecked="{Binding DownloadImage}"' src/HelloCrab.Core/Views/MainWindow.axaml
+          grep -q 'options.DownloadVideo' src/HelloCrab.Core/Services/Downloading/MediaDownloadService.cs
+          grep -q 'options.DownloadImage' src/HelloCrab.Core/Services/Downloading/MediaDownloadService.cs
+      - name: Build Desktop Release
+        run: dotnet build src/HelloCrab.Desktop/HelloCrab.Desktop.csproj -c Release
+      - name: Commit final source
+        shell: bash
+        run: |
+          rm -f .github/scripts/apply_download_media_toggles.py
+          rm -f .github/workflows/apply-download-media-toggles.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git diff --cached --check
+          git commit -m 'Add video and image download toggles'
+          git push origin HEAD:main
