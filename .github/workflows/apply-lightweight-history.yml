@@ -1,0 +1,323 @@
+name: Apply lightweight history refactor
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/history-refactor-trigger.txt'
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Apply history refactor
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          def read(path):
+              return Path(path).read_text(encoding='utf-8-sig')
+
+          def write(path, text):
+              Path(path).write_text(text, encoding='utf-8')
+
+          def replace_once(text, old, new, label):
+              if old not in text:
+                  raise SystemExit(f'anchor not found: {label}')
+              return text.replace(old, new, 1)
+
+          # 1. Filtered history becomes ID-based incremental synchronization.
+          vm_path = 'src/HelloCrab.Core/ViewModels/MainWindowViewModel.cs'
+          vm = read(vm_path)
+          old = '''        FilteredDownloadHistory.Clear();
+        foreach (var item in matches)
+            FilteredDownloadHistory.Add(item);'''
+          new = '''        HistoryCollectionSynchronizer.Sync(
+            FilteredDownloadHistory,
+            matches);'''
+          vm = replace_once(vm, old, new, 'MainWindowViewModel filtered history clear/add')
+          write(vm_path, vm)
+
+          # 2. Existing authors keep their current order. Only new authors are inserted at top.
+          history_path = 'src/HelloCrab.Core/Services/History/DownloadHistoryService.cs'
+          history = read(history_path)
+          old = '''            }
+            else
+            {
+                // 最近发生下载的作者始终移动到列表第一项。
+                var oldIndex = _items.IndexOf(item);
+                if (oldIndex > 0)
+                {
+                    _items.RemoveAt(oldIndex);
+                    _items.Insert(0, item);
+                }
+            }
+
+            item.Platform = NormalizePlatformName(work.PlatformId);'''
+          new = '''            }
+
+            // 已有作者只更新卡片数据，不再因再次下载自动移动位置。
+            // 新作者仍在上面的 item is null 分支插入列表顶部；之后只有用户拖动才改变顺序。
+            item.Platform = NormalizePlatformName(work.PlatformId);'''
+          history = replace_once(history, old, new, 'history existing author move-to-top')
+
+          old = '''            item.FolderPath = authorFolder;
+            item.ItemsCount = stats.ItemsCount;
+            item.ItemsSize = stats.ItemsSize;
+            await SaveCoreAsync(cancellationToken);
+            snapshot = Snapshot();'''
+          new = '''            if (string.Equals(item.FolderPath, authorFolder, StringComparison.Ordinal)
+                && item.ItemsCount == stats.ItemsCount
+                && item.ItemsSize == stats.ItemsSize)
+            {
+                return;
+            }
+
+            item.FolderPath = authorFolder;
+            item.ItemsCount = stats.ItemsCount;
+            item.ItemsSize = stats.ItemsSize;
+            await SaveCoreAsync(cancellationToken);
+            snapshot = Snapshot();'''
+          history = replace_once(history, old, new, 'history stats no-op')
+
+          old = '''            reordered.AddRange(byId.Values.OrderBy(x => x.SortOrder));
+            _items.Clear();
+            _items.AddRange(reordered);
+            NormalizeSortOrder();
+            await SaveCoreAsync(cancellationToken);
+            snapshot = Snapshot();'''
+          new = '''            reordered.AddRange(byId.Values.OrderBy(x => x.SortOrder));
+
+            // 失焦、重复保存等场景如果顺序没有真正变化，不写 History.json，
+            // 也不触发 HistoryChanged，避免无意义的 UI 同步。
+            if (_items.Select(x => x.Id).SequenceEqual(reordered.Select(x => x.Id)))
+                return;
+
+            _items.Clear();
+            _items.AddRange(reordered);
+            NormalizeSortOrder();
+            await SaveCoreAsync(cancellationToken);
+            snapshot = Snapshot();'''
+          history = replace_once(history, old, new, 'history SetOrder no-op')
+          write(history_path, history)
+
+          # 3. Losing window focus only persists order if a real drag was in progress.
+          window_path = 'src/HelloCrab.Core/Views/MainWindow.axaml.cs'
+          window = read(window_path)
+          old = '''    private void EndHistoryDrag(bool saveOrder)
+    {
+        if (_dragGhost is not null)'''
+          new = '''    private void EndHistoryDrag(bool saveOrder)
+    {
+        var wasDragging = _isHistoryDragging;
+
+        if (_dragGhost is not null)'''
+          window = replace_once(window, old, new, 'EndHistoryDrag capture state')
+          old = '''        if (saveOrder && DataContext is MainWindowViewModel viewModel)
+            _ = viewModel.PersistHistoryOrderAsync();'''
+          new = '''        if (saveOrder && wasDragging && DataContext is MainWindowViewModel viewModel)
+            _ = viewModel.PersistHistoryOrderAsync();'''
+          window = replace_once(window, old, new, 'EndHistoryDrag persist guard')
+          write(window_path, window)
+
+          # 4. Favorites filter uses the same incremental synchronizer.
+          fav_path = 'src/HelloCrab.Core/Views/MainWindow.HistoryFavorites.cs'
+          fav = read(fav_path)
+          if 'using HelloCrab.Core.Utilities;' not in fav:
+              fav = replace_once(
+                  fav,
+                  'using HelloCrab.Core.Services.Localization;\nusing HelloCrab.Core.ViewModels;',
+                  'using HelloCrab.Core.Services.Localization;\nusing HelloCrab.Core.Utilities;\nusing HelloCrab.Core.ViewModels;',
+                  'favorites using helper')
+          old = '''            viewModel.FilteredDownloadHistory.Clear();
+            foreach (var item in filtered)
+                viewModel.FilteredDownloadHistory.Add(item);'''
+          new = '''            HistoryCollectionSynchronizer.Sync(
+                viewModel.FilteredDownloadHistory,
+                filtered);'''
+          fav = replace_once(fav, old, new, 'favorites clear/add')
+          write(fav_path, fav)
+
+          # 5. Remove global scroll-offset restore. Auto-scroll remains only while user is dragging.
+          interactions_path = 'src/HelloCrab.Core/Views/MainWindow.HistoryInteractions.cs'
+          interactions = read(interactions_path)
+          interactions = interactions.replace('using System.Collections.Specialized;\n', '', 1)
+
+          for field in [
+              '    private bool _historyScrollRestorePending;\n',
+              '    private Vector _lastHistoryScrollOffset;\n',
+              '    private bool _lastHistoryWasAtBottom;\n',
+              '    private Vector _historyScrollOffsetBeforeRefresh;\n',
+              '    private bool _historyWasAtBottomBeforeRefresh;\n',
+              '    private long _historyScrollRestoreVersion;\n',
+          ]:
+              interactions = interactions.replace(field, '', 1)
+
+          interactions = replace_once(
+              interactions,
+              '''        viewModel.FilteredDownloadHistory.CollectionChanged +=
+            HistoryFilteredCollectionChanged;
+        Closed += HistoryInteractionsWindowClosed;''',
+              '''        Closed += HistoryInteractionsWindowClosed;''',
+              'history collection changed subscription')
+
+          interactions, count = re.subn(
+              r'''\n    private void HistoryFilteredCollectionChanged\(.*?\n    private void QueueHistoryFavoriteFilterRestore\(\)''',
+              '\n    private void QueueHistoryFavoriteFilterRestore()',
+              interactions,
+              count=1,
+              flags=re.S)
+          if count != 1:
+              raise SystemExit('HistoryFilteredCollectionChanged block not found')
+
+          interactions, count = re.subn(
+              r'''\n    private void QueueHistoryScrollRestore\(\).*?\n    private ScrollViewer\? GetHistoryListScrollViewer\(\)''',
+              '\n    private ScrollViewer? GetHistoryListScrollViewer()',
+              interactions,
+              count=1,
+              flags=re.S)
+          if count != 1:
+              raise SystemExit('scroll restore block not found')
+
+          old = '''        _historyListScrollViewer = scrollViewer;
+        scrollViewer.ScrollChanged += HistoryListScrollViewer_ScrollChanged;
+        CaptureHistoryScrollSnapshot(scrollViewer);
+        return scrollViewer;'''
+          new = '''        _historyListScrollViewer = scrollViewer;
+        return scrollViewer;'''
+          interactions = replace_once(interactions, old, new, 'scrollviewer snapshot hookup')
+
+          interactions, count = re.subn(
+              r'''\n    private void HistoryListScrollViewer_ScrollChanged\(.*?\n    private void HistoryInteractionsWindowClosed\(object\? sender, EventArgs e\)''',
+              '\n    private void HistoryInteractionsWindowClosed(object? sender, EventArgs e)',
+              interactions,
+              count=1,
+              flags=re.S)
+          if count != 1:
+              raise SystemExit('scroll changed/snapshot methods not found')
+
+          interactions = interactions.replace(
+              '''        if (_historyListScrollViewer is not null)
+            _historyListScrollViewer.ScrollChanged -= HistoryListScrollViewer_ScrollChanged;
+        if (_historyInteractionsViewModel is not null)
+        {
+            _historyInteractionsViewModel.FilteredDownloadHistory.CollectionChanged -=
+                HistoryFilteredCollectionChanged;
+        }
+''',
+              '',
+              1)
+          write(interactions_path, interactions)
+
+          # 6. Shared tiny synchronizer; unchanged rows keep the same object/container.
+          helper = Path('src/HelloCrab.Core/Utilities/HistoryCollectionSynchronizer.cs')
+          helper.write_text('''using System.Collections.ObjectModel;
+using HelloCrab.Core.Models;
+
+namespace HelloCrab.Core.Utilities;
+
+/// <summary>
+/// Incrementally aligns a visible history collection by stable history ID.
+/// Existing items are kept in place whenever possible, so ListBox containers and scroll state
+/// are not destroyed just because one author's statistics or filter membership changed.
+/// </summary>
+public static class HistoryCollectionSynchronizer
+{
+    public static void Sync(
+        ObservableCollection<DownloadHistoryItem> target,
+        IReadOnlyList<DownloadHistoryItem> desired)
+    {
+        var desiredIds = desired.Select(item => item.Id).ToHashSet();
+
+        for (var index = target.Count - 1; index >= 0; index--)
+        {
+            if (!desiredIds.Contains(target[index].Id))
+                target.RemoveAt(index);
+        }
+
+        for (var targetIndex = 0; targetIndex < desired.Count; targetIndex++)
+        {
+            var desiredItem = desired[targetIndex];
+            var currentIndex = IndexOfId(target, desiredItem.Id, targetIndex);
+            if (currentIndex < 0)
+            {
+                target.Insert(Math.Min(targetIndex, target.Count), desiredItem);
+                continue;
+            }
+
+            if (!ReferenceEquals(target[currentIndex], desiredItem))
+                target[currentIndex] = desiredItem;
+
+            if (currentIndex != targetIndex)
+                target.Move(currentIndex, targetIndex);
+        }
+    }
+
+    private static int IndexOfId(
+        IReadOnlyList<DownloadHistoryItem> items,
+        int id,
+        int startIndex)
+    {
+        for (var index = Math.Clamp(startIndex, 0, items.Count); index < items.Count; index++)
+        {
+            if (items[index].Id == id)
+                return index;
+        }
+
+        for (var index = 0; index < Math.Min(startIndex, items.Count); index++)
+        {
+            if (items[index].Id == id)
+                return index;
+        }
+
+        return -1;
+    }
+}
+''', encoding='utf-8')
+
+          # Stable-order recovery is no longer needed because the service no longer moves existing authors.
+          Path('src/HelloCrab.Core/Views/MainWindow.HistoryOrderStability.cs').unlink(missing_ok=True)
+          PY
+
+      - name: Verify no heavy history rebuild remains
+        shell: bash
+        run: |
+          set -euo pipefail
+          ! grep -n -A3 -B2 'FilteredDownloadHistory.Clear' src/HelloCrab.Core/ViewModels/MainWindowViewModel.cs
+          ! grep -n -A3 -B2 'FilteredDownloadHistory.Clear' src/HelloCrab.Core/Views/MainWindow.HistoryFavorites.cs
+          ! grep -n 'HistoryListScrollViewer_ScrollChanged\|QueueHistoryScrollRestore\|RestoreHistoryScrollPosition' src/HelloCrab.Core/Views/MainWindow.HistoryInteractions.cs
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Build Desktop
+        shell: bash
+        run: |
+          set -euo pipefail
+          dotnet restore src/HelloCrab.Desktop/HelloCrab.Desktop.csproj
+          dotnet build src/HelloCrab.Desktop/HelloCrab.Desktop.csproj -c Release --no-restore
+
+      - name: Commit to main and remove temporary workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f .github/workflows/apply-lightweight-history.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'Make download history updates incremental'
+          git push origin HEAD:main
