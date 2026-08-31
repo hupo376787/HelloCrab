@@ -1,9 +1,10 @@
 # Kuaishou adapter
 
-`KuaishouSiteAdapter` 统一实现快手两个网页入口的作者主页解析，平台 ID 都保持为 `kuaishou`，不会拆成两份历史或下载目录。
+快手两个网页入口使用独立平台选项和解析器，避免接口结构互相干扰：
 
-- 普通主页：`https://www.kuaishou.com/profile/{profileId}`
-- Live 站主页：`https://live.kuaishou.com/profile/{principalId}`
+- `快手网页版`（`kuaishou`）：`KuaishouProfileFeedSiteAdapter`，主页 `https://www.kuaishou.com/profile/{profileId}`
+- `快手网页版Live`（`kuaishou-live`）：`KuaishouSiteAdapter`，主页 `https://live.kuaishou.com/profile/{principalId}`
+- 两个选项使用独立历史平台标识，以便重新采集时选回正确解析器；媒体文件和完成索引仍共用 `kuaishou` 目录，避免跨入口重复下载
 - 主站作品接口：捕获 `GET /rest/v/profile/feed?...`
 - Live 站作品接口：捕获 `GET /live_api/profile/public?...`
 - 兼容旧接口：`visionProfilePhotoList` GraphQL 响应

@@ -40,11 +40,134 @@ public sealed class JsonDownloadIndex
             options.CheckVideoAudio,
             options.EnablePersonDetection);
 
+    public async Task<bool> IsCompletedAsync(
+        string authorFolder,
+        WorkItem work,
+        CrawlerDownloadOptions options,
+        CancellationToken cancellationToken)
+    {
+        var set = await GetIndexAsync(authorFolder, cancellationToken);
+        var exactKey = BuildKey(work, options);
+        if (set.Contains(exactKey))
+            return true;
+
+        // 需要详情解析的平台，列表阶段的资源类型并不完整，不能据此放宽索引匹配。
+        // 其余平台可忽略对当前作品没有实际影响的全局开关，例如纯视频快手作品的
+        // “下载图片/人像检测”开关，避免设置变化后把历史视频误判成新作品。
+        if (work.RequiresDetailResolution
+            || !work.Assets.Any(asset =>
+                asset.Type is MediaAssetType.Video or MediaAssetType.Image))
+            return false;
+
+        return set.Any(candidate => StoredKeySatisfies(candidate, work, options));
+    }
+
     public async Task<bool> IsCompletedAsync(string authorFolder, string key, CancellationToken cancellationToken)
     {
         var set = await GetIndexAsync(authorFolder, cancellationToken);
         return set.Contains(key);
     }
+
+    private static bool StoredKeySatisfies(
+        string candidate,
+        WorkItem work,
+        CrawlerDownloadOptions options)
+    {
+        if (!TryParseCanonicalKey(candidate, out var stored)
+            || !string.Equals(stored.PlatformId, NormalizePlatformId(work.PlatformId), StringComparison.Ordinal)
+            || !string.Equals(stored.AuthorId, work.AuthorId, StringComparison.Ordinal)
+            || !string.Equals(stored.WorkId, work.WorkId, StringComparison.Ordinal)
+            || stored.IncludeWorkId != options.IncludeWorkId)
+        {
+            return false;
+        }
+
+        var selectedVideo = options.DownloadVideo
+                            && work.Assets.Any(asset => asset.Type == MediaAssetType.Video);
+        var selectedImage = options.DownloadImage
+                            && work.Assets.Any(asset => asset.Type == MediaAssetType.Image);
+        var selectedCover = options.DownloadCover
+                            && work.Assets.Any(asset => asset.Type == MediaAssetType.Cover);
+        var selectedMusic = options.DownloadMusic
+                            && work.Assets.Any(asset => asset.Type == MediaAssetType.Music);
+        var selectedLivePhoto = options.DownloadLivePhoto
+                                && work.Assets.Any(asset => asset.Type == MediaAssetType.LivePhoto);
+
+        if (selectedVideo && !stored.DownloadVideo
+            || selectedImage && !stored.DownloadImage
+            || selectedCover && !stored.DownloadCover
+            || selectedMusic && !stored.DownloadMusic
+            || selectedLivePhoto && !stored.DownloadLivePhoto
+            || options.CheckVideoAudio && selectedVideo && !stored.CheckVideoAudio)
+        {
+            return false;
+        }
+
+        // 人像检测会删除不符合条件的图片，因此在确实选择了图片/封面的情况下，
+        // 开关的两个方向都不能互相替代；纯视频作品则完全忽略该标记。
+        var hasPersonDetectionTarget = selectedImage || selectedCover;
+        return !hasPersonDetectionTarget
+               || stored.EnablePersonDetection == options.EnablePersonDetection;
+    }
+
+    private static bool TryParseCanonicalKey(string key, out CompletionKey stored)
+    {
+        stored = default!;
+        var parts = key.Split(':', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (parts.Length < 11)
+            return false;
+
+        var flags = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
+        for (var index = 3; index < parts.Length; index++)
+        {
+            var separator = parts[index].IndexOf('=');
+            if (separator <= 0)
+                continue;
+
+            var value = parts[index][(separator + 1)..];
+            flags[parts[index][..separator]] = value == "1"
+                                               || bool.TryParse(value, out var parsed) && parsed;
+        }
+
+        if (!flags.TryGetValue("workId", out var includeWorkId)
+            || !flags.TryGetValue("video", out var downloadVideo)
+            || !flags.TryGetValue("image", out var downloadImage)
+            || !flags.TryGetValue("cover", out var downloadCover)
+            || !flags.TryGetValue("music", out var downloadMusic)
+            || !flags.TryGetValue("live", out var downloadLivePhoto)
+            || !flags.TryGetValue("audio", out var checkVideoAudio)
+            || !flags.TryGetValue("person", out var enablePersonDetection))
+        {
+            return false;
+        }
+
+        stored = new CompletionKey(
+            NormalizePlatformId(parts[0]),
+            parts[1],
+            parts[2],
+            includeWorkId,
+            downloadVideo,
+            downloadImage,
+            downloadCover,
+            downloadMusic,
+            downloadLivePhoto,
+            checkVideoAudio,
+            enablePersonDetection);
+        return true;
+    }
+
+    private sealed record CompletionKey(
+        string PlatformId,
+        string AuthorId,
+        string WorkId,
+        bool IncludeWorkId,
+        bool DownloadVideo,
+        bool DownloadImage,
+        bool DownloadCover,
+        bool DownloadMusic,
+        bool DownloadLivePhoto,
+        bool CheckVideoAudio,
+        bool EnablePersonDetection);
 
     public async Task MarkCompletedAsync(string authorFolder, string key, CancellationToken cancellationToken)
     {
@@ -245,6 +368,10 @@ public sealed class JsonDownloadIndex
     private static string NormalizePlatformId(string? platformId)
     {
         var value = platformId?.Trim() ?? string.Empty;
+        // 快手主站与 Live 站只是入口和接口不同，作品完成索引应当互通。
+        if (value.Equals("kuaishou-live", StringComparison.OrdinalIgnoreCase))
+            return "kuaishou";
+
         foreach (var knownPlatformId in KnownPlatformIds)
         {
             if (value.Equals(knownPlatformId, StringComparison.OrdinalIgnoreCase))

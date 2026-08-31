@@ -13,6 +13,8 @@ public sealed partial class MainWindowViewModel
     private string? _retainedAuthorAvatarUrl;
     private IImage? _retainedAuthorAvatarImage;
 
+    private sealed record BatchIssue(int ItemNumber, string Target, string Reason);
+
     public bool IsManualBatchRunning
     {
         get => _isManualBatchRunning;
@@ -71,7 +73,7 @@ public sealed partial class MainWindowViewModel
         IsBusy = true;
         ClearCurrentAuthorDisplayForNextCapture();
         var completedCount = 0;
-        var failedCount = 0;
+        var issues = new List<BatchIssue>();
 
         try
         {
@@ -84,7 +86,14 @@ public sealed partial class MainWindowViewModel
                 var url = ExtractFirstUrl(sourceLine);
                 if (string.IsNullOrWhiteSpace(url))
                 {
-                    failedCount++;
+                    issues.Add(new BatchIssue(
+                        index + 1,
+                        sourceLine,
+                        BatchLocalizedText(
+                            "Batch.Issue.InvalidUrl",
+                            "没有可用地址",
+                            "No valid URL",
+                            "有効な URL がありません")));
                     AddLog(BatchText(
                         "Batch.Log.InvalidUrl",
                         "批量第 {0} 行没有可用地址，已跳过：{1}",
@@ -96,7 +105,14 @@ public sealed partial class MainWindowViewModel
                 var platform = ResolvePlatformForBatchUrl(url);
                 if (platform is null)
                 {
-                    failedCount++;
+                    issues.Add(new BatchIssue(
+                        index + 1,
+                        url,
+                        BatchLocalizedText(
+                            "Batch.Issue.UnsupportedUrl",
+                            "无法识别所属平台",
+                            "Platform could not be recognized",
+                            "プラットフォームを認識できません")));
                     AddLog(BatchText(
                         "Batch.Log.UnsupportedUrl",
                         "批量第 {0} 项无法识别所属平台，已跳过：{1}",
@@ -120,6 +136,14 @@ public sealed partial class MainWindowViewModel
                     await _browser.StartAsync(url, IsHeadlessMode, cts.Token);
                     if (_browser.IsLoginRecoveryActive)
                     {
+                        issues.Add(new BatchIssue(
+                            index + 1,
+                            BuildBatchIssueTarget(CurrentAuthorName, url),
+                            BatchLocalizedText(
+                                "Batch.Issue.LoginRequired",
+                                "登录失效，当前项及后续任务已暂停",
+                                "Login expired; this and remaining items were paused",
+                                "ログイン切れのため、この項目と残りの処理を停止しました")));
                         AddLog(BatchText(
                             "Batch.Log.LoginRequired",
                             "批量第 {0} 项（{1}）需要重新登录，已暂停后续任务。",
@@ -137,13 +161,29 @@ public sealed partial class MainWindowViewModel
                     if (IsManualBatchSkipRequested)
                     {
                         IsManualBatchSkipRequested = false;
-                        failedCount++;
+                        issues.Add(new BatchIssue(
+                            index + 1,
+                            BuildBatchIssueTarget(CurrentAuthorName, url),
+                            BatchLocalizedText(
+                                "Batch.Issue.ManualSkip",
+                                "用户跳过",
+                                "Skipped by user",
+                                "ユーザーがスキップしました")));
                         AddLog(BatchLocalizedText(
                             "Batch.Log.ItemSkipped",
                             "批量第 {0} 项已跳过，立即继续下一位作者。",
                             "Batch item {0} was skipped. Moving to the next author immediately.",
                             "一括処理の第 {0} 件をスキップし、すぐに次の作者へ進みます。",
                             index + 1));
+                        continue;
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(_lastCaptureErrorMessage))
+                    {
+                        issues.Add(new BatchIssue(
+                            index + 1,
+                            BuildBatchIssueTarget(CurrentAuthorName, url),
+                            _lastCaptureErrorMessage));
                         continue;
                     }
 
@@ -164,7 +204,10 @@ public sealed partial class MainWindowViewModel
                 }
                 catch (Exception ex)
                 {
-                    failedCount++;
+                    issues.Add(new BatchIssue(
+                        index + 1,
+                        BuildBatchIssueTarget(CurrentAuthorName, url),
+                        ex.Message));
                     AddLog(BatchText(
                         "Batch.Log.ItemFailed",
                         "批量第 {0} 项处理失败，继续下一项：{1}",
@@ -184,8 +227,9 @@ public sealed partial class MainWindowViewModel
                     "Batch.Log.Completed",
                     "批量采集完成：成功处理 {0} 项，失败或跳过 {1} 项，共 {2} 项。",
                     completedCount,
-                    failedCount,
+                    issues.Count,
                     lines.Length));
+                AddBatchIssueSummary(issues);
             }
         }
         catch (OperationCanceledException)
@@ -195,6 +239,7 @@ public sealed partial class MainWindowViewModel
                 "批量采集已停止：已处理 {0}/{1} 项。",
                 completedCount,
                 lines.Length));
+            AddBatchIssueSummary(issues);
         }
         finally
         {
@@ -228,13 +273,7 @@ public sealed partial class MainWindowViewModel
             return null;
         }
 
-        return Platforms.FirstOrDefault(option =>
-        {
-            if (!Uri.TryCreate(option.HomeUrl, UriKind.Absolute, out var homeUri))
-                return false;
-
-            return HostsBelongToSamePlatform(targetUri.Host, homeUri.Host);
-        });
+        return FindPlatformForHost(targetUri.Host);
     }
 
     public bool SkipCurrentManualBatchAuthor()
@@ -277,6 +316,45 @@ public sealed partial class MainWindowViewModel
         const string line = "────────────────────────────────────────────────────────────";
         AddLog(string.Join(Environment.NewLine, Enumerable.Repeat(line, 10)));
     }
+
+    private void AddBatchIssueSummary(IReadOnlyList<BatchIssue> issues)
+    {
+        if (issues.Count == 0)
+            return;
+
+        AddLog(BatchLocalizedText(
+            "Batch.Log.IssueSummaryHeader",
+            "失败或跳过明细（{0} 项）：",
+            "Failed or skipped items ({0}):",
+            "失敗またはスキップの詳細（{0} 件）：",
+            issues.Count));
+
+        for (var index = 0; index < issues.Count; index++)
+        {
+            var issue = issues[index];
+            AddLog(BatchLocalizedText(
+                "Batch.Log.IssueSummaryItem",
+                "  {0}. 第 {1} 项｜{2}｜原因：{3}",
+                "  {0}. Item {1} | {2} | Reason: {3}",
+                "  {0}. 第 {1} 件｜{2}｜理由：{3}",
+                index + 1,
+                issue.ItemNumber,
+                issue.Target,
+                NormalizeBatchIssueText(issue.Reason)));
+        }
+    }
+
+    private static string BuildBatchIssueTarget(string? authorName, string url)
+        => string.IsNullOrWhiteSpace(authorName)
+            ? url
+            : $"{authorName}（{url}）";
+
+    private static string NormalizeBatchIssueText(string? text)
+        => string.Join(
+            " ",
+            (text ?? string.Empty).Split(
+                new[] { '\r', '\n', '\t' },
+                StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
 
     internal void ClearCurrentAuthorDisplayForNextCapture()
     {

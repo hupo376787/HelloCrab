@@ -86,6 +86,12 @@ public sealed class DouyinLivePhotoSiteAdapter : ISiteAdapter
         }
     }
 
+    public bool TryCreateCursorRequest(
+        BrowserRequestSnapshot previousRequest,
+        string cursor,
+        out BrowserPageRequest nextRequest)
+        => _inner.TryCreateCursorRequest(previousRequest, cursor, out nextRequest);
+
     public Task ScrollNextAsync(
         IBrowserAutomationService browser,
         CancellationToken cancellationToken)
@@ -239,6 +245,7 @@ public sealed class DouyinLivePhotoSiteAdapter : ISiteAdapter
     private static IReadOnlyList<string> NormalizeUrls(IEnumerable<string> urls)
         => urls
             .Select(WebUtility.HtmlDecode)
+            .OfType<string>()
             .Where(static url => !string.IsNullOrWhiteSpace(url)
                                  && Uri.TryCreate(url, UriKind.Absolute, out var uri)
                                  && uri.Scheme is "http" or "https")

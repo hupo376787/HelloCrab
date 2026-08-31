@@ -26,7 +26,76 @@ public sealed class DouyinSiteAdapter : ISiteAdapter
         => statusCode is >= 200 and < 300
            && (resourceType.Equals("xhr", StringComparison.OrdinalIgnoreCase)
                || resourceType.Equals("fetch", StringComparison.OrdinalIgnoreCase))
-           && responseUrl.Contains("/aweme/v1/web/aweme/post", StringComparison.OrdinalIgnoreCase);
+           && (responseUrl.Contains("/aweme/v1/web/aweme/post", StringComparison.OrdinalIgnoreCase)
+               || IsUserProfileResponse(responseUrl));
+
+    public bool TryHandleAuxiliaryResponse(
+        string responseUrl,
+        string responseJson,
+        string pageUrl,
+        string? requestBody,
+        out string? diagnostic)
+    {
+        diagnostic = null;
+        return IsUserProfileResponse(responseUrl);
+    }
+
+    public int? TryReadTotalWorkCount(
+        string responseUrl,
+        string responseJson,
+        string pageUrl,
+        string? requestBody)
+    {
+        if (!IsUserProfileResponse(responseUrl))
+            return null;
+
+        var pageSecUserId = TryReadPageSecUserId(pageUrl);
+        var responseSecUserId = ReadQueryValue(responseUrl, "sec_user_id")
+                                ?? ReadQueryValue(responseUrl, "sec_uid");
+        if (!string.IsNullOrWhiteSpace(pageSecUserId)
+            && !string.IsNullOrWhiteSpace(responseSecUserId)
+            && !SameSecUserId(pageSecUserId, responseSecUserId))
+        {
+            return null;
+        }
+
+        using var document = JsonDocument.Parse(responseJson);
+        var root = document.RootElement;
+        if (ReadInt64(root, "status_code") != 0
+            || !TryGetObject(root, "user", out var user))
+        {
+            return null;
+        }
+
+        var expectedSecUserId = pageSecUserId ?? responseSecUserId;
+        var userSecUserId = ReadString(user, "sec_uid");
+        if (!string.IsNullOrWhiteSpace(expectedSecUserId)
+            && !SameSecUserId(expectedSecUserId, userSecUserId))
+        {
+            return null;
+        }
+
+        if (!user.TryGetProperty("aweme_count", out var countElement))
+            return null;
+
+        long count;
+        if (countElement.ValueKind == JsonValueKind.Number)
+        {
+            if (!countElement.TryGetInt64(out count))
+                return null;
+        }
+        else if (countElement.ValueKind == JsonValueKind.String)
+        {
+            if (!long.TryParse(countElement.GetString(), out count))
+                return null;
+        }
+        else
+        {
+            return null;
+        }
+
+        return count is >= 0 and <= int.MaxValue ? (int)count : null;
+    }
 
     public ParsedWorkBatch ParseResponse(string responseUrl, string responseJson, string pageUrl, string? requestBody)
     {
@@ -131,8 +200,21 @@ public sealed class DouyinSiteAdapter : ISiteAdapter
             ReadHasMore(root),
             ReadString(root, "max_cursor"),
             diagnostic,
-            rejectedWorkCount);
+            rejectedWorkCount)
+        {
+            TotalWorkCount = HelloCrab.Core.Utilities.AuthorWorkCountReader.TryRead(Id, root)
+        };
     }
+
+    public bool TryCreateCursorRequest(
+        BrowserRequestSnapshot previousRequest,
+        string cursor,
+        out BrowserPageRequest nextRequest)
+        => CursorRequestRewriter.TryRewrite(
+            previousRequest,
+            cursor,
+            new[] { "max_cursor", "cursor" },
+            out nextRequest);
 
     private static string? TryReadPageSecUserId(string pageUrl)
     {
@@ -159,6 +241,13 @@ public sealed class DouyinSiteAdapter : ISiteAdapter
 
         return null;
     }
+
+    private static bool IsUserProfileResponse(string responseUrl)
+        => Uri.TryCreate(responseUrl, UriKind.Absolute, out var uri)
+           && uri.Host.EndsWith("douyin.com", StringComparison.OrdinalIgnoreCase)
+           && uri.AbsolutePath.TrimEnd('/').Equals(
+               "/aweme/v1/web/user/profile/other",
+               StringComparison.OrdinalIgnoreCase);
 
     private static string? ReadQueryValue(string url, string key)
     {

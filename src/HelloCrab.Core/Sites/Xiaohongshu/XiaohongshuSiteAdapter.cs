@@ -68,6 +68,25 @@ public sealed class XiaohongshuSiteAdapter : ISiteAdapter
             : ParseProfileDocument(responseJson, pageUrl);
     }
 
+    public bool TryCreateCursorRequest(
+        BrowserRequestSnapshot previousRequest,
+        string cursor,
+        out BrowserPageRequest nextRequest)
+    {
+        if (Uri.TryCreate(previousRequest.Url, UriKind.Absolute, out var uri)
+            && IsUserPostedApi(uri))
+        {
+            return CursorRequestRewriter.TryRewrite(
+                previousRequest,
+                cursor,
+                new[] { "cursor" },
+                out nextRequest);
+        }
+
+        nextRequest = null!;
+        return false;
+    }
+
     public async Task<WorkItem?> ResolveWorkAsync(
         WorkItem work,
         IBrowserAutomationService browser,
@@ -391,7 +410,10 @@ public sealed class XiaohongshuSiteAdapter : ISiteAdapter
         var diagnostic = rejected > 0
             ? RuntimeLocalization.Format("Xhs.FirstFiltered", "小红书首屏已过滤 {0} 条非目标作者笔记。", rejected)
             : RuntimeLocalization.Format("Xhs.FirstSummary", "小红书首屏发现 {0} 条笔记，将逐条读取详情地址。", works.Count);
-        return new ParsedWorkBatch(works, hasMore, cursor, diagnostic, rejected);
+        return new ParsedWorkBatch(works, hasMore, cursor, diagnostic, rejected)
+        {
+            TotalWorkCount = HelloCrab.Core.Utilities.AuthorWorkCountReader.TryRead(Id, root)
+        };
     }
 
     private ParsedWorkBatch ParseUserPostedResponse(string json, string pageUrl)
@@ -417,7 +439,10 @@ public sealed class XiaohongshuSiteAdapter : ISiteAdapter
         var diagnostic = rejected > 0
             ? RuntimeLocalization.Format("Xhs.PageFiltered", "小红书分页已过滤 {0} 条非目标作者笔记。", rejected)
             : null;
-        return new ParsedWorkBatch(works, hasMore, cursor, diagnostic, rejected);
+        return new ParsedWorkBatch(works, hasMore, cursor, diagnostic, rejected)
+        {
+            TotalWorkCount = HelloCrab.Core.Utilities.AuthorWorkCountReader.TryRead(Id, root)
+        };
     }
 
     private static List<WorkItem> ParseListingNotes(
@@ -631,50 +656,50 @@ public sealed class XiaohongshuSiteAdapter : ISiteAdapter
         switch (element.ValueKind)
         {
             case JsonValueKind.Object:
-            {
-                var ownWidth = (int)ReadFirstInt64(element, "width", "w");
-                var ownHeight = (int)ReadFirstInt64(element, "height", "h");
-                var width = ownWidth > 0 ? ownWidth : inheritedWidth;
-                var height = ownHeight > 0 ? ownHeight : inheritedHeight;
-                var bitrate = ReadFirstInt64(
-                    element,
-                    "bitrate",
-                    "avgBitrate",
-                    "avg_bitrate",
-                    "videoBitrate");
-                if (bitrate <= 0)
-                    bitrate = inheritedBitrate;
-
-                foreach (var property in element.EnumerateObject())
                 {
-                    var childPath = $"{path}.{property.Name}";
-                    if (property.Value.ValueKind == JsonValueKind.String)
+                    var ownWidth = (int)ReadFirstInt64(element, "width", "w");
+                    var ownHeight = (int)ReadFirstInt64(element, "height", "h");
+                    var width = ownWidth > 0 ? ownWidth : inheritedWidth;
+                    var height = ownHeight > 0 ? ownHeight : inheritedHeight;
+                    var bitrate = ReadFirstInt64(
+                        element,
+                        "bitrate",
+                        "avgBitrate",
+                        "avg_bitrate",
+                        "videoBitrate");
+                    if (bitrate <= 0)
+                        bitrate = inheritedBitrate;
+
+                    foreach (var property in element.EnumerateObject())
                     {
-                        var value = NormalizeUrl(property.Value.GetString());
-                        if (IsVideoUrl(value))
+                        var childPath = $"{path}.{property.Name}";
+                        if (property.Value.ValueKind == JsonValueKind.String)
                         {
-                            result.Add(new VideoCandidate(
-                                value!,
-                                ReadCodec(childPath),
+                            var value = NormalizeUrl(property.Value.GetString());
+                            if (IsVideoUrl(value))
+                            {
+                                result.Add(new VideoCandidate(
+                                    value!,
+                                    ReadCodec(childPath),
+                                    width,
+                                    height,
+                                    bitrate));
+                            }
+                        }
+                        else
+                        {
+                            CollectVideoCandidates(
+                                property.Value,
+                                childPath,
                                 width,
                                 height,
-                                bitrate));
+                                bitrate,
+                                result);
                         }
                     }
-                    else
-                    {
-                        CollectVideoCandidates(
-                            property.Value,
-                            childPath,
-                            width,
-                            height,
-                            bitrate,
-                            result);
-                    }
-                }
 
-                break;
-            }
+                    break;
+                }
             case JsonValueKind.Array:
                 foreach (var item in element.EnumerateArray())
                 {
@@ -689,47 +714,64 @@ public sealed class XiaohongshuSiteAdapter : ISiteAdapter
 
                 break;
             case JsonValueKind.String:
-            {
-                var value = NormalizeUrl(element.GetString());
-                if (IsVideoUrl(value))
                 {
-                    result.Add(new VideoCandidate(
-                        value!,
-                        ReadCodec(path),
-                        inheritedWidth,
-                        inheritedHeight,
-                        inheritedBitrate));
-                }
+                    var value = NormalizeUrl(element.GetString());
+                    if (IsVideoUrl(value))
+                    {
+                        result.Add(new VideoCandidate(
+                            value!,
+                            ReadCodec(path),
+                            inheritedWidth,
+                            inheritedHeight,
+                            inheritedBitrate));
+                    }
 
-                break;
-            }
+                    break;
+                }
         }
     }
 
     private static bool TryFindDetailNote(JsonElement root, string workId, out JsonElement note)
     {
         note = default;
-        if (!TryGetObject(root, "note", out var noteStore)
-            || !TryGetObject(noteStore, "noteDetailMap", out var map))
+        if (TryGetObject(root, "note", out var noteStore)
+            && TryGetObject(noteStore, "noteDetailMap", out var map))
         {
-            return false;
-        }
-
-        if (map.TryGetProperty(workId, out var direct)
-            && TryGetObject(direct, "note", out note))
-        {
-            return true;
-        }
-
-        foreach (var property in map.EnumerateObject())
-        {
-            if (!TryGetObject(property.Value, "note", out var candidate))
-                continue;
-            var candidateId = ReadFirstString(candidate, "noteId", "note_id", "id");
-            if (SameId(candidateId, workId))
+            if (map.TryGetProperty(workId, out var direct)
+                && TryGetObject(direct, "note", out note))
             {
-                note = candidate;
                 return true;
+            }
+
+            foreach (var property in map.EnumerateObject())
+            {
+                if (!TryGetObject(property.Value, "note", out var candidate))
+                    continue;
+                var candidateId = ReadFirstString(candidate, "noteId", "note_id", "id");
+                if (SameId(candidateId, workId))
+                {
+                    note = candidate;
+                    return true;
+                }
+            }
+        }
+
+        // 新版详情 SSR 同时把当前笔记放在 feed.undertakeNote.items[].noteCard。
+        // note.noteDetailMap 若在后续灰度版本中被移除，仍可从这份结构读取 imageList。
+        if (TryGetObject(root, "feed", out var feed)
+            && TryGetObject(feed, "undertakeNote", out var undertakeNote)
+            && TryGetArray(undertakeNote, "items", out var items))
+        {
+            foreach (var item in items.EnumerateArray())
+            {
+                if (!TryGetObject(item, "noteCard", out var candidate))
+                    continue;
+                var candidateId = ReadFirstString(candidate, "noteId", "note_id", "id");
+                if (SameId(candidateId, workId))
+                {
+                    note = candidate;
+                    return true;
+                }
             }
         }
 
@@ -850,6 +892,29 @@ public sealed class XiaohongshuSiteAdapter : ISiteAdapter
                 continue;
             }
 
+            // 2026 年新版详情页在 INITIAL_STATE 中加入了
+            // AiNoteDetailStore.noteDetailMap: new Map([])。这是一段可执行的
+            // JavaScript 状态，而不是严格 JSON。空 Map/Set 不包含笔记数据，按其
+            // JSON 等价空容器归一化，避免整份状态因一个辅助 Store 解析失败。
+            if (TryReplaceEmptyJavaScriptCollection(
+                    source,
+                    index,
+                    "Map",
+                    "{}",
+                    builder,
+                    out consumed)
+                || TryReplaceEmptyJavaScriptCollection(
+                    source,
+                    index,
+                    "Set",
+                    "[]",
+                    builder,
+                    out consumed))
+            {
+                index += consumed;
+                continue;
+            }
+
             if (character == '-'
                 && TryReplaceJavaScriptLiteral(source, index + 1, "Infinity", builder, out consumed))
             {
@@ -862,6 +927,73 @@ public sealed class XiaohongshuSiteAdapter : ISiteAdapter
         }
 
         return builder.ToString();
+    }
+
+    private static bool TryReplaceEmptyJavaScriptCollection(
+        string source,
+        int index,
+        string constructorName,
+        string replacement,
+        StringBuilder builder,
+        out int consumed)
+    {
+        consumed = 0;
+        const string newKeyword = "new";
+        if (index < 0
+            || index + newKeyword.Length > source.Length
+            || !source.AsSpan(index, newKeyword.Length).Equals(
+                newKeyword,
+                StringComparison.Ordinal)
+            || index > 0 && IsIdentifierCharacter(source[index - 1]))
+        {
+            return false;
+        }
+
+        var cursor = index + newKeyword.Length;
+        if (cursor >= source.Length || !char.IsWhiteSpace(source[cursor]))
+            return false;
+        SkipWhitespace(source, ref cursor);
+
+        if (cursor + constructorName.Length > source.Length
+            || !source.AsSpan(cursor, constructorName.Length).Equals(
+                constructorName,
+                StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        cursor += constructorName.Length;
+        if (cursor < source.Length && IsIdentifierCharacter(source[cursor]))
+            return false;
+        SkipWhitespace(source, ref cursor);
+        if (cursor >= source.Length || source[cursor] != '(')
+            return false;
+
+        cursor++;
+        SkipWhitespace(source, ref cursor);
+        if (cursor < source.Length && source[cursor] == '[')
+        {
+            cursor++;
+            SkipWhitespace(source, ref cursor);
+            if (cursor >= source.Length || source[cursor] != ']')
+                return false;
+            cursor++;
+            SkipWhitespace(source, ref cursor);
+        }
+
+        if (cursor >= source.Length || source[cursor] != ')')
+            return false;
+
+        cursor++;
+        builder.Append(replacement);
+        consumed = cursor - index;
+        return true;
+    }
+
+    private static void SkipWhitespace(string source, ref int index)
+    {
+        while (index < source.Length && char.IsWhiteSpace(source[index]))
+            index++;
     }
 
     private static bool TryReplaceJavaScriptLiteral(

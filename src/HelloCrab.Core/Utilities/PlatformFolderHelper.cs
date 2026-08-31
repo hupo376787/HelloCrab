@@ -38,6 +38,14 @@ public static class PlatformFolderHelper
             return "pinterest";
         }
 
+        if (value.Equals("kuaishou-live", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("快手网页版Live", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("快手 Live", StringComparison.OrdinalIgnoreCase))
+        {
+            // 两个入口是同一平台的两套网页接口，共用媒体目录以避免重复下载。
+            return "kuaishou";
+        }
+
         if (value.Equals("kuaishou", StringComparison.OrdinalIgnoreCase)
             || value.Contains("快手", StringComparison.Ordinal))
         {

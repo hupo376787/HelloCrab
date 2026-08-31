@@ -290,8 +290,21 @@ public sealed class BilibiliSiteAdapter : ISiteAdapter
             hasMore,
             nextPage,
             diagnostic,
-            rejectedCount);
+            rejectedCount)
+        {
+            TotalWorkCount = totalCount <= int.MaxValue ? (int)totalCount : int.MaxValue
+        };
     }
+
+    public bool TryCreateCursorRequest(
+        BrowserRequestSnapshot previousRequest,
+        string cursor,
+        out BrowserPageRequest nextRequest)
+        => CursorRequestRewriter.TryRewrite(
+            previousRequest,
+            cursor,
+            new[] { "pn" },
+            out nextRequest);
 
     public Task<WorkItem> EnrichWorkMetadataAsync(
         WorkItem work,

@@ -36,6 +36,7 @@ public sealed class RemoteMainViewModel : ObservableObject, IAsyncDisposable
     private string _downloadProgressText = string.Empty;
     private string _currentAuthor = "-";
     private int _responseCount;
+    private string _totalWorkCountText = "NA";
     private int _discoveredCount;
     private int _downloadedCount;
     private int _skippedCount;
@@ -51,6 +52,7 @@ public sealed class RemoteMainViewModel : ObservableObject, IAsyncDisposable
     private bool _downloadCover;
     private bool _downloadMusic;
     private bool _downloadLivePhoto;
+    private bool _updateAuthorNickname;
     private bool _checkVideoAudio;
     private bool _enablePersonDetection;
     private double _personDetectionConfidence = 0.60;
@@ -91,7 +93,7 @@ public sealed class RemoteMainViewModel : ObservableObject, IAsyncDisposable
     public bool IsBrowserClient => !IsNativeMobileClient;
 
     public IReadOnlyList<string> ThemeOptions { get; } = new[] { "Light", "Dark" };
-    public IReadOnlyList<string> PlatformOptions { get; } = new[] { "douyin", "tiktok", "kuaishou", "xiaohongshu", "weibo", "meipian", "instagram", "bilibili" };
+    public IReadOnlyList<string> PlatformOptions { get; } = new[] { "douyin", "tiktok", "kuaishou", "kuaishou-live", "xiaohongshu", "weibo", "meipian", "instagram", "bilibili" };
     public ObservableCollection<string> Logs { get; } = new();
     public ObservableCollection<RemoteHistoryItemViewModel> History { get; } = new();
 
@@ -195,6 +197,7 @@ public sealed class RemoteMainViewModel : ObservableObject, IAsyncDisposable
     public string DownloadProgressText { get => _downloadProgressText; private set => SetProperty(ref _downloadProgressText, value); }
     public string CurrentAuthor { get => _currentAuthor; private set => SetProperty(ref _currentAuthor, value); }
     public int ResponseCount { get => _responseCount; private set => SetProperty(ref _responseCount, value); }
+    public string TotalWorkCountText { get => _totalWorkCountText; private set => SetProperty(ref _totalWorkCountText, value); }
     public int DiscoveredCount { get => _discoveredCount; private set => SetProperty(ref _discoveredCount, value); }
     public int DownloadedCount { get => _downloadedCount; private set => SetProperty(ref _downloadedCount, value); }
     public int SkippedCount { get => _skippedCount; private set => SetProperty(ref _skippedCount, value); }
@@ -305,6 +308,12 @@ public sealed class RemoteMainViewModel : ObservableObject, IAsyncDisposable
     {
         get => _downloadLivePhoto;
         set { if (SetProperty(ref _downloadLivePhoto, value)) MarkSettingsDirty(); }
+    }
+
+    public bool UpdateAuthorNickname
+    {
+        get => _updateAuthorNickname;
+        set { if (SetProperty(ref _updateAuthorNickname, value)) MarkSettingsDirty(); }
     }
 
     public bool CheckVideoAudio
@@ -433,6 +442,7 @@ public sealed class RemoteMainViewModel : ObservableObject, IAsyncDisposable
                 DownloadCover = DownloadCover,
                 DownloadMusic = DownloadMusic,
                 DownloadLivePhoto = DownloadLivePhoto,
+                UpdateAuthorNickname = UpdateAuthorNickname,
                 CheckVideoAudio = CheckVideoAudio,
                 EnablePersonDetection = EnablePersonDetection,
                 PersonDetectionConfidence = PersonDetectionConfidence,
@@ -469,6 +479,7 @@ public sealed class RemoteMainViewModel : ObservableObject, IAsyncDisposable
                 ? "-"
                 : $"{snapshot.CurrentAuthorName} · {snapshot.CurrentAuthorId}";
             ResponseCount = snapshot.ResponseCount;
+            TotalWorkCountText = snapshot.TotalWorkCount?.ToString() ?? "NA";
             DiscoveredCount = snapshot.DiscoveredCount;
             DownloadedCount = snapshot.DownloadedCount;
             SkippedCount = snapshot.SkippedCount;
@@ -487,6 +498,7 @@ public sealed class RemoteMainViewModel : ObservableObject, IAsyncDisposable
                 DownloadCover = snapshot.Settings.DownloadCover;
                 DownloadMusic = snapshot.Settings.DownloadMusic;
                 DownloadLivePhoto = snapshot.Settings.DownloadLivePhoto;
+                UpdateAuthorNickname = snapshot.Settings.UpdateAuthorNickname;
                 CheckVideoAudio = snapshot.Settings.CheckVideoAudio;
                 EnablePersonDetection = snapshot.Settings.EnablePersonDetection;
                 PersonDetectionConfidence = snapshot.Settings.PersonDetectionConfidence;

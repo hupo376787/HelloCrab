@@ -12,7 +12,6 @@ using Avalonia.VisualTree;
 using HelloCrab.Core.Models;
 using HelloCrab.Core.Services.History;
 using HelloCrab.Core.Services.Localization;
-using HelloCrab.Core.Utilities;
 using HelloCrab.Core.ViewModels;
 
 namespace HelloCrab.Core.Views;
@@ -299,11 +298,7 @@ public partial class MainWindow
 
     private void HistoryFavoritesViewModel_PropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(MainWindowViewModel.HistorySearchText))
-        {
-            Dispatcher.UIThread.Post(ApplyHistoryFavoriteFilter, DispatcherPriority.Background);
-        }
-        else if (e.PropertyName == nameof(MainWindowViewModel.IsDarkTheme))
+        if (e.PropertyName == nameof(MainWindowViewModel.IsDarkTheme))
         {
             UpdateHistoryFavoritesButton();
         }
@@ -320,18 +315,11 @@ public partial class MainWindow
         if (_isApplyingHistoryFavoriteFilter || _historyFavoritesViewModel is not { } viewModel)
             return;
 
-        var query = viewModel.HistorySearchText.Trim();
-        var filtered = viewModel.DownloadHistory
-            .Where(item => !_showFavoritesOnly || IsHistoryFavorite(item))
-            .Where(item => MatchesHistorySearch(item, query))
-            .ToArray();
-
         _isApplyingHistoryFavoriteFilter = true;
         try
         {
-            HistoryCollectionSynchronizer.Sync(
-                viewModel.FilteredDownloadHistory,
-                filtered);
+            viewModel.SetAdditionalHistoryFilter(
+                _showFavoritesOnly ? IsHistoryFavorite : null);
         }
         finally
         {
@@ -353,28 +341,13 @@ public partial class MainWindow
         return $"{item.Platform.Trim().ToLowerInvariant()}::{identity}";
     }
 
-    private static bool MatchesHistorySearch(DownloadHistoryItem item, string query)
-    {
-        if (string.IsNullOrWhiteSpace(query))
-            return true;
-
-        return ContainsIgnoreCase(item.UserName, query)
-               || ContainsIgnoreCase(item.UserId, query)
-               || ContainsIgnoreCase(item.Platform, query)
-               || ContainsIgnoreCase(item.PlatformDisplayText, query)
-               || ContainsIgnoreCase(item.OriginalUrl, query);
-    }
-
-    private static bool ContainsIgnoreCase(string? value, string query)
-        => !string.IsNullOrWhiteSpace(value)
-           && value.Contains(query, StringComparison.OrdinalIgnoreCase);
-
     private void HistoryFavoritesWindowClosed(object? sender, EventArgs e)
     {
         if (_historyFavoritesViewModel is { } viewModel)
         {
             viewModel.PropertyChanged -= HistoryFavoritesViewModel_PropertyChanged;
             viewModel.DownloadHistory.CollectionChanged -= HistoryDownloadCollectionChanged;
+            viewModel.SetAdditionalHistoryFilter(null);
         }
 
         if (LocalizationService.Current is { } localization)

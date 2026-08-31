@@ -1,3 +1,4 @@
+using System.Collections.Specialized;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -28,6 +29,7 @@ public partial class MainWindow
     private bool _historyInteractionsInstalled;
     private bool _historyFilterSuppressedForDrag;
     private long _historyFavoriteRestoreVersion;
+    private long _historyScrollRestoreVersion;
 
     private void InstallHistoryInteractions()
     {
@@ -39,6 +41,7 @@ public partial class MainWindow
 
         _historyInteractionsInstalled = true;
         _historyInteractionsViewModel = viewModel;
+        viewModel.DownloadHistory.CollectionChanged += HistoryDownloadHistory_CollectionChanged;
 
         HistoryList.AddHandler(
             PointerPressedEvent,
@@ -58,6 +61,54 @@ public partial class MainWindow
 
         Closed += HistoryInteractionsWindowClosed;
         _ = GetHistoryListScrollViewer();
+    }
+
+    private void HistoryDownloadHistory_CollectionChanged(
+        object? sender,
+        NotifyCollectionChangedEventArgs e)
+    {
+        // 新作者固定插入主集合头部。Avalonia 的虚拟 ListBox 会在随后同步可见集合、
+        // 重算布局时尝试保留旧锚点，某些情况下会把滚动位置直接推到列表末尾。
+        // 在主集合先发生 Add、可见集合尚未改变的这个时点保存真实偏移，布局后再恢复。
+        if (e.Action != NotifyCollectionChangedAction.Add
+            || e.NewStartingIndex != 0
+            || _showFavoritesOnly
+            || _isHistoryDragging
+            || _historyInteractionsViewModel is not { } viewModel
+            || !string.IsNullOrWhiteSpace(viewModel.HistorySearchText)
+            || GetHistoryListScrollViewer() is not { } scrollViewer)
+        {
+            return;
+        }
+
+        var savedOffset = scrollViewer.Offset;
+        var version = Interlocked.Increment(ref _historyScrollRestoreVersion);
+        Dispatcher.UIThread.Post(
+            () => RestoreHistoryScrollOffset(version, savedOffset),
+            DispatcherPriority.Render);
+        Dispatcher.UIThread.Post(
+            () => RestoreHistoryScrollOffset(version, savedOffset),
+            DispatcherPriority.Background);
+    }
+
+    private void RestoreHistoryScrollOffset(long version, Vector savedOffset)
+    {
+        if (version != Interlocked.Read(ref _historyScrollRestoreVersion)
+            || _showFavoritesOnly
+            || _isHistoryDragging
+            || _historyInteractionsViewModel is not { } viewModel
+            || !string.IsNullOrWhiteSpace(viewModel.HistorySearchText)
+            || GetHistoryListScrollViewer() is not { } scrollViewer)
+        {
+            return;
+        }
+
+        var maximumY = Math.Max(0d, scrollViewer.Extent.Height - scrollViewer.Viewport.Height);
+        var restoredOffset = new Vector(
+            savedOffset.X,
+            Math.Clamp(savedOffset.Y, 0d, maximumY));
+        if (scrollViewer.Offset != restoredOffset)
+            scrollViewer.Offset = restoredOffset;
     }
 
     private void HistoryList_DoubleClickPointerPressed(
@@ -252,6 +303,9 @@ public partial class MainWindow
     {
         StopHistoryAutoScroll();
         ReleaseHistoryFilterAfterDrag();
+
+        if (_historyInteractionsViewModel is not null)
+            _historyInteractionsViewModel.DownloadHistory.CollectionChanged -= HistoryDownloadHistory_CollectionChanged;
 
         if (_historyAutoScrollTimer is not null)
             _historyAutoScrollTimer.Tick -= HistoryAutoScrollTimer_Tick;

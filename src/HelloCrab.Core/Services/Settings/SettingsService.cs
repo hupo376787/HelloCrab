@@ -54,7 +54,7 @@ public sealed class SettingsService
             }
 
             // v4 增加 PushPlusToken；v6 清理已经下线的平台配置字段；v7 增加微博平台；
-            // v8 增加人像检测开关；v9 增加视频音轨检测开关；v10 增加 JSON 多语言；v11 增加下载速度限制；v12 增加人像检测置信度；v13 增加 Live 图下载开关；v14 增加视频/图片独立下载开关。
+            // v8 增加人像检测开关；v9 增加视频音轨检测开关；v10 增加 JSON 多语言；v11 增加下载速度限制；v12 增加人像检测置信度；v13 增加 Live 图下载开关；v14 增加视频/图片独立下载开关；v15 增加作者昵称更新开关。
             // 未知旧字段会在下次保存时自然移除。
             if (settings.Version < 14)
             {
@@ -62,6 +62,12 @@ public sealed class SettingsService
                 settings.DownloadVideo = true;
                 settings.DownloadImage = true;
                 settings.Version = 14;
+            }
+            if (settings.Version < 15)
+            {
+                // 升级后默认保持旧昵称和旧目录，只有用户主动开启才允许重命名。
+                settings.UpdateAuthorNickname = false;
+                settings.Version = 15;
             }
             if (string.IsNullOrWhiteSpace(settings.LanguageCode))
                 settings.LanguageCode = "zh-CN";

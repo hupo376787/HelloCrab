@@ -27,6 +27,42 @@ public sealed class CrawlCoordinator : IAsyncDisposable
     private const int PageDelayMinMilliseconds = 3_000;
     private const int PageDelayMaxMillisecondsExclusive = 10_001;
 
+    private const string CursorFetchScript = """
+        async request => {
+            const forbiddenHeaders = new Set([
+                'accept-encoding', 'connection', 'content-length', 'cookie', 'host',
+                'origin', 'referer', 'user-agent', ':authority', ':method', ':path', ':scheme'
+            ]);
+            const headers = new Headers();
+            for (const [name, value] of Object.entries(request.headers || {})) {
+                const lower = name.toLowerCase();
+                if (forbiddenHeaders.has(lower) || lower.startsWith('sec-')) continue;
+                try { headers.set(name, value); } catch { }
+            }
+
+            const method = String(request.method || (request.body ? 'POST' : 'GET')).toUpperCase();
+            const options = {
+                method,
+                headers,
+                credentials: 'include',
+                cache: 'no-store',
+                redirect: 'follow'
+            };
+            if (request.body && method !== 'GET' && method !== 'HEAD')
+                options.body = request.body;
+
+            const response = await fetch(request.url, options);
+            const text = await response.text();
+            return {
+                ok: response.ok,
+                status: response.status,
+                url: response.url,
+                bodyLength: text.length,
+                preview: response.ok ? '' : text.slice(0, 180)
+            };
+        }
+        """;
+
     private CancellationTokenSource? _captureCts;
     private Channel<CapturedResponse>? _channel;
     private ISiteAdapter? _activeAdapter;
@@ -35,6 +71,7 @@ public sealed class CrawlCoordinator : IAsyncDisposable
     private string _capturePageUrl = string.Empty;
     private CrawlerDownloadOptions _downloadOptions = new();
     private int _responseCount;
+    private int? _totalWorkCount;
     private int _discoveredCount;
     private int _downloadedCount;
     private int _skippedCount;
@@ -44,6 +81,7 @@ public sealed class CrawlCoordinator : IAsyncDisposable
     private long _responseVersion;
     private bool? _hasMore;
     private string? _nextCursor;
+    private BrowserRequestSnapshot? _lastPaginationRequest;
     private DateTimeOffset _lastResponseAt;
     private DateTimeOffset _lastNewWorkAt;
     private string? _currentWork;
@@ -295,6 +333,14 @@ public sealed class CrawlCoordinator : IAsyncDisposable
             if (string.IsNullOrWhiteSpace(text))
                 return;
 
+            var totalWorkCount = adapter.TryReadTotalWorkCount(
+                response.Url,
+                text,
+                _capturePageUrl,
+                response.RequestPostData);
+            if (totalWorkCount.HasValue)
+                _totalWorkCount = totalWorkCount;
+
             // 作者资料等辅助响应必须在浏览器事件线程中立即解析。若与作品列表一起进入
             // 单消费者队列，它可能会被一整页视频详情和下载任务阻塞，导致首个作品写入
             // History.json 时头像仍为空。
@@ -315,7 +361,16 @@ public sealed class CrawlCoordinator : IAsyncDisposable
             Interlocked.Increment(ref _responseVersion);
             _lastResponseAt = DateTimeOffset.Now;
             await channel.Writer.WriteAsync(
-                new CapturedResponse(response.Url, text, response.PageUrl, response.RequestPostData),
+                new CapturedResponse(
+                    response.Url,
+                    text,
+                    response.PageUrl,
+                    response.RequestPostData,
+                    new BrowserRequestSnapshot(
+                        response.Url,
+                        response.RequestMethod,
+                        response.RequestPostData,
+                        response.RequestHeaders)),
                 cts.Token);
             RaiseLog(RuntimeLocalization.Format("Log.Crawl.ResponseCaptured", "捕获作品响应：第 {0} 页", _responseCount));
             PublishProgress();
@@ -366,9 +421,15 @@ public sealed class CrawlCoordinator : IAsyncDisposable
                 if (!string.IsNullOrWhiteSpace(batch.Diagnostic))
                     RaiseLog(batch.Diagnostic);
 
+                if (batch.TotalWorkCount.HasValue)
+                    _totalWorkCount = batch.TotalWorkCount;
+
                 if (batch.HasMore.HasValue)
                     _hasMore = batch.HasMore;
-                _nextCursor = batch.Cursor;
+                if (batch.HasMore.HasValue || batch.Cursor is not null)
+                    _nextCursor = batch.Cursor;
+                if (batch.HasMore.HasValue || batch.Cursor is not null || batch.Works.Count > 0)
+                    _lastPaginationRequest = captured.Request;
                 Interlocked.Increment(ref _parsedResponseCount);
 
                 foreach (var listedWork in batch.Works)
@@ -433,27 +494,19 @@ public sealed class CrawlCoordinator : IAsyncDisposable
                     _currentSourceUrl = work.SourceUrl;
                     PublishProgress();
 
-                    if (await _index.IsCompletedAsync(authorFolder, completionKey, cancellationToken))
+                    if (await _index.IsCompletedAsync(
+                            authorFolder,
+                            work,
+                            _downloadOptions,
+                            cancellationToken))
                     {
                         // 即使全部作品都已下载，也要把新捕获的作者头像写回历史记录。
                         await RegisterTouchedAuthorAsync(work, authorFolder);
 
-                        Interlocked.Increment(ref _skippedCount);
-                        _consecutiveCompletedDuplicates++;
-                        RaiseLog(RuntimeLocalization.Format("Log.Download.DuplicateSkipped", "已下载过，跳过：{0}（连续重复 {1}）", work.WorkId, _consecutiveCompletedDuplicates));
-                        PublishProgress();
-
-                        if (_downloadOptions.StopOnDuplicateThreshold
-                            && _consecutiveCompletedDuplicates >= Math.Max(1, _downloadOptions.DuplicateStopThreshold))
-                        {
-                            _duplicateStopRequested = true;
-                            RaiseLog(RuntimeLocalization.Format("Log.Crawl.DuplicateThresholdReached", "已连续发现 {0} 个历史作品，达到停止阈值。", _consecutiveCompletedDuplicates));
+                        if (RegisterCompletedDuplicate(work.WorkId))
                             break;
-                        }
                         continue;
                     }
-
-                    _consecutiveCompletedDuplicates = 0;
 
                     // 小红书和 Pinterest 的作者列表主要提供作品 ID；真实媒体地址
                     // 分别位于作品详情文档中。其他平台默认原样返回，不增加请求。
@@ -465,6 +518,7 @@ public sealed class CrawlCoordinator : IAsyncDisposable
                             cancellationToken);
                         if (resolvedWork is null)
                         {
+                            _consecutiveCompletedDuplicates = 0;
                             Interlocked.Increment(ref _failedCount);
                             RaiseLog(RuntimeLocalization.Format("Log.Crawl.NoMediaDetail", "作品详情未返回有效媒体，跳过：{0}", work.WorkId));
                             PublishProgress();
@@ -476,6 +530,7 @@ public sealed class CrawlCoordinator : IAsyncDisposable
                                 _sessionAuthorId,
                                 StringComparison.Ordinal))
                         {
+                            _consecutiveCompletedDuplicates = 0;
                             Interlocked.Increment(ref _failedCount);
                             RaiseLog(RuntimeLocalization.Format(
                                 "Log.Crawl.DetailAuthorMismatch",
@@ -488,6 +543,7 @@ public sealed class CrawlCoordinator : IAsyncDisposable
                         if (!resolvedWork.Assets.Any(asset =>
                                 asset.Type is MediaAssetType.Video or MediaAssetType.Image))
                         {
+                            _consecutiveCompletedDuplicates = 0;
                             Interlocked.Increment(ref _failedCount);
                             RaiseLog(RuntimeLocalization.Format("Log.Crawl.DetailNoMedia", "作品详情中没有可下载的视频或图片：{0}", resolvedWork.WorkId));
                             PublishProgress();
@@ -510,6 +566,7 @@ public sealed class CrawlCoordinator : IAsyncDisposable
                     }
                     catch (Exception ex)
                     {
+                        _consecutiveCompletedDuplicates = 0;
                         Interlocked.Increment(ref _failedCount);
                         RaiseLog(RuntimeLocalization.Format("Log.Crawl.DetailReadFailed", "读取作品详情失败 {0}：{1}", work.WorkId, ex.Message));
                         PublishProgress();
@@ -522,17 +579,27 @@ public sealed class CrawlCoordinator : IAsyncDisposable
 
                     try
                     {
-                        await _downloader.DownloadWorkAsync(
+                        var downloadResult = await _downloader.DownloadWorkAsync(
                             work,
-                            _platformDownloadRoot,
+                            authorFolder,
                             _downloadOptions,
                             _personDetectionSessionId,
                             cancellationToken);
                         await _index.MarkCompletedAsync(authorFolder, completionKey, cancellationToken);
-                        Interlocked.Increment(ref _downloadedCount);
+                        if (downloadResult.AllSelectedOutputsAlreadyExisted)
+                        {
+                            if (RegisterCompletedDuplicate(work.WorkId))
+                                break;
+                        }
+                        else
+                        {
+                            _consecutiveCompletedDuplicates = 0;
+                            Interlocked.Increment(ref _downloadedCount);
+                        }
                     }
                     catch (Exception ex) when (ex is not OperationCanceledException)
                     {
+                        _consecutiveCompletedDuplicates = 0;
                         Interlocked.Increment(ref _failedCount);
                         RaiseLog(RuntimeLocalization.Format("Log.Crawl.WorkDownloadFailed", "作品下载失败 {0}：{1}", work.WorkId, ex.Message));
                     }
@@ -569,6 +636,8 @@ public sealed class CrawlCoordinator : IAsyncDisposable
         var stagnantRounds = 0;
         var lastHeight = 0d;
         var firstResponseDeadline = DateTimeOffset.Now.AddSeconds(25);
+        var directPaginationDisabled = false;
+        var directPaginationAnnounced = false;
 
         while (!cancellationToken.IsCancellationRequested)
         {
@@ -582,6 +651,32 @@ public sealed class CrawlCoordinator : IAsyncDisposable
 
             if (_hasMore == false && DateTimeOffset.Now - _lastResponseAt > TimeSpan.FromSeconds(3))
                 return RuntimeLocalization.Get("Completion.NoMore", "接口已返回无更多作品，采集完成。");
+
+            if (!directPaginationDisabled)
+            {
+                var directOutcome = await TryFetchCursorPageAsync(adapter, cancellationToken);
+                if (directOutcome == CursorFetchOutcome.Success)
+                {
+                    if (!directPaginationAnnounced)
+                    {
+                        directPaginationAnnounced = true;
+                        RaiseLog(RuntimeLocalization.Get(
+                            "Log.Crawl.CursorFetchEnabled",
+                            "游标直连分页已启用：后续页将跳过页面渲染，直接复用当前登录态请求作品接口。"));
+                    }
+
+                    stagnantRounds = 0;
+                    continue;
+                }
+
+                if (directOutcome == CursorFetchOutcome.Failed)
+                {
+                    directPaginationDisabled = true;
+                    RaiseLog(RuntimeLocalization.Get(
+                        "Log.Crawl.CursorFetchFallback",
+                        "游标直连请求未通过接口校验，可能需要动态签名；本次采集已自动回退页面滚动。"));
+                }
+            }
 
             var beforeVersion = Interlocked.Read(ref _responseVersion);
             var beforeDiscovered = _discoveredCount;
@@ -636,15 +731,110 @@ public sealed class CrawlCoordinator : IAsyncDisposable
         return RuntimeLocalization.Get("Status.CaptureStopped", "采集已停止");
     }
 
-    private async Task WaitForParsedResponseAsync(
+    private async Task<bool> WaitForParsedResponseAsync(
         int beforeParsedCount,
+        TimeSpan timeout,
         CancellationToken cancellationToken)
     {
-        while (Volatile.Read(ref _parsedResponseCount) <= beforeParsedCount)
+        var deadline = DateTimeOffset.Now + timeout;
+        while (DateTimeOffset.Now < deadline)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            if (Volatile.Read(ref _parsedResponseCount) > beforeParsedCount)
+                return true;
             await Task.Delay(50, cancellationToken);
         }
+
+        return Volatile.Read(ref _parsedResponseCount) > beforeParsedCount;
+    }
+
+    private async Task<CursorFetchOutcome> TryFetchCursorPageAsync(
+        ISiteAdapter adapter,
+        CancellationToken cancellationToken)
+    {
+        var previousRequest = _lastPaginationRequest;
+        var previousCursor = _nextCursor;
+        if (previousRequest is null
+            || string.IsNullOrWhiteSpace(previousCursor)
+            || _hasMore == false
+            || !adapter.TryCreateCursorRequest(previousRequest, previousCursor, out var nextRequest))
+        {
+            return CursorFetchOutcome.NotAvailable;
+        }
+
+        var beforeVersion = Interlocked.Read(ref _responseVersion);
+        var beforeParsedCount = Volatile.Read(ref _parsedResponseCount);
+        var beforeDiscovered = _discoveredCount;
+        var previousHasMore = _hasMore;
+
+        try
+        {
+            RaiseLog(RuntimeLocalization.Format(
+                "Log.Crawl.CursorFetchPage",
+                "正在使用游标直接请求下一页：预计第 {0} 页",
+                _responseCount + 1));
+            var result = await _browser.EvaluatePageAsync(
+                CursorFetchScript,
+                nextRequest,
+                cancellationToken);
+
+            var ok = result.ValueKind == System.Text.Json.JsonValueKind.Object
+                     && result.TryGetProperty("ok", out var okElement)
+                     && okElement.ValueKind == System.Text.Json.JsonValueKind.True;
+            if (!ok)
+            {
+                var status = result.ValueKind == System.Text.Json.JsonValueKind.Object
+                             && result.TryGetProperty("status", out var statusElement)
+                    ? statusElement.ToString()
+                    : "unknown";
+                RaiseLog(RuntimeLocalization.Format(
+                    "Log.Crawl.CursorFetchHttpFailed",
+                    "游标直连接口返回 HTTP {0}。",
+                    status));
+                return CursorFetchOutcome.Failed;
+            }
+
+            var responseArrived = await WaitForResponseOrNewWorkAsync(
+                beforeVersion,
+                beforeDiscovered,
+                TimeSpan.FromSeconds(12),
+                cancellationToken);
+            var responseParsed = responseArrived
+                                 && await WaitForParsedResponseAsync(
+                                     beforeParsedCount,
+                                     TimeSpan.FromSeconds(12),
+                                     cancellationToken);
+            if (responseParsed)
+                await WaitUntilPipelineIdleAsync(cancellationToken);
+
+            var cursorAdvanced = !string.IsNullOrWhiteSpace(_nextCursor)
+                                 && !string.Equals(
+                                     _nextCursor,
+                                     previousCursor,
+                                     StringComparison.Ordinal);
+            var reachedEnd = _hasMore == false;
+            var discoveredNewWork = _discoveredCount > beforeDiscovered;
+            if (responseParsed && (cursorAdvanced || reachedEnd || discoveredNewWork))
+                return CursorFetchOutcome.Success;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            RaiseLog(RuntimeLocalization.Format(
+                "Log.Crawl.CursorFetchError",
+                "游标直连请求失败：{0}",
+                ex.Message));
+        }
+
+        // 直连返回了风控/签名错误 JSON 时，解析器可能得到空 cursor 或错误的
+        // has_more。恢复上一页状态后再滚动，让网页自身重新生成合法签名。
+        _nextCursor = previousCursor;
+        _hasMore = previousHasMore;
+        _lastPaginationRequest = previousRequest;
+        return CursorFetchOutcome.Failed;
     }
 
     private async Task WaitUntilPipelineIdleAsync(CancellationToken cancellationToken)
@@ -677,6 +867,7 @@ public sealed class CrawlCoordinator : IAsyncDisposable
         _persistedAuthorMetadata.Clear();
         _touchedAuthors.Clear();
         _responseCount = 0;
+        _totalWorkCount = null;
         _discoveredCount = 0;
         _downloadedCount = 0;
         _skippedCount = 0;
@@ -686,6 +877,7 @@ public sealed class CrawlCoordinator : IAsyncDisposable
         _responseVersion = 0;
         _hasMore = null;
         _nextCursor = null;
+        _lastPaginationRequest = null;
         _currentWork = null;
         _lastResponseAt = DateTimeOffset.Now;
         _lastNewWorkAt = DateTimeOffset.Now;
@@ -735,6 +927,7 @@ public sealed class CrawlCoordinator : IAsyncDisposable
 
         ProgressChanged?.Invoke(this, new CrawlProgressSnapshot(
             _responseCount,
+            _totalWorkCount,
             _discoveredCount,
             _downloadedCount,
             _skippedCount,
@@ -859,9 +1052,13 @@ public sealed class CrawlCoordinator : IAsyncDisposable
         {
             // 历史登记是很短的本地文件操作，不使用采集取消令牌，
             // 避免“停止”恰好发生时作者记录还没建立或头像尚未写入。
-            await _history.UpsertDownloadedAuthorAsync(
+            await _history.UpsertAuthorMetadataAsync(
                 work,
                 authorFolder,
+                _downloadOptions.UpdateAuthorNickname
+                && Path.GetFileName(authorFolder).Equals(
+                    FileNameHelper.BuildAuthorFolderName(work.AuthorName, work.AuthorId),
+                    StringComparison.Ordinal),
                 CancellationToken.None);
             _persistedAuthorMetadata[touchedAuthorKey] = metadataFingerprint;
         }
@@ -889,8 +1086,72 @@ public sealed class CrawlCoordinator : IAsyncDisposable
             ? work.AuthorName
             : $"{work.AuthorName} - {work.Description}";
 
-    private static string GetAuthorFolder(string downloadRoot, WorkItem work)
-        => Path.Combine(downloadRoot, FileNameHelper.BuildAuthorFolderName(work.AuthorName, work.AuthorId));
+    private string GetAuthorFolder(string downloadRoot, WorkItem work)
+    {
+        if (string.Equals(_currentAuthorId, work.AuthorId, StringComparison.Ordinal)
+            && !string.IsNullOrWhiteSpace(_currentAuthorDirectory))
+        {
+            return _currentAuthorDirectory;
+        }
+
+        var preferredFolder = Path.Combine(
+            downloadRoot,
+            FileNameHelper.BuildAuthorFolderName(work.AuthorName, work.AuthorId));
+        var resolution = AuthorFolderResolver.ResolveDetailed(
+            downloadRoot,
+            work.AuthorName,
+            work.AuthorId,
+            _downloadOptions.UpdateAuthorNickname);
+        if (resolution.Renamed)
+        {
+            RaiseLog(RuntimeLocalization.Format(
+                "Log.Download.AuthorFolderRenamed",
+                "检测到作者昵称变化，已将下载目录重命名：{0} → {1}",
+                resolution.PreviousFolderPath ?? string.Empty,
+                resolution.FolderPath));
+        }
+        else if (!string.IsNullOrWhiteSpace(resolution.RenameError))
+        {
+            RaiseLog(RuntimeLocalization.Format(
+                "Log.Download.AuthorFolderRenameFailed",
+                "更新作者目录名称失败，将继续使用旧目录并保留历史昵称：{0}",
+                resolution.RenameError));
+        }
+        else if (!resolution.FolderPath.Equals(preferredFolder, StringComparison.Ordinal))
+        {
+            RaiseLog(RuntimeLocalization.Format(
+                "Log.Download.ExistingAuthorFolderReused",
+                "已按作者 ID 找到原下载目录，将继续使用：{0}",
+                resolution.FolderPath));
+        }
+
+        return resolution.FolderPath;
+    }
+
+    private bool RegisterCompletedDuplicate(string workId)
+    {
+        Interlocked.Increment(ref _skippedCount);
+        _consecutiveCompletedDuplicates++;
+        RaiseLog(RuntimeLocalization.Format(
+            "Log.Download.DuplicateSkipped",
+            "已下载过，跳过：{0}（连续重复 {1}）",
+            workId,
+            _consecutiveCompletedDuplicates));
+        PublishProgress();
+
+        if (!_downloadOptions.StopOnDuplicateThreshold
+            || _consecutiveCompletedDuplicates < Math.Max(1, _downloadOptions.DuplicateStopThreshold))
+        {
+            return false;
+        }
+
+        _duplicateStopRequested = true;
+        RaiseLog(RuntimeLocalization.Format(
+            "Log.Crawl.DuplicateThresholdReached",
+            "已连续发现 {0} 个历史作品，达到停止阈值。",
+            _consecutiveCompletedDuplicates));
+        return true;
+    }
 
     private void RaiseLog(string message)
         => Log?.Invoke(this, $"[{DateTime.Now:HH:mm:ss}] {message}");
@@ -907,5 +1168,13 @@ public sealed class CrawlCoordinator : IAsyncDisposable
         string ResponseUrl,
         string Json,
         string PageUrl,
-        string? RequestBody);
+        string? RequestBody,
+        BrowserRequestSnapshot Request);
+
+    private enum CursorFetchOutcome
+    {
+        NotAvailable,
+        Success,
+        Failed
+    }
 }

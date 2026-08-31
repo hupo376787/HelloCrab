@@ -52,18 +52,22 @@ public static class FileNameHelper
 
     public static string BuildAuthorFolderName(string? authorName, string? authorId, int maxLength = 120)
     {
-        var safeId = string.IsNullOrWhiteSpace(authorId)
-            ? string.Empty
-            : Sanitize(authorId, Math.Min(64, Math.Max(1, maxLength - 3)));
-
-        if (string.IsNullOrWhiteSpace(safeId))
+        var idSuffix = BuildAuthorFolderIdSuffix(authorId, maxLength);
+        if (string.IsNullOrWhiteSpace(idSuffix))
             return Sanitize(authorName, maxLength);
 
         // 始终为“昵称(UID)”，并优先完整保留 UID；昵称过长时只截短昵称。
-        var suffix = $"({safeId})";
-        var nameLength = Math.Max(1, maxLength - suffix.Length);
+        var nameLength = Math.Max(1, maxLength - idSuffix.Length);
         var safeName = Sanitize(authorName, nameLength);
-        return Sanitize(safeName + suffix, maxLength);
+        return Sanitize(safeName + idSuffix, maxLength);
+    }
+
+    public static string BuildAuthorFolderIdSuffix(string? authorId, int maxLength = 120)
+    {
+        var safeId = string.IsNullOrWhiteSpace(authorId)
+            ? string.Empty
+            : Sanitize(authorId, Math.Min(64, Math.Max(1, maxLength - 3)));
+        return string.IsNullOrWhiteSpace(safeId) ? string.Empty : $"({safeId})";
     }
 
     public static string BuildWorkBaseName(

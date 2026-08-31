@@ -21,7 +21,13 @@ public sealed class KuaishouProfileFeedSiteAdapter : ISiteAdapter
     public string HomeUrl => "https://www.kuaishou.com/";
 
     public bool CanHandlePage(string pageUrl)
-        => _scrollAdapter.CanHandlePage(pageUrl);
+        => Uri.TryCreate(pageUrl, UriKind.Absolute, out var uri)
+           && uri.Host.Equals("www.kuaishou.com", StringComparison.OrdinalIgnoreCase)
+           && uri.AbsolutePath.Split(
+               '/',
+               StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+               is ["profile", var profileId, ..]
+           && !string.IsNullOrWhiteSpace(profileId);
 
     public bool IsTargetResponse(
         string responseUrl,
@@ -134,8 +140,21 @@ public sealed class KuaishouProfileFeedSiteAdapter : ISiteAdapter
             ReadHasMore(root),
             ReadString(root, "pcursor"),
             diagnostic,
-            rejected);
+            rejected)
+        {
+            TotalWorkCount = HelloCrab.Core.Utilities.AuthorWorkCountReader.TryRead(Id, root)
+        };
     }
+
+    public bool TryCreateCursorRequest(
+        BrowserRequestSnapshot previousRequest,
+        string cursor,
+        out BrowserPageRequest nextRequest)
+        => CursorRequestRewriter.TryRewrite(
+            previousRequest,
+            cursor,
+            new[] { "pcursor", "cursor" },
+            out nextRequest);
 
     public Task ScrollNextAsync(
         IBrowserAutomationService browser,
@@ -179,6 +198,7 @@ public sealed class KuaishouProfileFeedSiteAdapter : ISiteAdapter
         var normalized = urls
             .Where(IsHttpUrl)
             .Select(WebUtility.HtmlDecode)
+            .OfType<string>()
             .Distinct(StringComparer.Ordinal)
             .ToArray();
 

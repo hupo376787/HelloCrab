@@ -100,9 +100,10 @@ public sealed class DownloadHistoryService
         }
     }
 
-    public async Task UpsertDownloadedAuthorAsync(
+    public async Task UpsertAuthorMetadataAsync(
         WorkItem work,
         string authorFolder,
+        bool updateExistingAuthorNickname,
         CancellationToken cancellationToken = default)
     {
         IReadOnlyList<DownloadHistoryItem> snapshot;
@@ -112,11 +113,13 @@ public sealed class DownloadHistoryService
             await EnsureLoadedCoreAsync(cancellationToken);
 
             var item = _items.FirstOrDefault(x =>
-                x.Platform.Equals(work.PlatformId, StringComparison.OrdinalIgnoreCase)
+                PlatformMatches(x.Platform, work.PlatformId)
                 && x.UserId.Equals(work.AuthorId, StringComparison.Ordinal));
 
+            var isNewAuthor = false;
             if (item is null)
             {
+                isNewAuthor = true;
                 item = new DownloadHistoryItem
                 {
                     Id = _items.Count == 0 ? 1 : _items.Max(x => x.Id) + 1,
@@ -132,10 +135,10 @@ public sealed class DownloadHistoryService
             item.Platform = NormalizePlatformName(work.PlatformId);
             item.HeadUrl = work.AuthorAvatarUrl ?? item.HeadUrl;
             item.UserId = work.AuthorId;
-            item.UserName = work.AuthorName;
+            if (isNewAuthor || updateExistingAuthorNickname)
+                item.UserName = work.AuthorName;
             item.OriginalUrl = work.AuthorPageUrl ?? work.SourceUrl;
             item.FolderPath = authorFolder;
-            item.UpdatedAt = DateTimeOffset.Now;
 
             NormalizeSortOrder();
             await SaveCoreAsync(cancellationToken);
@@ -147,6 +150,41 @@ public sealed class DownloadHistoryService
         }
 
         HistoryChanged?.Invoke(this, snapshot);
+    }
+
+    public async Task MarkDownloadCompletedAsync(
+        string platformId,
+        string userId,
+        string authorFolder,
+        CancellationToken cancellationToken = default)
+    {
+        var stats = await Task.Run(() => CalculateFolderStats(authorFolder), cancellationToken);
+        IReadOnlyList<DownloadHistoryItem>? snapshot = null;
+
+        await _gate.WaitAsync(cancellationToken);
+        try
+        {
+            await EnsureLoadedCoreAsync(cancellationToken);
+            var item = _items.FirstOrDefault(x =>
+                PlatformMatches(x.Platform, platformId)
+                && x.UserId.Equals(userId, StringComparison.Ordinal));
+            if (item is null)
+                return;
+
+            item.FolderPath = authorFolder;
+            item.ItemsCount = stats.ItemsCount;
+            item.ItemsSize = stats.ItemsSize;
+            item.UpdatedAt = DateTimeOffset.Now;
+            await SaveCoreAsync(cancellationToken);
+            snapshot = Snapshot();
+        }
+        finally
+        {
+            _gate.Release();
+        }
+
+        if (snapshot is not null)
+            HistoryChanged?.Invoke(this, snapshot);
     }
 
     public async Task RefreshAuthorStatsAsync(
@@ -600,6 +638,7 @@ public sealed class DownloadHistoryService
             "tiktok" => "TikTok",
             "instagram" => "Instagram",
             "kuaishou" => "Kuaishou",
+            "kuaishou-live" => "Kuaishou-Live",
             "weibo" => "Weibo",
             "meipian" => "Meipian",
             _ => platformId
@@ -616,6 +655,8 @@ public sealed class DownloadHistoryService
                    && platformId.Equals("instagram", StringComparison.OrdinalIgnoreCase))
                || (storedPlatform.Equals("Kuaishou", StringComparison.OrdinalIgnoreCase)
                    && platformId.Equals("kuaishou", StringComparison.OrdinalIgnoreCase))
+               || (storedPlatform.Equals("Kuaishou-Live", StringComparison.OrdinalIgnoreCase)
+                   && platformId.Equals("kuaishou-live", StringComparison.OrdinalIgnoreCase))
                || (storedPlatform.Equals("Weibo", StringComparison.OrdinalIgnoreCase)
                    && platformId.Equals("weibo", StringComparison.OrdinalIgnoreCase))
                || (storedPlatform.Equals("Meipian", StringComparison.OrdinalIgnoreCase)

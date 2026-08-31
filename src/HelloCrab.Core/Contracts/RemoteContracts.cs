@@ -25,6 +25,7 @@ public sealed class RemoteCrawlerSnapshot
     public string? CurrentAuthorId { get; set; }
     public string? CurrentAuthorDirectory { get; set; }
     public int ResponseCount { get; set; }
+    public int? TotalWorkCount { get; set; }
     public int DiscoveredCount { get; set; }
     public int DownloadedCount { get; set; }
     public int SkippedCount { get; set; }
@@ -47,6 +48,7 @@ public sealed class RemoteSettingsDto
     public bool DownloadCover { get; set; }
     public bool DownloadMusic { get; set; }
     public bool DownloadLivePhoto { get; set; }
+    public bool UpdateAuthorNickname { get; set; }
     public bool CheckVideoAudio { get; set; }
     public bool EnablePersonDetection { get; set; }
     public double PersonDetectionConfidence { get; set; } = 0.60;
@@ -66,6 +68,7 @@ public sealed class RemoteHistoryItemDto
     public int ItemsCount { get; set; }
     public long ItemsSize { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
+    public bool IsDownloading { get; set; }
 }
 
 public sealed class RemoteCommandResult

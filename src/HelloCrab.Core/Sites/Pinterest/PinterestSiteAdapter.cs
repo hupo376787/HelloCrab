@@ -198,8 +198,21 @@ public sealed partial class PinterestSiteAdapter : ISiteAdapter
             bookmarkState.HasMore,
             bookmarkState.Bookmark,
             diagnostic,
-            rejected);
+            rejected)
+        {
+            TotalWorkCount = HelloCrab.Core.Utilities.AuthorWorkCountReader.TryRead(Id, root)
+        };
     }
+
+    public bool TryCreateCursorRequest(
+        BrowserRequestSnapshot previousRequest,
+        string cursor,
+        out BrowserPageRequest nextRequest)
+        => CursorRequestRewriter.TryRewrite(
+            previousRequest,
+            cursor,
+            new[] { "bookmark", "bookmarks", "next_bookmark", "nextBookmark" },
+            out nextRequest);
 
     public Task<WorkItem> EnrichWorkMetadataAsync(
         WorkItem work,

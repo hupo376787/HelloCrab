@@ -91,18 +91,18 @@
         <Border Classes="card">
           <StackPanel Spacing="10">
             <TextBlock Text="连接桌面客户端" FontSize="17" FontWeight="SemiBold" />
-            <TextBox Watermark="例如：http://192.168.1.10:5088"
+            <TextBox PlaceholderText="例如：http://192.168.1.10:5088"
                      Text="{Binding ServerAddress, Mode=TwoWay}"
                      MinHeight="42" />
             <Grid ColumnDefinitions="*,44" ColumnSpacing="8">
               <Grid>
-                <TextBox Watermark="输入桌面端日志显示的远程访问令牌"
+                <TextBox PlaceholderText="输入桌面端日志显示的远程访问令牌"
                          Text="{Binding AccessToken, Mode=TwoWay}"
                          PasswordChar="●"
                          MinHeight="42"
                          VerticalContentAlignment="Center"
                          IsVisible="{Binding IsAccessTokenHidden}" />
-                <TextBox Watermark="输入桌面端日志显示的远程访问令牌"
+                <TextBox PlaceholderText="输入桌面端日志显示的远程访问令牌"
                          Text="{Binding AccessToken, Mode=TwoWay}"
                          MinHeight="42"
                          VerticalContentAlignment="Center"
@@ -170,6 +170,9 @@
             <StackPanel><TextBlock Text="响应" Classes="caption"/><TextBlock Text="{Binding ResponseCount}" FontSize="25" FontWeight="Bold"/></StackPanel>
           </Border>
           <Border Classes="card" Width="190" Margin="0,0,8,8">
+            <StackPanel><TextBlock Text="作品数" Classes="caption"/><TextBlock Text="{Binding TotalWorkCountText}" FontSize="25" FontWeight="Bold"/></StackPanel>
+          </Border>
+          <Border Classes="card" Width="190" Margin="0,0,8,8">
             <StackPanel><TextBlock Text="发现" Classes="caption"/><TextBlock Text="{Binding DiscoveredCount}" FontSize="25" FontWeight="Bold"/></StackPanel>
           </Border>
           <Border Classes="card" Width="190" Margin="0,0,8,8">
@@ -192,15 +195,18 @@
             <StackPanel><TextBlock Text="响应" Classes="caption"/><TextBlock Text="{Binding ResponseCount}" FontSize="25" FontWeight="Bold"/></StackPanel>
           </Border>
           <Border Grid.Row="0" Grid.Column="1" Classes="card">
-            <StackPanel><TextBlock Text="发现" Classes="caption"/><TextBlock Text="{Binding DiscoveredCount}" FontSize="25" FontWeight="Bold"/></StackPanel>
+            <StackPanel><TextBlock Text="作品数" Classes="caption"/><TextBlock Text="{Binding TotalWorkCountText}" FontSize="25" FontWeight="Bold"/></StackPanel>
           </Border>
           <Border Grid.Row="1" Grid.Column="0" Classes="card">
-            <StackPanel><TextBlock Text="下载" Classes="caption"/><TextBlock Text="{Binding DownloadedCount}" FontSize="25" FontWeight="Bold"/></StackPanel>
+            <StackPanel><TextBlock Text="发现" Classes="caption"/><TextBlock Text="{Binding DiscoveredCount}" FontSize="25" FontWeight="Bold"/></StackPanel>
           </Border>
           <Border Grid.Row="1" Grid.Column="1" Classes="card">
-            <StackPanel><TextBlock Text="跳过" Classes="caption"/><TextBlock Text="{Binding SkippedCount}" FontSize="25" FontWeight="Bold"/></StackPanel>
+            <StackPanel><TextBlock Text="下载" Classes="caption"/><TextBlock Text="{Binding DownloadedCount}" FontSize="25" FontWeight="Bold"/></StackPanel>
           </Border>
           <Border Grid.Row="2" Grid.Column="0" Classes="card">
+            <StackPanel><TextBlock Text="跳过" Classes="caption"/><TextBlock Text="{Binding SkippedCount}" FontSize="25" FontWeight="Bold"/></StackPanel>
+          </Border>
+          <Border Grid.Row="2" Grid.Column="1" Classes="card">
             <StackPanel><TextBlock Text="失败" Classes="caption"/><TextBlock Text="{Binding FailedCount}" FontSize="25" FontWeight="Bold"/></StackPanel>
           </Border>
         </Grid>
@@ -274,6 +280,9 @@
             <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
               <CheckBox Content="下载作品封面" IsChecked="{Binding DownloadCover, Mode=TwoWay}" />
               <CheckBox Grid.Column="1" Content="下载背景音乐" IsChecked="{Binding DownloadMusic, Mode=TwoWay}" />
+            </Grid>
+            <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
+              <CheckBox Content="更新作者昵称" IsChecked="{Binding UpdateAuthorNickname, Mode=TwoWay}" />
             </Grid>
             <CheckBox Content="检测视频是否有声音，并自动修复无声视频"
                       IsChecked="{Binding CheckVideoAudio, Mode=TwoWay}" />

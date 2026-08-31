@@ -1022,7 +1022,9 @@ public sealed class PlaywrightBrowserService : IBrowserAutomationService
             response.Request.ResourceType,
             response.Status,
             responsePageUrl,
+            response.Request.Method,
             response.Request.PostData,
+            new Dictionary<string, string>(response.Request.Headers, StringComparer.OrdinalIgnoreCase),
             async cancellationToken =>
             {
                 // response.TextAsync 本身不支持 CancellationToken。停止采集或页面关闭时先返回空，

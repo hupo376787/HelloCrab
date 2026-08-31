@@ -172,8 +172,22 @@ public sealed class WeiboSiteAdapter : ISiteAdapter
             hasMore,
             sinceId,
             diagnostic,
-            rejectedCount + retweetedCount);
+            rejectedCount + retweetedCount)
+        {
+            TotalWorkCount = HelloCrab.Core.Utilities.AuthorWorkCountReader.TryRead(Id, root)
+        };
     }
+
+    public bool TryCreateCursorRequest(
+        BrowserRequestSnapshot previousRequest,
+        string cursor,
+        out BrowserPageRequest nextRequest)
+        => CursorRequestRewriter.TrySetQueryParameter(
+            previousRequest,
+            "since_id",
+            cursor,
+            out nextRequest,
+            incrementPage: true);
 
     public async Task ScrollNextAsync(
         IBrowserAutomationService browser,

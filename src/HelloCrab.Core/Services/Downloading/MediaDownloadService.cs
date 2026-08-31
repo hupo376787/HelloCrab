@@ -11,8 +11,19 @@ using HelloCrab.Core.Utilities;
 
 namespace HelloCrab.Core.Services.Downloading;
 
+public sealed record WorkDownloadResult(
+    int CreatedOutputCount,
+    int ExistingOutputCount)
+{
+    public bool AllSelectedOutputsAlreadyExisted
+        => CreatedOutputCount == 0 && ExistingOutputCount > 0;
+}
+
 public sealed class MediaDownloadService : IAsyncDisposable
 {
+    private sealed record AssetDownloadResult(string Path, bool AlreadyExisted);
+    private sealed record AudioRepairResult(bool RetainedMusic, bool ModifiedVideo);
+
     private readonly IBrowserAutomationService _browser;
     private readonly HttpClient _httpClient;
     private readonly IMediaProcessor _mediaProcessor;
@@ -64,9 +75,9 @@ public sealed class MediaDownloadService : IAsyncDisposable
             confidence,
             cancellationToken);
 
-    public async Task DownloadWorkAsync(
+    public async Task<WorkDownloadResult> DownloadWorkAsync(
         WorkItem work,
-        string downloadRoot,
+        string authorFolder,
         CrawlerDownloadOptions options,
         Guid? personDetectionSessionId,
         CancellationToken cancellationToken)
@@ -91,9 +102,7 @@ public sealed class MediaDownloadService : IAsyncDisposable
                 (url, token) => originalContext.GetCookiesAsync(url, token));
         }
 
-        // 使用接口中的 author.uid，不再截短 UID。
-        var authorFolderName = FileNameHelper.BuildAuthorFolderName(work.AuthorName, work.AuthorId);
-        var authorFolder = Path.Combine(downloadRoot, authorFolderName);
+        // 作者目录由采集协调器按平台和作者 ID 统一解析，避免作者改名后创建重复目录。
         Directory.CreateDirectory(authorFolder);
 
         var publishedAt = work.CreateTime > 0
@@ -149,6 +158,17 @@ public sealed class MediaDownloadService : IAsyncDisposable
                              || availablePrimaryAssets.Any(x => x.Type == MediaAssetType.Image);
         var sequence = 1;
         var musicRetainedDuringRepair = false;
+        var createdOutputCount = 0;
+        var existingOutputCount = 0;
+
+        void TrackOutput(AssetDownloadResult result)
+        {
+            if (result.AlreadyExisted)
+                existingOutputCount++;
+            else
+                createdOutputCount++;
+        }
+
         foreach (var asset in primaryAssets)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -157,32 +177,34 @@ public sealed class MediaDownloadService : IAsyncDisposable
 
             if (asset.Type == MediaAssetType.Image)
             {
-                var imagePath = await DownloadAssetAsync(
+                var imageDownload = await DownloadAssetAsync(
                     asset,
                     targetWithoutExtension,
                     browserContext,
                     publishedAt,
                     cancellationToken,
                     stageForPersonDetection: options.EnablePersonDetection);
+                TrackOutput(imageDownload);
                 QueuePersonDetection(
-                    imagePath,
+                    imageDownload.Path,
                     options.EnablePersonDetection,
                     personDetectionSessionId,
                     options.PersonDetectionConfidence);
             }
             else
             {
-                var videoPath = await DownloadAssetAsync(
+                var videoDownload = await DownloadAssetAsync(
                     asset,
                     targetWithoutExtension,
                     browserContext,
                     publishedAt,
                     cancellationToken);
+                TrackOutput(videoDownload);
 
                 if (options.CheckVideoAudio || requiresDashAudioMerge)
                 {
-                    var retained = await EnsureVideoHasAudioAsync(
-                        videoPath,
+                    var audioRepair = await EnsureVideoHasAudioAsync(
+                        videoDownload.Path,
                         music,
                         options.DownloadMusic && !musicRetainedDuringRepair
                             ? Path.Combine(authorFolder, baseName + "_music")
@@ -191,7 +213,12 @@ public sealed class MediaDownloadService : IAsyncDisposable
                         publishedAt,
                         cancellationToken,
                         requireAudioMerge: requiresDashAudioMerge);
-                    musicRetainedDuringRepair |= retained;
+                    musicRetainedDuringRepair |= audioRepair.RetainedMusic;
+                    if (audioRepair.ModifiedVideo && videoDownload.AlreadyExisted)
+                    {
+                        existingOutputCount--;
+                        createdOutputCount++;
+                    }
                 }
             }
 
@@ -211,12 +238,13 @@ public sealed class MediaDownloadService : IAsyncDisposable
                     ? primaryPosition + 1
                     : Math.Max(1, livePhoto.Index + 1);
                 var suffix = appendSequence ? $"_{sequenceNumber:00}" : string.Empty;
-                await DownloadAssetAsync(
+                var livePhotoDownload = await DownloadAssetAsync(
                     livePhoto,
                     Path.Combine(authorFolder, baseName + suffix + "_live"),
                     browserContext,
                     publishedAt,
                     cancellationToken);
+                TrackOutput(livePhotoDownload);
             }
         }
 
@@ -224,15 +252,16 @@ public sealed class MediaDownloadService : IAsyncDisposable
         {
             if (cover is not null)
             {
-                var coverPath = await DownloadAssetAsync(
+                var coverDownload = await DownloadAssetAsync(
                     cover,
                     Path.Combine(authorFolder, baseName + "_cover"),
                     browserContext,
                     publishedAt,
                     cancellationToken,
                     stageForPersonDetection: options.EnablePersonDetection);
+                TrackOutput(coverDownload);
                 QueuePersonDetection(
-                    coverPath,
+                    coverDownload.Path,
                     options.EnablePersonDetection,
                     personDetectionSessionId,
                     options.PersonDetectionConfidence);
@@ -247,12 +276,13 @@ public sealed class MediaDownloadService : IAsyncDisposable
         {
             if (music is not null)
             {
-                await DownloadAssetAsync(
+                var musicDownload = await DownloadAssetAsync(
                     music,
                     Path.Combine(authorFolder, baseName + "_music"),
                     browserContext,
                     publishedAt,
                     cancellationToken);
+                TrackOutput(musicDownload);
             }
             else
             {
@@ -260,6 +290,7 @@ public sealed class MediaDownloadService : IAsyncDisposable
             }
         }
 
+        return new WorkDownloadResult(createdOutputCount, existingOutputCount);
     }
 
     private void QueuePersonDetection(
@@ -316,7 +347,7 @@ public sealed class MediaDownloadService : IAsyncDisposable
         }
     }
 
-    private async Task<string> DownloadAssetAsync(
+    private async Task<AssetDownloadResult> DownloadAssetAsync(
         MediaAsset asset,
         string targetWithoutExtension,
         BrowserDownloadContext browserContext,
@@ -394,7 +425,7 @@ public sealed class MediaDownloadService : IAsyncDisposable
                             if (applyTimestamp)
                                 ApplyPublishedTimestamp(targetPath, publishedAt);
                             RaiseLog(RuntimeLocalization.Format("Log.Person.PendingExisting", "待检测图片已存在，重新加入队列：{0}", Path.GetFileName(finalTargetPath)));
-                            return targetPath;
+                            return new AssetDownloadResult(targetPath, AlreadyExisted: false);
                         }
 
                         if (File.Exists(finalTargetPath) && new FileInfo(finalTargetPath).Length > 0)
@@ -403,7 +434,7 @@ public sealed class MediaDownloadService : IAsyncDisposable
                             if (applyTimestamp)
                                 ApplyPublishedTimestamp(targetPath, publishedAt);
                             RaiseLog(RuntimeLocalization.Format("Log.Person.ExistingMoved", "已有图片已转入后台人像检测：{0}", Path.GetFileName(finalTargetPath)));
-                            return targetPath;
+                            return new AssetDownloadResult(targetPath, AlreadyExisted: false);
                         }
                     }
                     else if (File.Exists(targetPath) && new FileInfo(targetPath).Length > 0)
@@ -411,7 +442,7 @@ public sealed class MediaDownloadService : IAsyncDisposable
                         if (applyTimestamp)
                             ApplyPublishedTimestamp(targetPath, publishedAt);
                         RaiseLog(RuntimeLocalization.Format("Log.Download.FileExists", "文件已存在，跳过：{0}", Path.GetFileName(targetPath)));
-                        return targetPath;
+                        return new AssetDownloadResult(targetPath, AlreadyExisted: true);
                     }
 
                     var expectedLength = response.Content.Headers.ContentLength;
@@ -468,7 +499,7 @@ public sealed class MediaDownloadService : IAsyncDisposable
                     RaiseLog(RuntimeLocalization.Format("Log.Download.CompletedFile", "{0}：{1}", completedLabel, completedFileName));
                     if (asset.Type is MediaAssetType.Video or MediaAssetType.Music or MediaAssetType.LivePhoto)
                         ClearTransferProgress(completedFileName, asset.Type);
-                    return targetPath;
+                    return new AssetDownloadResult(targetPath, AlreadyExisted: false);
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException)
                 {
@@ -484,7 +515,7 @@ public sealed class MediaDownloadService : IAsyncDisposable
         throw new IOException(RuntimeLocalization.Get("Error.Download.AllCandidatesFailed", "所有候选下载地址均失败。"), lastError);
     }
 
-    private async Task<string> DownloadHlsAssetAsync(
+    private async Task<AssetDownloadResult> DownloadHlsAssetAsync(
         string playlistUrl,
         string targetWithoutExtension,
         BrowserDownloadContext browserContext,
@@ -500,7 +531,7 @@ public sealed class MediaDownloadService : IAsyncDisposable
             if (applyTimestamp)
                 ApplyPublishedTimestamp(targetPath, publishedAt);
             RaiseLog(RuntimeLocalization.Format("Log.Download.FileExists", "文件已存在，跳过：{0}", Path.GetFileName(targetPath)));
-            return targetPath;
+            return new AssetDownloadResult(targetPath, AlreadyExisted: true);
         }
 
         var partPath = targetWithoutExtension + ".hls.part.mp4";
@@ -593,7 +624,7 @@ public sealed class MediaDownloadService : IAsyncDisposable
                 ApplyPublishedTimestamp(targetPath, publishedAt);
             RaiseLog(RuntimeLocalization.Format("Log.Download.CompletedFile", "{0}：{1}", completionLabel ?? RuntimeLocalization.Get("Common.DownloadComplete", "下载完成"), Path.GetFileName(targetPath)));
             ClearTransferProgress(displayFileName, MediaAssetType.Video);
-            return targetPath;
+            return new AssetDownloadResult(targetPath, AlreadyExisted: false);
         }
         catch
         {
@@ -1032,7 +1063,7 @@ public sealed class MediaDownloadService : IAsyncDisposable
         int Height,
         long Bandwidth);
 
-    private async Task<bool> EnsureVideoHasAudioAsync(
+    private async Task<AudioRepairResult> EnsureVideoHasAudioAsync(
         string videoPath,
         MediaAsset? music,
         string? retainedMusicTargetWithoutExtension,
@@ -1058,16 +1089,16 @@ public sealed class MediaDownloadService : IAsyncDisposable
 
             if (Interlocked.Exchange(ref _ffmpegUnavailableWarningLogged, 1) == 0)
                 RaiseLog(ex.Message);
-            return false;
+            return new AudioRepairResult(RetainedMusic: false, ModifiedVideo: false);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             RaiseLog(RuntimeLocalization.Format("Log.Audio.CheckFailed", "无法检查视频音轨，保留原视频：{0}；{1}", Path.GetFileName(videoPath), ex.Message));
-            return false;
+            return new AudioRepairResult(RetainedMusic: false, ModifiedVideo: false);
         }
 
         if (hasAudio)
-            return false;
+            return new AudioRepairResult(RetainedMusic: false, ModifiedVideo: false);
 
         RaiseLog(RuntimeLocalization.Format("Log.Audio.SilentDetected", "检测到无音轨视频，准备下载临时音频并合并：{0}", Path.GetFileName(videoPath)));
         if (music is null || music.CandidateUrls.Count == 0)
@@ -1076,7 +1107,7 @@ public sealed class MediaDownloadService : IAsyncDisposable
                 throw new IOException(RuntimeLocalization.Get("Error.Audio.DashNoAudio", "哔哩哔哩 DASH 数据中没有可用音频流，无法生成完整视频。"));
 
             RaiseLog(RuntimeLocalization.Get("Log.Audio.NoMusic", "该作品没有可用的音乐地址，无法为无声视频补充音频。"));
-            return false;
+            return new AudioRepairResult(RetainedMusic: false, ModifiedVideo: false);
         }
 
         var directory = Path.GetDirectoryName(videoPath)
@@ -1090,7 +1121,7 @@ public sealed class MediaDownloadService : IAsyncDisposable
         var retainedMusic = false;
         try
         {
-            temporaryAudioPath = await DownloadAssetAsync(
+            var temporaryAudioDownload = await DownloadAssetAsync(
                 music,
                 temporaryAudioBase,
                 browserContext,
@@ -1098,6 +1129,7 @@ public sealed class MediaDownloadService : IAsyncDisposable
                 cancellationToken,
                 applyTimestamp: false,
                 completionLabel: RuntimeLocalization.Get("Status.Audio.TempDownloaded", "临时音频下载完成"));
+            temporaryAudioPath = temporaryAudioDownload.Path;
 
             if (!await _mediaProcessor.HasAudioStreamAsync(temporaryAudioPath, cancellationToken))
                 throw new IOException(RuntimeLocalization.Get("Error.Audio.TempNoTrack", "下载的临时音乐文件中没有可用音频轨。"));
@@ -1140,7 +1172,7 @@ public sealed class MediaDownloadService : IAsyncDisposable
             File.Move(muxedPath, videoPath, overwrite: true);
             ApplyPublishedTimestamp(videoPath, publishedAt);
             RaiseLog(RuntimeLocalization.Format("Log.Audio.MergeComplete", "无声视频已补充音频并合并完成：{0}", Path.GetFileName(videoPath)));
-            return retainedMusic;
+            return new AudioRepairResult(retainedMusic, ModifiedVideo: true);
         }
         finally
         {

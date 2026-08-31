@@ -62,14 +62,18 @@ public sealed class BrowserResponseReceivedEventArgs : EventArgs
         string resourceType,
         int statusCode,
         string pageUrl,
+        string requestMethod,
         string? requestPostData,
+        IReadOnlyDictionary<string, string> requestHeaders,
         Func<CancellationToken, Task<string>> readBodyAsync)
     {
         Url = url;
         ResourceType = resourceType;
         StatusCode = statusCode;
         PageUrl = pageUrl;
+        RequestMethod = requestMethod;
         RequestPostData = requestPostData;
+        RequestHeaders = requestHeaders;
         _readBodyAsync = readBodyAsync;
     }
 
@@ -77,11 +81,31 @@ public sealed class BrowserResponseReceivedEventArgs : EventArgs
     public string ResourceType { get; }
     public int StatusCode { get; }
     public string PageUrl { get; }
+    public string RequestMethod { get; }
     public string? RequestPostData { get; }
+    public IReadOnlyDictionary<string, string> RequestHeaders { get; }
 
     public Task<string> ReadBodyAsync(CancellationToken cancellationToken = default)
         => _readBodyAsync(cancellationToken);
 }
+
+/// <summary>
+/// 从已成功返回的浏览器网络请求中保存的分页请求模板。
+/// Cookie、User-Agent 等受浏览器控制的请求头不需要显式保存；再次 fetch 时会
+/// 由当前页面上下文自动附带。这里保留业务接口需要的普通请求头。
+/// </summary>
+public sealed record BrowserRequestSnapshot(
+    string Url,
+    string Method,
+    string? Body,
+    IReadOnlyDictionary<string, string> Headers);
+
+/// <summary>使用当前登录页面上下文发出的下一页接口请求。</summary>
+public sealed record BrowserPageRequest(
+    string Url,
+    string Method,
+    string? Body,
+    IReadOnlyDictionary<string, string> Headers);
 
 public sealed class BrowserDownloadContext
 {

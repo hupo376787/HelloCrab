@@ -130,6 +130,7 @@ Windows、Linux、macOS 共用 `HelloCrab.Desktop`：
 - 抖音、TikTok、Pinterest、快手、小红书、微博、美篇、Instagram、哔哩哔哩使用 Playwright Chromium 登录与页面采集；
 - 微博支持普通视频和图文混排视频，优先从 `media_info.playback_list` 选择 4K/2K/1080p 等最高分辨率 MP4；
 - 捕获作品接口；
+- 捕获首个作品列表请求后，优先复用当前登录态和响应游标直接请求后续页，跳过不必要的页面渲染；平台动态签名或风控拒绝请求时自动回退原有滚动方式；
 - 自动滚动作者主页；
 - 下载视频、图集、封面、音乐；
 - Instagram 捕获 `/graphql/query` 作者时间线，支持单图、Reels 和图片/视频混合轮播；无文案作品仅按发布时间命名；

@@ -20,6 +20,7 @@ public sealed class DownloadHistoryItem : ObservableObject
     private string _folderPath = string.Empty;
     private int _sortOrder;
     private IImage? _avatarImage;
+    private bool _isDownloading;
 
     public int Id { get => _id; set => SetProperty(ref _id, value); }
     public string Platform
@@ -73,6 +74,17 @@ public sealed class DownloadHistoryItem : ObservableObject
     public IImage? AvatarImage { get => _avatarImage; set => SetProperty(ref _avatarImage, value); }
 
     [JsonIgnore]
+    public bool IsDownloading
+    {
+        get => _isDownloading;
+        set
+        {
+            if (SetProperty(ref _isDownloading, value))
+                OnPropertyChanged(nameof(UpdatedAtText));
+        }
+    }
+
+    [JsonIgnore]
     public string PlatformDisplayText
     {
         get
@@ -95,10 +107,12 @@ public sealed class DownloadHistoryItem : ObservableObject
                              ?? $"UID：{UserId}";
 
     [JsonIgnore]
-    public string UpdatedAtText => UpdatedAt == default
-        ? LocalizationService.Current?.Get("History.NotDownloaded", "尚未下载") ?? "尚未下载"
-        : (LocalizationService.Current?.Format("History.LastDownloaded", UpdatedAt.LocalDateTime.ToString("yyyy-MM-dd HH:mm"))
-           ?? $"最后下载：{UpdatedAt.LocalDateTime:yyyy-MM-dd HH:mm}");
+    public string UpdatedAtText => IsDownloading
+        ? LocalizationService.Current?.Get("Common.Downloading", "正在下载") ?? "正在下载"
+        : UpdatedAt == default
+            ? LocalizationService.Current?.Get("History.NotDownloaded", "尚未下载") ?? "尚未下载"
+            : (LocalizationService.Current?.Format("History.LastDownloaded", UpdatedAt.LocalDateTime.ToString("yyyy-MM-dd HH:mm"))
+               ?? $"最后下载：{UpdatedAt.LocalDateTime:yyyy-MM-dd HH:mm}");
 
     [JsonIgnore]
     public string ItemsSizeText => FormatBytes(ItemsSize);

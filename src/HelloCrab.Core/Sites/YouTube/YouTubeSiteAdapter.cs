@@ -136,7 +136,10 @@ public sealed class YouTubeSiteAdapter : ISiteAdapter, ISiteManagedDownloadAdapt
                 false,
                 null,
                 diagnostic,
-                rejectedCount);
+                rejectedCount)
+            {
+                TotalWorkCount = works.Count
+            };
         }
         catch (Exception ex)
         {
@@ -227,9 +230,11 @@ public sealed class YouTubeSiteAdapter : ISiteAdapter, ISiteManagedDownloadAdapt
         ArgumentNullException.ThrowIfNull(log);
         ArgumentNullException.ThrowIfNull(reportProgress);
 
-        var authorFolder = Path.Combine(
+        var authorFolder = AuthorFolderResolver.ResolveDetailed(
             platformDownloadRoot,
-            FileNameHelper.BuildAuthorFolderName(work.AuthorName, work.AuthorId));
+            work.AuthorName,
+            work.AuthorId,
+            options.UpdateAuthorNickname).FolderPath;
         Directory.CreateDirectory(authorFolder);
 
         var publishedAt = work.CreateTime > 0

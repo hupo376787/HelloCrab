@@ -59,17 +59,23 @@ public sealed record CrawlerDownloadOptions(
     decimal DownloadSpeedLimitMBps = 0,
     double PersonDetectionConfidence = 0.60,
     bool DownloadVideo = true,
-    bool DownloadImage = true);
+    bool DownloadImage = true,
+    bool UpdateAuthorNickname = false);
 
 public sealed record ParsedWorkBatch(
     IReadOnlyList<WorkItem> Works,
     bool? HasMore,
     string? Cursor,
     string? Diagnostic = null,
-    int RejectedWorkCount = 0);
+    int RejectedWorkCount = 0)
+{
+    /// <summary>平台返回的作者作品总数；接口未提供或无法可靠解析时为 null。</summary>
+    public int? TotalWorkCount { get; init; }
+}
 
 public sealed record CrawlProgressSnapshot(
     int ResponseCount,
+    int? TotalWorkCount,
     int DiscoveredCount,
     int DownloadedCount,
     int SkippedCount,
@@ -136,7 +142,10 @@ public sealed class PlatformOption : ObservableObject
     {
         try
         {
-            var iconUri = new Uri($"avares://HelloCrab.Core/Assets/Platforms/{platformId}.png");
+            var iconId = platformId.Equals("kuaishou-live", StringComparison.OrdinalIgnoreCase)
+                ? "kuaishou"
+                : platformId;
+            var iconUri = new Uri($"avares://HelloCrab.Core/Assets/Platforms/{iconId}.png");
             using var stream = AssetLoader.Open(iconUri);
             return new Bitmap(stream);
         }

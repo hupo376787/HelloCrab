@@ -27,7 +27,31 @@ public interface ISiteAdapter
         return false;
     }
 
+    /// <summary>
+    /// 从当前响应读取作者作品总数。适用于作者资料等不进入作品分页队列的辅助响应；
+    /// 无可靠总数时返回 null。
+    /// </summary>
+    int? TryReadTotalWorkCount(
+        string responseUrl,
+        string responseJson,
+        string pageUrl,
+        string? requestBody)
+        => null;
+
     ParsedWorkBatch ParseResponse(string responseUrl, string responseJson, string pageUrl, string? requestBody);
+
+    /// <summary>
+    /// 根据刚刚成功的作品列表请求和响应返回的游标，构造下一页接口请求。
+    /// 返回 false 时采集器继续使用页面滚动；直连请求失败时也会自动回退滚动。
+    /// </summary>
+    bool TryCreateCursorRequest(
+        BrowserRequestSnapshot previousRequest,
+        string cursor,
+        out BrowserPageRequest nextRequest)
+    {
+        nextRequest = null!;
+        return false;
+    }
 
     /// <summary>
     /// 在判断历史完成索引之前补充作者名、头像等轻量元数据。

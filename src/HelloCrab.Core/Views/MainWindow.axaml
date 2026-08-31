@@ -126,7 +126,9 @@
     <Style Selector="ListBox.historyList ListBoxItem">
       <Setter Property="HorizontalContentAlignment" Value="Stretch" />
       <Setter Property="Padding" Value="0" />
-      <Setter Property="Margin" Value="0,0,0,10" />
+      <!-- ListBox 向右跨过 card 的 18px Padding，让滚动条贴边；
+           项目自身补回右边距，保持作者卡片原来的宽度和留白。 -->
+      <Setter Property="Margin" Value="0,0,18,10" />
       <Setter Property="Background" Value="Transparent" />
     </Style>
     <Style Selector="ListBox.historyList ListBoxItem:selected">
@@ -328,7 +330,7 @@
                 <TextBlock Classes="caption" Text="{DynamicResource Lang.Browser.CurrentUrl}" />
                 <TextBox Text="{Binding CurrentUrl, Mode=TwoWay}"
                          IsReadOnly="{Binding IsCurrentUrlReadOnly}"
-                         Watermark="{DynamicResource Lang.Browser.UrlWatermark}"
+                         PlaceholderText="{DynamicResource Lang.Browser.UrlWatermark}"
                          TextWrapping="Wrap"
                          MinHeight="54" />
               </StackPanel>
@@ -377,7 +379,7 @@
                 <TextBlock Text="{DynamicResource Lang.Download.Title}" FontSize="18" FontWeight="SemiBold" />
                 <Grid ColumnDefinitions="*,42" ColumnSpacing="8">
                   <TextBox Text="{Binding DownloadRoot}"
-                           Watermark="{DynamicResource Lang.Download.RootWatermark}"
+                           PlaceholderText="{DynamicResource Lang.Download.RootWatermark}"
                            VerticalContentAlignment="Center" />
                   <Button Grid.Column="1"
                           Width="42"
@@ -469,6 +471,11 @@
                   <CheckBox Grid.Column="1"
                             Content="{DynamicResource Lang.Download.Music}"
                             IsChecked="{Binding DownloadMusic}"
+                            VerticalAlignment="Center" />
+                </Grid>
+                <Grid ColumnDefinitions="*,*" ColumnSpacing="14">
+                  <CheckBox Content="{DynamicResource Lang.Download.UpdateAuthorNickname}"
+                            IsChecked="{Binding UpdateAuthorNickname}"
                             VerticalAlignment="Center" />
                 </Grid>
                 <Border Height="1"
@@ -617,7 +624,7 @@
                            Text="{DynamicResource Lang.PushPlus.Description}"
                            TextWrapping="Wrap" />
                 <TextBox Text="{Binding PushPlusToken, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                         Watermark="{DynamicResource Lang.PushPlus.Watermark}"
+                         PlaceholderText="{DynamicResource Lang.PushPlus.Watermark}"
                          MaxLength="256"
                          MinHeight="42"
                          VerticalContentAlignment="Center" />
@@ -645,7 +652,7 @@
                     <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
                       <TextBox Text="{Binding RemoteApiTokenDraft, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                MaxLength="64"
-                               Watermark="{DynamicResource Lang.Remote.TokenWatermark}"
+                               PlaceholderText="{DynamicResource Lang.Remote.TokenWatermark}"
                                FontFamily="Consolas,Menlo,Monospace"
                                MinHeight="38"
                                VerticalAlignment="Center"
@@ -698,8 +705,9 @@
         </ScrollViewer>
 
         <Grid Grid.Column="1" RowDefinitions="Auto,Auto,*" RowSpacing="14">
-          <UniformGrid Columns="5">
+          <UniformGrid Columns="6">
             <Border Classes="metricCard" Margin="0,0,7,0"><StackPanel><TextBlock Classes="caption" Text="{DynamicResource Lang.Metrics.Responses}"/><TextBlock Classes="metric" Text="{Binding ResponseCount}" Foreground="#8B5CF6"/></StackPanel></Border>
+            <Border Classes="metricCard" Margin="0,0,7,0"><StackPanel><TextBlock Classes="caption" Text="{DynamicResource Lang.Metrics.TotalWorks}"/><TextBlock Classes="metric" Text="{Binding TotalWorkCountText}" Foreground="#EC4899"/></StackPanel></Border>
             <Border Classes="metricCard" Margin="0,0,7,0"><StackPanel><TextBlock Classes="caption" Text="{DynamicResource Lang.Metrics.Discovered}"/><TextBlock Classes="metric" Text="{Binding DiscoveredCount}" Foreground="#06B6D4"/></StackPanel></Border>
             <Border Classes="metricCard" Margin="0,0,7,0"><StackPanel><TextBlock Classes="caption" Text="{DynamicResource Lang.Metrics.Downloaded}"/><TextBlock Classes="metric" Text="{Binding DownloadedCount}" Foreground="#10B981"/></StackPanel></Border>
             <Border Classes="metricCard" Margin="0,0,7,0"><StackPanel><TextBlock Classes="caption" Text="{DynamicResource Lang.Metrics.Skipped}"/><TextBlock Classes="metric" Text="{Binding SkippedCount}" Foreground="#F59E0B"/></StackPanel></Border>
@@ -750,12 +758,12 @@
               </Grid>
               <ScrollViewer x:Name="LogScrollViewer"
                             Grid.Row="1"
-                            Margin="0,12,0,0"
+                            Margin="0,12,-18,0"
                             HorizontalScrollBarVisibility="Disabled"
                             VerticalScrollBarVisibility="Auto"
                             IsScrollChainingEnabled="False"
                             Background="Transparent">
-                <ItemsControl ItemsSource="{Binding Logs}">
+                <ItemsControl ItemsSource="{Binding Logs}" Margin="0,0,18,0">
                   <ItemsControl.ItemTemplate>
                     <DataTemplate x:CompileBindings="False">
                       <TextBlock Text="{Binding}" FontSize="12" TextWrapping="Wrap" Margin="8,5" />
@@ -796,10 +804,11 @@
                    Padding="12,0"
                    VerticalContentAlignment="Center"
                    Text="{Binding HistorySearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                   Watermark="{Binding HistorySearchPlaceholderText}" />
+                   PlaceholderText="{Binding HistorySearchPlaceholderText}" />
 
           <ListBox x:Name="HistoryList"
                    Grid.Row="3"
+                   Margin="0,0,-18,0"
                    Classes="historyList"
                    ItemsSource="{Binding FilteredDownloadHistory}"
                    Background="Transparent"
@@ -818,6 +827,7 @@
                   <Border.ContextMenu>
                     <ContextMenu>
                       <MenuItem Header="{DynamicResource Lang.History.OpenHome}" Tag="{Binding}" Click="HistoryOpenHome_Click" />
+                      <MenuItem Header="{DynamicResource Lang.History.CopyAuthorUrl}" Tag="{Binding}" Click="HistoryCopyAuthorUrl_Click" />
                       <MenuItem Header="{DynamicResource Lang.History.OpenFolder}" Tag="{Binding}" Click="HistoryOpenFolder_Click" />
                       <MenuItem Header="{DynamicResource Lang.History.Recollect}" Tag="{Binding}" Click="HistoryRecollect_Click" />
                       <Separator />

@@ -145,8 +145,21 @@ public sealed class TikTokSiteAdapter : ISiteAdapter
             ReadBoolean(root, "hasMore"),
             ReadStringOrNumber(root, "cursor"),
             string.Join(' ', diagnosticParts),
-            rejected);
+            rejected)
+        {
+            TotalWorkCount = HelloCrab.Core.Utilities.AuthorWorkCountReader.TryRead(Id, root)
+        };
     }
+
+    public bool TryCreateCursorRequest(
+        BrowserRequestSnapshot previousRequest,
+        string cursor,
+        out BrowserPageRequest nextRequest)
+        => CursorRequestRewriter.TryRewrite(
+            previousRequest,
+            cursor,
+            new[] { "cursor" },
+            out nextRequest);
 
     public async Task ScrollNextAsync(IBrowserAutomationService browser, CancellationToken cancellationToken)
     {

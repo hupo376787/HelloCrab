@@ -7,25 +7,24 @@ using HelloCrab.Core.Services.Browser;
 namespace HelloCrab.Core.Sites.Kuaishou;
 
 /// <summary>
-/// 快手网页版作者主页适配器。
+/// 快手 Live 网页版作者主页适配器。
 ///
-/// 快手作者作品列表同时兼容 www.kuaishou.com 的 /rest/v/profile/feed、
-/// live.kuaishou.com 的 /live_api/profile/public，以及旧版 GraphQL。
-/// 两种 REST 接口中的主页 principalId/profileId 与作品 author.id 可能不是同一种 ID，
+/// 监听 live.kuaishou.com 的 /live_api/profile/public，以及旧版 GraphQL。
+/// Live 主页 principalId 与作品 author.id 可能不是同一种 ID，
 /// 因此以每批响应中占多数的 author.id 锁定目标作者，避免推荐作品进入下载队列。
 /// </summary>
 public sealed class KuaishouSiteAdapter : ISiteAdapter
 {
-    public string Id => "kuaishou";
-    public string DisplayName => RuntimeLocalization.Get("Platform.kuaishou", "快手网页版");
-    public string HomeUrl => "https://www.kuaishou.com/";
+    public string Id => "kuaishou-live";
+    public string DisplayName => RuntimeLocalization.Get("Platform.kuaishou-live", "快手网页版Live");
+    public string HomeUrl => "https://live.kuaishou.com/";
 
     public bool CanHandlePage(string pageUrl)
     {
         if (!Uri.TryCreate(pageUrl, UriKind.Absolute, out var uri))
             return false;
 
-        return IsKuaishouHost(uri.Host)
+        return uri.Host.Equals("live.kuaishou.com", StringComparison.OrdinalIgnoreCase)
                && !string.IsNullOrWhiteSpace(TryReadProfileUserId(pageUrl));
     }
 
@@ -35,14 +34,16 @@ public sealed class KuaishouSiteAdapter : ISiteAdapter
             || (!resourceType.Equals("xhr", StringComparison.OrdinalIgnoreCase)
                 && !resourceType.Equals("fetch", StringComparison.OrdinalIgnoreCase))
             || !Uri.TryCreate(responseUrl, UriKind.Absolute, out var uri)
-            || !IsKuaishouHost(uri.Host))
+            || !uri.Host.Equals("live.kuaishou.com", StringComparison.OrdinalIgnoreCase))
         {
             return false;
         }
 
         // 当前快手 PC 作者主页的作品分页接口。查询字符串中的 __NS_hxfalcon
         // 是动态风控参数，不能参与固定匹配，因此只校验路径。
-        if (IsRestProfileFeed(uri) || IsLivePublicProfile(uri))
+        if (IsRestProfileFeed(uri)
+            || IsLivePublicProfile(uri)
+            || IsSensitiveUserInfo(uri))
             return true;
 
         // 保留旧版 GraphQL 兼容，避免不同账号/灰度版本仍使用旧接口时失效。
@@ -57,6 +58,67 @@ public sealed class KuaishouSiteAdapter : ISiteAdapter
         return string.IsNullOrWhiteSpace(requestBody)
                || requestBody.Contains("visionProfilePhotoList", StringComparison.OrdinalIgnoreCase)
                || requestBody.Contains("publicFeeds", StringComparison.OrdinalIgnoreCase);
+    }
+
+    public bool TryHandleAuxiliaryResponse(
+        string responseUrl,
+        string responseJson,
+        string pageUrl,
+        string? requestBody,
+        out string? diagnostic)
+    {
+        diagnostic = null;
+        return Uri.TryCreate(responseUrl, UriKind.Absolute, out var uri)
+               && IsSensitiveUserInfo(uri);
+    }
+
+    public int? TryReadTotalWorkCount(
+        string responseUrl,
+        string responseJson,
+        string pageUrl,
+        string? requestBody)
+    {
+        if (!Uri.TryCreate(responseUrl, UriKind.Absolute, out var uri)
+            || !IsSensitiveUserInfo(uri))
+        {
+            return null;
+        }
+
+        var pageUserId = TryReadProfileUserId(pageUrl);
+        var requestUserId = ReadQueryValue(uri, "principalId");
+        if (!string.IsNullOrWhiteSpace(pageUserId)
+            && !string.IsNullOrWhiteSpace(requestUserId)
+            && !SameId(pageUserId, requestUserId))
+        {
+            return null;
+        }
+
+        using var document = JsonDocument.Parse(responseJson);
+        var root = document.RootElement;
+        if (!TryGetObject(root, "data", out var data)
+            || !TryGetObject(data, "sensitiveUserInfo", out var userInfo))
+        {
+            return null;
+        }
+
+        if (TryGetProperty(data, "result", out var resultElement)
+            && ReadInt64(data, "result") != 1)
+        {
+            return null;
+        }
+
+        var expectedUserId = pageUserId ?? requestUserId;
+        var responseUserId = ReadFirstString(userInfo, "id", "principalId");
+        if (!string.IsNullOrWhiteSpace(expectedUserId)
+            && !SameId(expectedUserId, responseUserId))
+        {
+            return null;
+        }
+
+        return TryGetObject(userInfo, "counts", out var counts)
+               && TryReadNonNegativeInt(counts, "photo", out var photoCount)
+            ? photoCount
+            : null;
     }
 
     public ParsedWorkBatch ParseResponse(string responseUrl, string responseJson, string pageUrl, string? requestBody)
@@ -187,8 +249,21 @@ public sealed class KuaishouSiteAdapter : ISiteAdapter
             ReadHasMore(payload),
             ReadCursor(payload),
             diagnostic,
-            rejected);
+            rejected)
+        {
+            TotalWorkCount = HelloCrab.Core.Utilities.AuthorWorkCountReader.TryRead(Id, document.RootElement)
+        };
     }
+
+    public bool TryCreateCursorRequest(
+        BrowserRequestSnapshot previousRequest,
+        string cursor,
+        out BrowserPageRequest nextRequest)
+        => CursorRequestRewriter.TryRewrite(
+            previousRequest,
+            cursor,
+            new[] { "pcursor", "cursor", "nextCursor", "next_cursor" },
+            out nextRequest);
 
     public async Task ScrollNextAsync(IBrowserAutomationService browser, CancellationToken cancellationToken)
     {
@@ -615,6 +690,37 @@ public sealed class KuaishouSiteAdapter : ISiteAdapter
                && path.Equals("/live_api/profile/public", StringComparison.OrdinalIgnoreCase);
     }
 
+    private static bool IsSensitiveUserInfo(Uri uri)
+    {
+        var path = uri.AbsolutePath.TrimEnd('/');
+        return uri.Host.Equals("live.kuaishou.com", StringComparison.OrdinalIgnoreCase)
+               && path.Equals(
+                   "/live_api/baseuser/userinfo/sensitive",
+                   StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string? ReadQueryValue(Uri uri, string key)
+    {
+        foreach (var pair in uri.Query.TrimStart('?').Split('&', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var separator = pair.IndexOf('=');
+            var rawName = separator >= 0 ? pair[..separator] : pair;
+            if (!string.Equals(
+                    WebUtility.UrlDecode(rawName),
+                    key,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            var rawValue = separator >= 0 ? pair[(separator + 1)..] : string.Empty;
+            var value = WebUtility.UrlDecode(rawValue)?.Trim();
+            return string.IsNullOrWhiteSpace(value) ? null : value;
+        }
+
+        return null;
+    }
+
     private static long TryReadTimestampFromMediaUrl(JsonElement feed, JsonElement photo)
     {
         var urls = new List<string>();
@@ -703,10 +809,6 @@ public sealed class KuaishouSiteAdapter : ISiteAdapter
         return null;
     }
 
-    private static bool IsKuaishouHost(string host)
-        => host.Equals("kuaishou.com", StringComparison.OrdinalIgnoreCase)
-           || host.EndsWith(".kuaishou.com", StringComparison.OrdinalIgnoreCase);
-
     private static bool SameId(string? left, string? right)
         => !string.IsNullOrWhiteSpace(left)
            && !string.IsNullOrWhiteSpace(right)
@@ -771,34 +873,34 @@ public sealed class KuaishouSiteAdapter : ISiteAdapter
         switch (value.ValueKind)
         {
             case JsonValueKind.String:
-            {
-                var text = value.GetString();
-                if (string.IsNullOrWhiteSpace(text))
-                    return;
-
-                if (Uri.TryCreate(WebUtility.HtmlDecode(text), UriKind.Absolute, out _))
                 {
-                    target.Add(text);
+                    var text = value.GetString();
+                    if (string.IsNullOrWhiteSpace(text))
+                        return;
+
+                    if (Uri.TryCreate(WebUtility.HtmlDecode(text), UriKind.Absolute, out _))
+                    {
+                        target.Add(text);
+                        return;
+                    }
+
+                    // 老接口中的 imgUrls.json 可能是序列化后的 JSON 字符串。
+                    var trimmed = text.Trim();
+                    if ((trimmed.StartsWith('[') && trimmed.EndsWith(']'))
+                        || (trimmed.StartsWith('{') && trimmed.EndsWith('}')))
+                    {
+                        try
+                        {
+                            using var nested = JsonDocument.Parse(trimmed);
+                            AddUrlsFromValue(nested.RootElement, target, depth + 1);
+                        }
+                        catch (JsonException)
+                        {
+                        }
+                    }
+
                     return;
                 }
-
-                // 老接口中的 imgUrls.json 可能是序列化后的 JSON 字符串。
-                var trimmed = text.Trim();
-                if ((trimmed.StartsWith('[') && trimmed.EndsWith(']'))
-                    || (trimmed.StartsWith('{') && trimmed.EndsWith('}')))
-                {
-                    try
-                    {
-                        using var nested = JsonDocument.Parse(trimmed);
-                        AddUrlsFromValue(nested.RootElement, target, depth + 1);
-                    }
-                    catch (JsonException)
-                    {
-                    }
-                }
-
-                return;
-            }
             case JsonValueKind.Array:
                 foreach (var item in value.EnumerateArray())
                     AddUrlsFromValue(item, target, depth + 1);
@@ -878,6 +980,38 @@ public sealed class KuaishouSiteAdapter : ISiteAdapter
         if (value.ValueKind == JsonValueKind.String && long.TryParse(value.GetString(), out number))
             return number;
         return 0;
+    }
+
+    private static bool TryReadNonNegativeInt(
+        JsonElement parent,
+        string propertyName,
+        out int result)
+    {
+        result = 0;
+        if (!TryGetProperty(parent, propertyName, out var value))
+            return false;
+
+        long number;
+        if (value.ValueKind == JsonValueKind.Number)
+        {
+            if (!value.TryGetInt64(out number))
+                return false;
+        }
+        else if (value.ValueKind == JsonValueKind.String)
+        {
+            if (!long.TryParse(value.GetString(), out number))
+                return false;
+        }
+        else
+        {
+            return false;
+        }
+
+        if (number is < 0 or > int.MaxValue)
+            return false;
+
+        result = (int)number;
+        return true;
     }
 
     private static double ReadDouble(JsonElement parent, string propertyName, double fallback = 0)

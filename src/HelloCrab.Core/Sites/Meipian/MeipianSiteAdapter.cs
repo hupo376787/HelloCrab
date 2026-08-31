@@ -91,6 +91,25 @@ public sealed class MeipianSiteAdapter : ISiteAdapter
             : ParseProfileDocument(responseJson, pageUrl);
     }
 
+    public bool TryCreateCursorRequest(
+        BrowserRequestSnapshot previousRequest,
+        string cursor,
+        out BrowserPageRequest nextRequest)
+    {
+        if (Uri.TryCreate(previousRequest.Url, UriKind.Absolute, out var uri)
+            && IsArticlePagingApi(uri))
+        {
+            return CursorRequestRewriter.TryRewrite(
+                previousRequest,
+                cursor,
+                new[] { "id", "lastid", "last_id", "cursor" },
+                out nextRequest);
+        }
+
+        nextRequest = null!;
+        return false;
+    }
+
     public async Task<WorkItem?> ResolveWorkAsync(
         WorkItem work,
         IBrowserAutomationService browser,
@@ -442,7 +461,10 @@ public sealed class MeipianSiteAdapter : ISiteAdapter
             cursor,
             works.Count == 0
                 ? RuntimeLocalization.Get("Meipian.PageEmpty", "美篇分页接口已返回空列表。")
-                : RuntimeLocalization.Format("Meipian.PageSummary", "美篇分页返回 {0} 篇文章。", works.Count));
+                : RuntimeLocalization.Format("Meipian.PageSummary", "美篇分页返回 {0} 篇文章。", works.Count))
+        {
+            TotalWorkCount = HelloCrab.Core.Utilities.AuthorWorkCountReader.TryRead(Id, root)
+        };
     }
 
     private static string ExtractArticleDetailJson(string html)

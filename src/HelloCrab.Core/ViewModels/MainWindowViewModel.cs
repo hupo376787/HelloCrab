@@ -65,6 +65,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
     private PlatformOption _selectedPlatform;
     private LanguageOption _selectedLanguage;
     private int _responseCount;
+    private string _totalWorkCountText = "NA";
     private int _discoveredCount;
     private int _downloadedCount;
     private int _skippedCount;
@@ -80,6 +81,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
     private bool _downloadCover;
     private bool _downloadMusic;
     private bool _downloadLivePhoto;
+    private bool _updateAuthorNickname;
     private decimal _downloadSpeedLimitMBps;
     private bool _checkVideoAudio;
     private bool _enablePersonDetection;
@@ -91,10 +93,13 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
     private int _currentTaskDownloadedCount;
     private string? _currentTaskAuthorId;
     private string? _activeCapturePlatformId;
+    private string? _activeHistoryDownloadAuthorId;
+    private string? _lastCaptureErrorMessage;
     private HashSet<string> _authorsKnownBeforeCurrentTask = new(StringComparer.OrdinalIgnoreCase);
     private bool _isDarkTheme;
     private bool _isHistoryVisible;
     private string _historySearchText = string.Empty;
+    private Func<DownloadHistoryItem, bool>? _additionalHistoryFilter;
     private string? _currentAuthorDirectory;
     private string? _currentAuthorName;
     private string? _currentAuthorId;
@@ -158,6 +163,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
         _downloadCover = settings.DownloadCover;
         _downloadMusic = settings.DownloadMusic;
         _downloadLivePhoto = settings.DownloadLivePhoto;
+        _updateAuthorNickname = settings.UpdateAuthorNickname;
         _downloadSpeedLimitMBps = Math.Clamp(settings.DownloadSpeedLimitMBps, 0m, 10000m);
         _checkVideoAudio = settings.CheckVideoAudio;
         _enablePersonDetection = settings.EnablePersonDetection;
@@ -487,6 +493,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
         private set => SetProperty(ref _browserModeStatusText, value);
     }
     public int ResponseCount { get => _responseCount; private set => SetProperty(ref _responseCount, value); }
+    public string TotalWorkCountText { get => _totalWorkCountText; private set => SetProperty(ref _totalWorkCountText, value); }
     public int DiscoveredCount { get => _discoveredCount; private set => SetProperty(ref _discoveredCount, value); }
     public int DownloadedCount { get => _downloadedCount; private set => SetProperty(ref _downloadedCount, value); }
     public int SkippedCount { get => _skippedCount; private set => SetProperty(ref _skippedCount, value); }
@@ -553,6 +560,16 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
         set
         {
             if (SetProperty(ref _downloadLivePhoto, value))
+                QueueSettingsSave();
+        }
+    }
+
+    public bool UpdateAuthorNickname
+    {
+        get => _updateAuthorNickname;
+        set
+        {
+            if (SetProperty(ref _updateAuthorNickname, value))
                 QueueSettingsSave();
         }
     }
@@ -1152,8 +1169,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
 
         ClearCurrentCover();
         _lastCoordinatorCompletionMessage = null;
+        _lastCaptureErrorMessage = null;
         _currentTaskDownloadedCount = 0;
         _currentTaskAuthorId = null;
+        _activeHistoryDownloadAuthorId = null;
         var capturePlatformId = SelectedPlatform.Id;
         var pushPlusTokenSnapshot = PushPlusToken;
         _activeCapturePlatformId = capturePlatformId;
@@ -1193,7 +1212,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
                 DownloadSpeedLimitMBps,
                 PersonDetectionConfidence,
                 DownloadVideo,
-                DownloadImage);
+                DownloadImage,
+                UpdateAuthorNickname);
             var result = await _coordinator.StartAsync(
                 capturePlatformId,
                 DownloadRoot,
@@ -1221,6 +1241,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
         }
         catch (Exception ex)
         {
+            _lastCaptureErrorMessage = ex.Message;
             StatusText = _localization.Get("Status.CaptureFailed");
             AddLocalizedLog("Log.Capture.Failed", ex.GetType().Name, ex.Message);
             if (ex.InnerException is not null
@@ -1231,6 +1252,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
         }
         finally
         {
+            ClearHistoryDownloadingState();
             IsCapturing = false;
             CurrentWork = "-";
             ClearCurrentAuthorAvatar();
@@ -1327,6 +1349,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
             CurrentAuthorId = CurrentAuthorId,
             CurrentAuthorDirectory = CurrentAuthorDirectory,
             ResponseCount = ResponseCount,
+            TotalWorkCount = int.TryParse(TotalWorkCountText, out var totalWorkCount) ? totalWorkCount : null,
             DiscoveredCount = DiscoveredCount,
             DownloadedCount = DownloadedCount,
             SkippedCount = SkippedCount,
@@ -1344,6 +1367,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
                 DownloadCover = DownloadCover,
                 DownloadMusic = DownloadMusic,
                 DownloadLivePhoto = DownloadLivePhoto,
+                UpdateAuthorNickname = UpdateAuthorNickname,
                 CheckVideoAudio = CheckVideoAudio,
                 EnablePersonDetection = EnablePersonDetection,
                 PersonDetectionConfidence = PersonDetectionConfidence,
@@ -1362,7 +1386,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
                 HeadUrl = item.HeadUrl,
                 ItemsCount = item.ItemsCount,
                 ItemsSize = item.ItemsSize,
-                UpdatedAt = item.UpdatedAt
+                UpdatedAt = item.UpdatedAt,
+                IsDownloading = item.IsDownloading
             }).ToList()
         };
     }
@@ -1450,6 +1475,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
             DownloadCover = settings.DownloadCover;
             DownloadMusic = settings.DownloadMusic;
             DownloadLivePhoto = settings.DownloadLivePhoto;
+            UpdateAuthorNickname = settings.UpdateAuthorNickname;
             CheckVideoAudio = settings.CheckVideoAudio;
             EnablePersonDetection = settings.EnablePersonDetection;
             PersonDetectionConfidence = settings.PersonDetectionConfidence;
@@ -1524,10 +1550,12 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
             var path = item.FolderPath;
             if (string.IsNullOrWhiteSpace(path))
             {
-                path = Path.Combine(
-                    DownloadRoot,
-                    PlatformFolderHelper.GetFolderName(item.Platform),
-                    FileNameHelper.BuildAuthorFolderName(item.UserName, item.UserId));
+                path = AuthorFolderResolver.Resolve(
+                    Path.Combine(
+                        DownloadRoot,
+                        PlatformFolderHelper.GetFolderName(item.Platform)),
+                    item.UserName,
+                    item.UserId);
             }
             _platformShell.OpenFolder(path);
         }
@@ -1557,6 +1585,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
                 && item.Platform.Equals("Pinterest", StringComparison.OrdinalIgnoreCase))
             || (x.Id.Equals("kuaishou", StringComparison.OrdinalIgnoreCase)
                 && item.Platform.Equals("Kuaishou", StringComparison.OrdinalIgnoreCase))
+            || (x.Id.Equals("kuaishou-live", StringComparison.OrdinalIgnoreCase)
+                && item.Platform.Equals("Kuaishou-Live", StringComparison.OrdinalIgnoreCase))
             || (x.Id.Equals("weibo", StringComparison.OrdinalIgnoreCase)
                 && item.Platform.Equals("Weibo", StringComparison.OrdinalIgnoreCase))
             || (x.Id.Equals("meipian", StringComparison.OrdinalIgnoreCase)
@@ -1574,10 +1604,12 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
         var path = item.FolderPath;
         if (string.IsNullOrWhiteSpace(path))
         {
-            path = Path.Combine(
-                DownloadRoot,
-                PlatformFolderHelper.GetFolderName(item.Platform),
-                FileNameHelper.BuildAuthorFolderName(item.UserName, item.UserId));
+            path = AuthorFolderResolver.Resolve(
+                Path.Combine(
+                    DownloadRoot,
+                    PlatformFolderHelper.GetFolderName(item.Platform)),
+                item.UserName,
+                item.UserId);
         }
 
         return Path.GetFullPath(path);
@@ -1794,7 +1826,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
             if (!string.IsNullOrWhiteSpace(result.AuthorId)
                 && !string.IsNullOrWhiteSpace(result.AuthorFolder))
             {
-                await _historyService.RefreshAuthorStatsAsync(
+                // 更新时间只发生在本轮采集结束时。只要已经识别到作者并进入采集流程，
+                // 无论正常完成、没有新文件、批量跳过或用户点击停止，都同步最终目录统计和时间。
+                await _historyService.MarkDownloadCompletedAsync(
                     result.PlatformId,
                     result.AuthorId,
                     result.AuthorFolder,
@@ -1909,11 +1943,17 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
     private void ApplyProgress(CrawlProgressSnapshot progress)
     {
         ResponseCount = progress.ResponseCount;
+        TotalWorkCountText = progress.TotalWorkCount?.ToString() ?? "NA";
         DiscoveredCount = progress.DiscoveredCount;
         DownloadedCount = progress.DownloadedCount;
         SkippedCount = progress.SkippedCount;
         FailedCount = progress.FailedCount;
         CurrentWork = string.IsNullOrWhiteSpace(progress.CurrentWork) ? "-" : progress.CurrentWork;
+        if (!string.IsNullOrWhiteSpace(progress.CurrentAuthorId))
+        {
+            _activeHistoryDownloadAuthorId = progress.CurrentAuthorId;
+            RefreshHistoryDownloadingState();
+        }
         IsDownloadProgressVisible = progress.IsDownloading;
         IsDownloadProgressIndeterminate = progress.IsDownloadIndeterminate;
         DownloadProgressPercent = progress.DownloadProgressPercent;
@@ -2001,6 +2041,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
         }
 
         RefreshFilteredDownloadHistory();
+        RefreshHistoryDownloadingState();
     }
 
     private void RefreshFilteredDownloadHistory()
@@ -2009,12 +2050,39 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
             .Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
         var matches = DownloadHistory
+            .Where(item => _additionalHistoryFilter?.Invoke(item) != false)
             .Where(item => keywords.Length == 0 || keywords.All(keyword => HistoryItemMatchesSearch(item, keyword)))
             .ToArray();
 
         HistoryCollectionSynchronizer.Sync(
             FilteredDownloadHistory,
             matches);
+    }
+
+    internal void SetAdditionalHistoryFilter(Func<DownloadHistoryItem, bool>? filter)
+    {
+        _additionalHistoryFilter = filter;
+        RefreshFilteredDownloadHistory();
+    }
+
+    private void RefreshHistoryDownloadingState()
+    {
+        foreach (var item in DownloadHistory)
+        {
+            item.IsDownloading = IsCapturing
+                                 && !string.IsNullOrWhiteSpace(_activeCapturePlatformId)
+                                 && !string.IsNullOrWhiteSpace(_activeHistoryDownloadAuthorId)
+                                 && item.Platform.Equals(_activeCapturePlatformId, StringComparison.OrdinalIgnoreCase)
+                                 && item.UserId.Equals(_activeHistoryDownloadAuthorId, StringComparison.Ordinal);
+        }
+    }
+
+    private void ClearHistoryDownloadingState()
+    {
+        _activeHistoryDownloadAuthorId = null;
+        _activeCapturePlatformId = null;
+        foreach (var item in DownloadHistory)
+            item.IsDownloading = false;
     }
 
     private static bool HistoryItemMatchesSearch(DownloadHistoryItem item, string keyword)
@@ -2132,13 +2200,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
         if (!Uri.TryCreate(url, UriKind.Absolute, out var currentUri))
             return;
 
-        var platform = Platforms.FirstOrDefault(option =>
-        {
-            if (!Uri.TryCreate(option.HomeUrl, UriKind.Absolute, out var homeUri))
-                return false;
-
-            return HostsBelongToSamePlatform(currentUri.Host, homeUri.Host);
-        });
+        var platform = FindPlatformForHost(currentUri.Host);
 
         if (platform is not null && !ReferenceEquals(platform, SelectedPlatform))
             SelectedPlatform = platform;
@@ -2158,6 +2220,27 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
         }
 
         return RootDomain(first) == RootDomain(second);
+    }
+
+    private PlatformOption? FindPlatformForHost(string host)
+    {
+        PlatformOption? sameRootDomain = null;
+        foreach (var option in Platforms)
+        {
+            if (!Uri.TryCreate(option.HomeUrl, UriKind.Absolute, out var homeUri))
+                continue;
+
+            if (host.Equals(homeUri.Host, StringComparison.OrdinalIgnoreCase))
+                return option;
+
+            if (sameRootDomain is null
+                && HostsBelongToSamePlatform(host, homeUri.Host))
+            {
+                sameRootDomain = option;
+            }
+        }
+
+        return sameRootDomain;
     }
 
     private string NormalizeBrowserUrl(string? text)
@@ -2304,6 +2387,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
             DownloadCover = DownloadCover,
             DownloadMusic = DownloadMusic,
             DownloadLivePhoto = DownloadLivePhoto,
+            UpdateAuthorNickname = UpdateAuthorNickname,
             DownloadSpeedLimitMBps = DownloadSpeedLimitMBps,
             CheckVideoAudio = CheckVideoAudio,
             EnablePersonDetection = EnablePersonDetection,

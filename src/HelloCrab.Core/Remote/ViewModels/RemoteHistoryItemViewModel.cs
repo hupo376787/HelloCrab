@@ -22,6 +22,7 @@ public sealed class RemoteHistoryItemViewModel : ObservableObject, IDisposable
     private int _itemsCount;
     private long _itemsSize;
     private DateTimeOffset _updatedAt;
+    private bool _isDownloading;
     private IImage? _avatarImage;
 
     public RemoteHistoryItemViewModel(RemoteHistoryItemDto source)
@@ -76,6 +77,16 @@ public sealed class RemoteHistoryItemViewModel : ObservableObject, IDisposable
         }
     }
 
+    public bool IsDownloading
+    {
+        get => _isDownloading;
+        private set
+        {
+            if (SetProperty(ref _isDownloading, value))
+                OnPropertyChanged(nameof(UpdatedAtText));
+        }
+    }
+
     public IImage? AvatarImage
     {
         get => _avatarImage;
@@ -85,9 +96,11 @@ public sealed class RemoteHistoryItemViewModel : ObservableObject, IDisposable
     public string AvatarKey => $"{Id}|{HeadUrl}";
     public string UidText => $"UID：{UserId}";
     public string ItemsSummary => $"{ItemsCount} 个作品 · {FormatBytes(ItemsSize)}";
-    public string UpdatedAtText => UpdatedAt == default
-        ? "尚未下载"
-        : $"最后下载：{UpdatedAt.LocalDateTime:yyyy-MM-dd HH:mm}";
+    public string UpdatedAtText => IsDownloading
+        ? "正在下载"
+        : UpdatedAt == default
+            ? "尚未下载"
+            : $"最后下载：{UpdatedAt.LocalDateTime:yyyy-MM-dd HH:mm}";
 
     /// <summary>
     /// 返回头像 URL 是否发生变化。发生变化时调用方需要重新获取头像。
@@ -106,6 +119,7 @@ public sealed class RemoteHistoryItemViewModel : ObservableObject, IDisposable
         ItemsCount = source.ItemsCount;
         ItemsSize = source.ItemsSize;
         UpdatedAt = source.UpdatedAt;
+        IsDownloading = source.IsDownloading;
 
         var avatarChanged = !string.Equals(oldAvatarKey, AvatarKey, StringComparison.Ordinal);
         if (avatarChanged)

@@ -3,6 +3,7 @@ using System.Collections.Specialized;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Input.Platform;
 using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
@@ -438,6 +439,38 @@ public partial class MainWindow : Window
             && DataContext is MainWindowViewModel viewModel)
         {
             await viewModel.OpenHistoryHomeAsync(item);
+        }
+    }
+
+    private async void HistoryCopyAuthorUrl_Click(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not MenuItem { Tag: DownloadHistoryItem item }
+            || DataContext is not MainWindowViewModel viewModel)
+        {
+            return;
+        }
+
+        var authorUrl = item.OriginalUrl?.Trim();
+        if (string.IsNullOrWhiteSpace(authorUrl))
+        {
+            viewModel.AddRemoteLocalizedLog("Log.History.CopyUrlMissing", item.UserName);
+            return;
+        }
+
+        try
+        {
+            var clipboard = TopLevel.GetTopLevel(this)?.Clipboard
+                            ?? throw new InvalidOperationException(
+                                LocalizationService.Current?.Get(
+                                    "Error.ClipboardUnavailable",
+                                    "系统剪贴板不可用。")
+                                ?? "系统剪贴板不可用。");
+            await clipboard.SetTextAsync(authorUrl);
+            viewModel.AddRemoteLocalizedLog("Log.History.UrlCopied", item.UserName);
+        }
+        catch (Exception ex)
+        {
+            viewModel.AddRemoteLocalizedLog("Log.History.CopyUrlFailed", ex.Message);
         }
     }
 

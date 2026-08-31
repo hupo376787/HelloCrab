@@ -126,8 +126,21 @@ public sealed class InstagramSiteAdapter : ISiteAdapter
             hasMore,
             cursor,
             diagnostic,
-            rejectedWorkCount);
+            rejectedWorkCount)
+        {
+            TotalWorkCount = HelloCrab.Core.Utilities.AuthorWorkCountReader.TryRead(Id, root)
+        };
     }
+
+    public bool TryCreateCursorRequest(
+        BrowserRequestSnapshot previousRequest,
+        string cursor,
+        out BrowserPageRequest nextRequest)
+        => CursorRequestRewriter.TryRewrite(
+            previousRequest,
+            cursor,
+            new[] { "after", "cursor" },
+            out nextRequest);
 
     public async Task ScrollNextAsync(
         IBrowserAutomationService browser,

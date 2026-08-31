@@ -94,7 +94,10 @@ public sealed partial class XSiteAdapter : ISiteAdapter
             bottomCursor is not null,
             bottomCursor,
             diagnostic,
-            rejected);
+            rejected)
+        {
+            TotalWorkCount = HelloCrab.Core.Utilities.AuthorWorkCountReader.TryRead(Id, document.RootElement)
+        };
     }
 
     public async Task ScrollNextAsync(

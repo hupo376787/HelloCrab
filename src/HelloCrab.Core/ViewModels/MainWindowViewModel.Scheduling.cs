@@ -237,6 +237,7 @@ public sealed partial class MainWindowViewModel
         var completedCount = 0;
         var totalCount = 0;
         var stoppedForLogin = false;
+        var issues = new List<BatchIssue>();
         try
         {
             var history = (await _historyService.LoadAsync(linkedCts.Token))
@@ -268,6 +269,14 @@ public sealed partial class MainWindowViewModel
                 var platform = ResolveHistoryPlatform(item.Platform);
                 if (platform is null)
                 {
+                    issues.Add(new BatchIssue(
+                        index + 1,
+                        BuildBatchIssueTarget(item.UserName, item.OriginalUrl),
+                        BatchLocalizedText(
+                            "Batch.Issue.UnsupportedUrl",
+                            $"无法识别平台“{item.Platform}”",
+                            $"Platform “{item.Platform}” could not be recognized",
+                            $"プラットフォーム「{item.Platform}」を認識できません")));
                     AddLog(_localization.Format(
                         "Schedule.Log.ItemUnknownPlatform",
                         item.UserName,
@@ -278,6 +287,14 @@ public sealed partial class MainWindowViewModel
                 var url = ExtractFirstUrl(item.OriginalUrl);
                 if (string.IsNullOrWhiteSpace(url))
                 {
+                    issues.Add(new BatchIssue(
+                        index + 1,
+                        item.UserName,
+                        BatchLocalizedText(
+                            "Batch.Issue.InvalidUrl",
+                            "没有可用地址",
+                            "No valid URL",
+                            "有効な URL がありません")));
                     AddLog(_localization.Format(
                         "Schedule.Log.ItemInvalidUrl",
                         item.UserName));
@@ -298,6 +315,14 @@ public sealed partial class MainWindowViewModel
                     linkedCts.Token);
                 if (_browser.IsLoginRecoveryActive)
                 {
+                    issues.Add(new BatchIssue(
+                        index + 1,
+                        BuildBatchIssueTarget(item.UserName, url),
+                        BatchLocalizedText(
+                            "Batch.Issue.LoginRequired",
+                            "登录失效，当前项及后续任务已暂停",
+                            "Login expired; this and remaining items were paused",
+                            "ログイン切れのため、この項目と残りの処理を停止しました")));
                     AddLog(_localization.Format(
                         "Schedule.Log.LoginRequired",
                         item.UserName));
@@ -306,7 +331,17 @@ public sealed partial class MainWindowViewModel
                 }
 
                 await StartCaptureAsync();
-                completedCount++;
+                if (string.IsNullOrWhiteSpace(_lastCaptureErrorMessage))
+                {
+                    completedCount++;
+                }
+                else
+                {
+                    issues.Add(new BatchIssue(
+                        index + 1,
+                        BuildBatchIssueTarget(item.UserName, url),
+                        _lastCaptureErrorMessage));
+                }
                 linkedCts.Token.ThrowIfCancellationRequested();
             }
 
@@ -317,6 +352,8 @@ public sealed partial class MainWindowViewModel
                     completedCount,
                     history.Length));
             }
+
+            AddBatchIssueSummary(issues);
         }
         catch (OperationCanceledException)
         {
@@ -324,12 +361,18 @@ public sealed partial class MainWindowViewModel
                 "Schedule.Log.BatchCanceled",
                 completedCount,
                 totalCount));
+            AddBatchIssueSummary(issues);
         }
         catch (Exception ex)
         {
+            issues.Add(new BatchIssue(
+                completedCount + issues.Count + 1,
+                BuildBatchIssueTarget(CurrentAuthorName, CurrentUrl),
+                ex.Message));
             AddLog(_localization.Format(
                 "Schedule.Log.ExecutionFailed",
                 ex.Message));
+            AddBatchIssueSummary(issues);
             throw;
         }
         finally
@@ -350,6 +393,9 @@ public sealed partial class MainWindowViewModel
             "小红书" => "xiaohongshu",
             "抖音" => "douyin",
             "快手" => "kuaishou",
+            "快手live" => "kuaishou-live",
+            "快手 live" => "kuaishou-live",
+            "快手网页版live" => "kuaishou-live",
             "微博" => "weibo",
             "美篇" => "meipian",
             _ => platformName?.Trim().ToLowerInvariant()
