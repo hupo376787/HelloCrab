@@ -339,7 +339,13 @@ public sealed class CrawlCoordinator : IAsyncDisposable
                 _capturePageUrl,
                 response.RequestPostData);
             if (totalWorkCount.HasValue)
+            {
                 _totalWorkCount = totalWorkCount;
+                RaiseLog(RuntimeLocalization.Format(
+                    "Log.Crawl.TotalWorkCountRead",
+                    "已读取作者作品数：{0}",
+                    totalWorkCount.Value));
+            }
 
             // 作者资料等辅助响应必须在浏览器事件线程中立即解析。若与作品列表一起进入
             // 单消费者队列，它可能会被一整页视频详情和下载任务阻塞，导致首个作品写入

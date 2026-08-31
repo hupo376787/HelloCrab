@@ -4,6 +4,7 @@ using System.Text.Json;
 using HelloCrab.Core.Models;
 using HelloCrab.Core.Sites;
 using HelloCrab.Core.Services.Browser;
+using HelloCrab.Core.Utilities;
 
 namespace HelloCrab.Core.Sites.Douyin;
 
@@ -23,11 +24,21 @@ public sealed class DouyinSiteAdapter : ISiteAdapter
     }
 
     public bool IsTargetResponse(string responseUrl, string resourceType, int statusCode, string? requestBody)
-        => statusCode is >= 200 and < 300
-           && (resourceType.Equals("xhr", StringComparison.OrdinalIgnoreCase)
-               || resourceType.Equals("fetch", StringComparison.OrdinalIgnoreCase))
-           && (responseUrl.Contains("/aweme/v1/web/aweme/post", StringComparison.OrdinalIgnoreCase)
-               || IsUserProfileResponse(responseUrl));
+    {
+        if (statusCode is < 200 or >= 300)
+            return false;
+
+        // profile/other 在不同 Chromium/缓存路径下可能被标记为 xhr、fetch 或 other。
+        // URL 已做精确接口匹配，因此不再用资源类型把作者作品数响应过滤掉。
+        if (IsUserProfileResponse(responseUrl))
+            return true;
+
+        return (resourceType.Equals("xhr", StringComparison.OrdinalIgnoreCase)
+                || resourceType.Equals("fetch", StringComparison.OrdinalIgnoreCase))
+               && responseUrl.Contains(
+                   "/aweme/v1/web/aweme/post",
+                   StringComparison.OrdinalIgnoreCase);
+    }
 
     public bool TryHandleAuxiliaryResponse(
         string responseUrl,
@@ -59,42 +70,36 @@ public sealed class DouyinSiteAdapter : ISiteAdapter
             return null;
         }
 
-        using var document = JsonDocument.Parse(responseJson);
-        var root = document.RootElement;
-        if (ReadInt64(root, "status_code") != 0
-            || !TryGetObject(root, "user", out var user))
+        try
         {
-            return null;
-        }
-
-        var expectedSecUserId = pageSecUserId ?? responseSecUserId;
-        var userSecUserId = ReadString(user, "sec_uid");
-        if (!string.IsNullOrWhiteSpace(expectedSecUserId)
-            && !SameSecUserId(expectedSecUserId, userSecUserId))
-        {
-            return null;
-        }
-
-        if (!user.TryGetProperty("aweme_count", out var countElement))
-            return null;
-
-        long count;
-        if (countElement.ValueKind == JsonValueKind.Number)
-        {
-            if (!countElement.TryGetInt64(out count))
+            using var document = JsonDocument.Parse(responseJson);
+            var root = document.RootElement;
+            if (ReadInt64(root, "status_code") != 0)
                 return null;
+
+            var countRoot = root;
+            if (TryGetObject(root, "user", out var user))
+            {
+                var expectedSecUserId = pageSecUserId ?? responseSecUserId;
+                var userSecUserId = ReadString(user, "sec_uid");
+                // 新版接口可能省略 user.sec_uid；只有双方都有值且确实不一致时才拒绝。
+                if (!string.IsNullOrWhiteSpace(expectedSecUserId)
+                    && !string.IsNullOrWhiteSpace(userSecUserId)
+                    && !SameSecUserId(expectedSecUserId, userSecUserId))
+                {
+                    return null;
+                }
+
+                countRoot = user;
+            }
+
+            return AuthorWorkCountReader.TryRead(Id, countRoot)
+                   ?? AuthorWorkCountReader.TryRead(Id, root);
         }
-        else if (countElement.ValueKind == JsonValueKind.String)
-        {
-            if (!long.TryParse(countElement.GetString(), out count))
-                return null;
-        }
-        else
+        catch (JsonException)
         {
             return null;
         }
-
-        return count is >= 0 and <= int.MaxValue ? (int)count : null;
     }
 
     public ParsedWorkBatch ParseResponse(string responseUrl, string responseJson, string pageUrl, string? requestBody)
