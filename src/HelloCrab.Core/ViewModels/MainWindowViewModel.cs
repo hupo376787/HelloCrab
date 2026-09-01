@@ -88,6 +88,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
     private double _personDetectionConfidence = 0.60;
     private bool _stopOnDuplicateThreshold = true;
     private int _duplicateStopThreshold = 20;
+    private int _pageDelaySeconds = 10;
     private string _pushPlusToken = string.Empty;
     private string? _lastCoordinatorCompletionMessage;
     private int _currentTaskDownloadedCount;
@@ -170,6 +171,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
         _personDetectionConfidence = Math.Clamp(settings.PersonDetectionConfidence, 0.10, 0.95);
         _stopOnDuplicateThreshold = settings.StopOnDuplicateThreshold;
         _duplicateStopThreshold = Math.Clamp(settings.DuplicateStopThreshold, 1, 10000);
+        _pageDelaySeconds = Math.Max(2, settings.PageDelaySeconds);
         _pushPlusToken = settings.PushPlusToken ?? string.Empty;
         _isDarkTheme = settings.Theme.Equals("Dark", StringComparison.OrdinalIgnoreCase);
         _remoteApiEnabled = settings.RemoteApiEnabled;
@@ -644,6 +646,17 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
         {
             var normalized = Math.Clamp(value, 1, 10000);
             if (SetProperty(ref _duplicateStopThreshold, normalized))
+                QueueSettingsSave();
+        }
+    }
+
+    public int PageDelaySeconds
+    {
+        get => _pageDelaySeconds;
+        set
+        {
+            var normalized = Math.Max(2, value);
+            if (SetProperty(ref _pageDelaySeconds, normalized))
                 QueueSettingsSave();
         }
     }
@@ -1213,7 +1226,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
                 PersonDetectionConfidence,
                 DownloadVideo,
                 DownloadImage,
-                UpdateAuthorNickname);
+                UpdateAuthorNickname,
+                PageDelaySeconds);
             var result = await _coordinator.StartAsync(
                 capturePlatformId,
                 DownloadRoot,
@@ -1372,7 +1386,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
                 EnablePersonDetection = EnablePersonDetection,
                 PersonDetectionConfidence = PersonDetectionConfidence,
                 StopOnDuplicateThreshold = StopOnDuplicateThreshold,
-                DuplicateStopThreshold = DuplicateStopThreshold
+                DuplicateStopThreshold = DuplicateStopThreshold,
+                PageDelaySeconds = PageDelaySeconds
             },
             Logs = Logs.Take(150).ToList(),
             History = DownloadHistory.Select(item => new RemoteHistoryItemDto
@@ -1481,6 +1496,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
             PersonDetectionConfidence = settings.PersonDetectionConfidence;
             StopOnDuplicateThreshold = settings.StopOnDuplicateThreshold;
             DuplicateStopThreshold = settings.DuplicateStopThreshold;
+            PageDelaySeconds = settings.PageDelaySeconds;
             SetTheme(settings.Theme.Equals("Dark", StringComparison.OrdinalIgnoreCase));
         }
         finally
@@ -2394,6 +2410,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
             PersonDetectionConfidence = PersonDetectionConfidence,
             StopOnDuplicateThreshold = StopOnDuplicateThreshold,
             DuplicateStopThreshold = DuplicateStopThreshold,
+            PageDelaySeconds = PageDelaySeconds,
             PushPlusToken = PushPlusToken,
             RemoteApiEnabled = RemoteApiEnabled,
             RemoteApiPort = RemoteApiPort,

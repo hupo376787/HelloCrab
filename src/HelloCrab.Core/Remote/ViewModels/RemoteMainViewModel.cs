@@ -58,6 +58,7 @@ public sealed class RemoteMainViewModel : ObservableObject, IAsyncDisposable
     private double _personDetectionConfidence = 0.60;
     private bool _stopOnDuplicateThreshold = true;
     private int _duplicateStopThreshold = 20;
+    private int _pageDelaySeconds = 10;
     private bool _applyingSnapshot;
     private bool _settingsDirty;
     private string _settingsSyncText = "连接桌面客户端后会自动加载 settings.json。";
@@ -362,6 +363,17 @@ public sealed class RemoteMainViewModel : ObservableObject, IAsyncDisposable
         }
     }
 
+    public int PageDelaySeconds
+    {
+        get => _pageDelaySeconds;
+        set
+        {
+            var normalized = Math.Max(2, value);
+            if (SetProperty(ref _pageDelaySeconds, normalized))
+                MarkSettingsDirty();
+        }
+    }
+
     private bool CanRunHostAction() => IsConnected && !HostIsBusy && !IsCapturing;
 
     private async Task ConnectAsync()
@@ -447,7 +459,8 @@ public sealed class RemoteMainViewModel : ObservableObject, IAsyncDisposable
                 EnablePersonDetection = EnablePersonDetection,
                 PersonDetectionConfidence = PersonDetectionConfidence,
                 StopOnDuplicateThreshold = StopOnDuplicateThreshold,
-                DuplicateStopThreshold = DuplicateStopThreshold
+                DuplicateStopThreshold = DuplicateStopThreshold,
+                PageDelaySeconds = PageDelaySeconds
             });
             await RefreshAsync();
             ConnectionText = string.IsNullOrWhiteSpace(result.Message)
@@ -504,6 +517,7 @@ public sealed class RemoteMainViewModel : ObservableObject, IAsyncDisposable
                 PersonDetectionConfidence = snapshot.Settings.PersonDetectionConfidence;
                 StopOnDuplicateThreshold = snapshot.Settings.StopOnDuplicateThreshold;
                 DuplicateStopThreshold = snapshot.Settings.DuplicateStopThreshold;
+                PageDelaySeconds = snapshot.Settings.PageDelaySeconds;
                 _settingsDirty = false;
                 SettingsSyncText = $"已自动加载桌面设置 · {snapshot.ServerTime:HH:mm:ss}";
             }

@@ -54,6 +54,7 @@ public sealed class RemoteSettingsDto
     public double PersonDetectionConfidence { get; set; } = 0.60;
     public bool StopOnDuplicateThreshold { get; set; } = true;
     public int DuplicateStopThreshold { get; set; } = 20;
+    public int PageDelaySeconds { get; set; } = 10;
 }
 
 public sealed class RemoteHistoryItemDto

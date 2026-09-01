@@ -345,6 +345,28 @@
                         CornerRadius="8" />
               </Grid>
             </Grid>
+            <Grid ColumnDefinitions="*,120" ColumnSpacing="10" MinHeight="44">
+              <StackPanel VerticalAlignment="Center">
+                <TextBlock Text="每页随机等待（秒）" FontWeight="SemiBold" />
+                <TextBlock Classes="caption"
+                           Text="默认 10；每页会在 2 秒至设置值之间随机等待。"
+                           TextWrapping="Wrap" />
+              </StackPanel>
+              <Grid Grid.Column="1"
+                    Width="120"
+                    Height="44"
+                    HorizontalAlignment="Right"
+                    VerticalAlignment="Center">
+                <NumericUpDown Classes="remoteThreshold"
+                               Minimum="2"
+                               Increment="1"
+                               Value="{Binding PageDelaySeconds, Mode=TwoWay}" />
+                <Border IsHitTestVisible="False"
+                        BorderBrush="{DynamicResource RemoteCardBorderBrush}"
+                        BorderThickness="1"
+                        CornerRadius="8" />
+              </Grid>
+            </Grid>
             <Button Classes="action primary" Command="{Binding SaveSettingsCommand}" Content="保存并同步桌面客户端" HorizontalAlignment="Stretch" />
           </StackPanel>
         </Border>

@@ -2,7 +2,7 @@ namespace HelloCrab.Core.Services.Settings;
 
 public sealed class AppSettings
 {
-    public int Version { get; set; } = 15;
+    public int Version { get; set; } = 16;
 
     /// <summary>
     /// Light 或 Dark。
@@ -31,6 +31,7 @@ public sealed class AppSettings
     public double PersonDetectionConfidence { get; set; } = 0.60;
     public bool StopOnDuplicateThreshold { get; set; } = true;
     public int DuplicateStopThreshold { get; set; } = 20;
+    public int PageDelaySeconds { get; set; } = 10;
 
     /// <summary>PushPlus 微信通知 Token；为空时不发送下载完成通知。</summary>
     public string PushPlusToken { get; set; } = string.Empty;

@@ -23,10 +23,8 @@ public sealed class CrawlCoordinator : IAsyncDisposable
     private readonly Dictionary<string, string> _persistedAuthorMetadata = new(StringComparer.Ordinal);
     private readonly Dictionary<string, (string PlatformId, string UserId, string Folder)> _touchedAuthors = new(StringComparer.Ordinal);
 
-    // 每一页（一次列表响应）中的所有作品处理完毕后，再随机等待 3–10 秒，
+    // 每一页（一次列表响应）中的所有作品处理完毕后，再按用户设置随机等待，
     // 然后才允许滚动或请求下一页。作品之间、详情解析前和媒体下载前均不等待。
-    private const int PageDelayMinMilliseconds = 3_000;
-    private const int PageDelayMaxMillisecondsExclusive = 10_001;
 
     private const string CursorFetchScript = """
         async request => {
@@ -633,11 +631,13 @@ public sealed class CrawlCoordinator : IAsyncDisposable
                 // 从而确保延时发生在“本页完成”和“加载下一页”之间，而不是作品之间。
                 if (batch.Works.Count > 0 && !_duplicateStopRequested && _hasMore != false)
                 {
-                    var pageDelay = Random.Shared.Next(
-                        PageDelayMinMilliseconds,
-                        PageDelayMaxMillisecondsExclusive);
-                    RaiseLog(RuntimeLocalization.Format("Log.Crawl.PageDoneDelay", "本页 {0} 个作品处理完成，随机等待 {1} 秒后加载下一页。", batch.Works.Count, $"{pageDelay / 1000d:0.0}"));
-                    await Task.Delay(pageDelay, cancellationToken);
+                    const int minimumSeconds = 2;
+                    var maximumSeconds = Math.Max(minimumSeconds, _downloadOptions.PageDelaySeconds);
+                    var pageDelaySeconds = maximumSeconds == minimumSeconds
+                        ? minimumSeconds
+                        : Random.Shared.NextInt64(minimumSeconds, (long)maximumSeconds + 1);
+                    RaiseLog(RuntimeLocalization.Format("Log.Crawl.PageDoneDelay", "本页 {0} 个作品处理完成，随机等待 {1} 秒后加载下一页。", batch.Works.Count, pageDelaySeconds));
+                    await DelaySecondsAsync(pageDelaySeconds, cancellationToken);
                 }
             }
             finally
@@ -764,6 +764,17 @@ public sealed class CrawlCoordinator : IAsyncDisposable
         }
 
         return Volatile.Read(ref _parsedResponseCount) > beforeParsedCount;
+    }
+
+    private static async Task DelaySecondsAsync(long seconds, CancellationToken cancellationToken)
+    {
+        // Task.Delay 对单次 TimeSpan 有平台上限；分段等待使设置值无需人为设置最大值。
+        while (seconds > 0)
+        {
+            var chunkSeconds = Math.Min(seconds, 86_400);
+            await Task.Delay(TimeSpan.FromSeconds(chunkSeconds), cancellationToken);
+            seconds -= chunkSeconds;
+        }
     }
 
     private async Task<CursorFetchOutcome> TryFetchCursorPageAsync(

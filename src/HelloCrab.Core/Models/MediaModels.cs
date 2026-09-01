@@ -60,7 +60,8 @@ public sealed record CrawlerDownloadOptions(
     double PersonDetectionConfidence = 0.60,
     bool DownloadVideo = true,
     bool DownloadImage = true,
-    bool UpdateAuthorNickname = false);
+    bool UpdateAuthorNickname = false,
+    int PageDelaySeconds = 10);
 
 public sealed record ParsedWorkBatch(
     IReadOnlyList<WorkItem> Works,
