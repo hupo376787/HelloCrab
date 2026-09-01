@@ -284,6 +284,7 @@
     "Log.Crawl.UnlockFailed": "解除标签页锁定失败：{0}",
     "Log.Crawl.ResponseCaptured": "捕获作品响应：第 {0} 页",
     "Log.Crawl.TotalWorkCountRead": "已读取作者作品数：{0}",
+    "Log.Crawl.TotalWorkCountRecoveryFailed": "补读抖音作者作品数失败，将继续正常采集：{0}",
     "Log.Crawl.CursorFetchPage": "正在使用游标直接请求下一页：预计第 {0} 页",
     "Log.Crawl.CursorFetchEnabled": "游标直连分页已启用：后续页将跳过页面渲染，直接复用当前登录态请求作品接口。",
     "Log.Crawl.CursorFetchHttpFailed": "游标直连接口返回 HTTP {0}。",

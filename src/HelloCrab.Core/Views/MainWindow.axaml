@@ -108,21 +108,6 @@
     <Style Selector="Button.windowButton.closeButton:pointerover">
       <Setter Property="Background" Value="#E5484D" />
     </Style>
-    <Style Selector="Button.historyToggle">
-      <Setter Property="Width" Value="36" />
-      <Setter Property="MinWidth" Value="36" />
-      <Setter Property="Height" Value="72" />
-      <Setter Property="Padding" Value="0" />
-      <Setter Property="CornerRadius" Value="7" />
-      <Setter Property="Background" Value="#B8262B3D" />
-      <Setter Property="BorderBrush" Value="#55FFFFFF" />
-      <Setter Property="BorderThickness" Value="1" />
-      <Setter Property="HorizontalContentAlignment" Value="Center" />
-      <Setter Property="VerticalContentAlignment" Value="Center" />
-    </Style>
-    <Style Selector="Button.historyToggle:pointerover">
-      <Setter Property="Background" Value="#E63A4056" />
-    </Style>
     <Style Selector="ListBox.historyList ListBoxItem">
       <Setter Property="HorizontalContentAlignment" Value="Stretch" />
       <Setter Property="Padding" Value="0" />
@@ -213,8 +198,8 @@
                   Orientation="Horizontal"
                   Spacing="0"
                   Margin="0"
-                  HorizontalAlignment="Right"
-                  VerticalAlignment="Top">
+                   HorizontalAlignment="Right"
+                   VerticalAlignment="Top">
         <Button Classes="windowButton"
                 Command="{Binding ToggleThemeCommand}"
                 ToolTip.Tip="{Binding ThemeButtonText}">
@@ -223,7 +208,22 @@
                      FontWeight="SemiBold"
                      Foreground="White"
                      HorizontalAlignment="Center"
-                     VerticalAlignment="Center" />
+                      VerticalAlignment="Center" />
+        </Button>
+        <Button Classes="windowButton"
+                Command="{Binding ToggleHistoryCommand}"
+                ToolTip.Tip="{Binding HistoryButtonText}">
+          <Grid Width="16" Height="16">
+            <Border BorderBrush="White"
+                    BorderThickness="1.5"
+                    CornerRadius="2" />
+            <Border Width="1.5"
+                    Height="11"
+                    Margin="0,0,3,0"
+                    Background="White"
+                    HorizontalAlignment="Right"
+                    VerticalAlignment="Center" />
+          </Grid>
         </Button>
         <Button Classes="windowButton" Click="MinimizeButton_Click" ToolTip.Tip="{DynamicResource Lang.Window.Minimize}">
           <Viewbox Width="14" Height="14" Stretch="Uniform">
@@ -255,7 +255,7 @@
 
     <Grid Grid.Row="1"
           Margin="20,14,8,20"
-          ColumnDefinitions="*,Auto,36">
+          ColumnDefinitions="*,Auto">
       <!-- 主内容参与布局；历史显示时此区域自动收缩。 -->
       <Grid Grid.Column="0"
             Margin="0,0,8,0"
@@ -892,24 +892,6 @@
         </Grid>
       </Border>
 
-      <!-- 固定在最右侧中部，距离窗口右侧 8 像素。 -->
-      <Button Grid.Column="2"
-              Classes="historyToggle"
-              Command="{Binding ToggleHistoryCommand}"
-              ToolTip.Tip="{Binding HistoryButtonText}"
-              VerticalAlignment="Center">
-        <Grid Width="16" Height="16">
-          <Border BorderBrush="White"
-                  BorderThickness="1.5"
-                  CornerRadius="2" />
-          <Border Width="1.5"
-                  Height="11"
-                  Margin="0,0,3,0"
-                  Background="White"
-                  HorizontalAlignment="Right"
-                  VerticalAlignment="Center" />
-        </Grid>
-      </Button>
     </Grid>
 
 

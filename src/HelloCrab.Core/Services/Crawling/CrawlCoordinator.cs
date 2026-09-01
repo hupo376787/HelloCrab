@@ -1,4 +1,5 @@
 using HelloCrab.Core.Services.Localization;
+using System.Text.Json;
 using System.Threading.Channels;
 using HelloCrab.Core.Models;
 using HelloCrab.Core.Services.Browser;
@@ -82,6 +83,7 @@ public sealed class CrawlCoordinator : IAsyncDisposable
     private bool? _hasMore;
     private string? _nextCursor;
     private BrowserRequestSnapshot? _lastPaginationRequest;
+    private string? _douyinProfileResponseUrl;
     private DateTimeOffset _lastResponseAt;
     private DateTimeOffset _lastNewWorkAt;
     private string? _currentWork;
@@ -198,9 +200,12 @@ public sealed class CrawlCoordinator : IAsyncDisposable
 
             RaiseLog(RuntimeLocalization.Format("Log.Crawl.CurrentTab", "当前采集标签页：{0}", _capturePageUrl));
             RaiseLog(RuntimeLocalization.Get("Log.Crawl.TabLocked", "采集标签页已锁定：页面操作、新标签页和误导航将被阻止。"));
+            await TryRecoverDouyinTotalWorkCountAsync(adapter, token);
             await _browser.ReloadAsync(token);
             RaiseLog(RuntimeLocalization.Get("Log.Crawl.WaitFirstPage", "等待第一页作品接口和作品列表完成加载……"));
             await WaitForResponseOrNewWorkAsync(0, 0, TimeSpan.FromSeconds(20), token);
+            if (!_totalWorkCount.HasValue)
+                await TryRecoverDouyinTotalWorkCountAsync(adapter, token);
             await WaitUntilPipelineIdleAsync(token);
             completionMessage = await RunScrollLoopAsync(adapter, token);
             _channel.Writer.TryComplete();
@@ -329,6 +334,17 @@ public sealed class CrawlCoordinator : IAsyncDisposable
                     response.RequestPostData))
                 return;
 
+            // 抖音的作者资料响应偶尔会在 Playwright 读取 body 时被 Chromium 提前释放，
+            // 表现为 Network.getResponseBody: No resource with given identifier found。
+            // 必须先保存完整的已签名 URL，之后才能在当前登录页面内重新 fetch 补读。
+            if (adapter.Id.Equals("douyin", StringComparison.OrdinalIgnoreCase)
+                && response.Url.Contains(
+                    "/aweme/v1/web/user/profile/other",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                _douyinProfileResponseUrl = response.Url;
+            }
+
             var text = await response.ReadBodyAsync(cts.Token);
             if (string.IsNullOrWhiteSpace(text))
                 return;
@@ -340,11 +356,7 @@ public sealed class CrawlCoordinator : IAsyncDisposable
                 response.RequestPostData);
             if (totalWorkCount.HasValue)
             {
-                _totalWorkCount = totalWorkCount;
-                RaiseLog(RuntimeLocalization.Format(
-                    "Log.Crawl.TotalWorkCountRead",
-                    "已读取作者作品数：{0}",
-                    totalWorkCount.Value));
+                SetTotalWorkCount(totalWorkCount.Value);
             }
 
             // 作者资料等辅助响应必须在浏览器事件线程中立即解析。若与作品列表一起进入
@@ -884,6 +896,7 @@ public sealed class CrawlCoordinator : IAsyncDisposable
         _hasMore = null;
         _nextCursor = null;
         _lastPaginationRequest = null;
+        _douyinProfileResponseUrl = null;
         _currentWork = null;
         _lastResponseAt = DateTimeOffset.Now;
         _lastNewWorkAt = DateTimeOffset.Now;
@@ -952,6 +965,145 @@ public sealed class CrawlCoordinator : IAsyncDisposable
             DownloadProgressPercent = downloadProgressPercent,
             DownloadProgressText = downloadProgressText
         });
+    }
+
+    private async Task TryRecoverDouyinTotalWorkCountAsync(
+        ISiteAdapter adapter,
+        CancellationToken cancellationToken)
+    {
+        if (_totalWorkCount.HasValue
+            || !adapter.Id.Equals("douyin", StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        try
+        {
+            // 抖音会缓存作者资料，刷新作者主页时不一定再次请求 profile/other。
+            // 此时页面的 SSR/水合 JSON 或已经渲染的“作品 N”标签仍包含作品数，
+            // 先从页面读取，避免把是否触发资料接口作为显示作品数的前置条件。
+            var pageCountResult = await _browser.EvaluatePageAsync(
+                """
+                () => {
+                    const parseCount = value => {
+                        const text = String(value || '').trim().replaceAll(',', '');
+                        const match = text.match(/^(\d+(?:\.\d+)?)(万|w)?$/i);
+                        if (!match)
+                            return null;
+                        const number = Number(match[1]);
+                        if (!Number.isFinite(number))
+                            return null;
+                        return Math.round(number * (match[2] ? 10000 : 1));
+                    };
+
+                    for (const element of document.querySelectorAll('span, a, div')) {
+                        if (element.childElementCount !== 0)
+                            continue;
+                        const match = (element.textContent || '').trim().match(/^作品\s*([\d,.]+(?:万|w)?)/i);
+                        if (!match)
+                            continue;
+                        const count = parseCount(match[1]);
+                        if (count !== null)
+                            return count;
+                    }
+
+                    const bodyMatch = (document.body?.innerText || '')
+                        .match(/(?:^|\n)\s*作品\s*([\d,.]+(?:万|w)?)/i);
+                    if (bodyMatch) {
+                        const count = parseCount(bodyMatch[1]);
+                        if (count !== null)
+                            return count;
+                    }
+
+                    const pathParts = location.pathname.split('/').filter(Boolean);
+                    const secUserId = pathParts[0] === 'user' && pathParts.length > 1
+                        ? decodeURIComponent(pathParts[1])
+                        : '';
+                    if (secUserId) {
+                        for (const script of document.scripts) {
+                            const text = script.textContent || '';
+                            let index = text.indexOf(secUserId);
+                            while (index >= 0) {
+                                const nearby = text.slice(Math.max(0, index - 4000), index + secUserId.length + 4000);
+                                const match = nearby.match(/(?:\\?["'])aweme_count(?:\\?["'])\s*:\s*(\d+)/)
+                                    || nearby.match(/(?:\\?["'])awemeCount(?:\\?["'])\s*:\s*(\d+)/);
+                                if (match)
+                                    return Number(match[1]);
+                                index = text.indexOf(secUserId, index + secUserId.length);
+                            }
+                        }
+                    }
+
+                    return null;
+                }
+                """,
+                cancellationToken);
+            if (pageCountResult.ValueKind == JsonValueKind.Number
+                && pageCountResult.TryGetInt32(out var pageCount)
+                && pageCount >= 0)
+            {
+                SetTotalWorkCount(pageCount);
+                PublishProgress();
+                return;
+            }
+
+            var resourceUrl = _douyinProfileResponseUrl;
+            if (string.IsNullOrWhiteSpace(resourceUrl))
+            {
+                var resourceUrlResult = await _browser.EvaluatePageAsync(
+                    """
+                    () => {
+                        const matches = performance
+                            .getEntriesByType('resource')
+                            .map(entry => String(entry.name || ''))
+                            .filter(url => url.includes('/aweme/v1/web/user/profile/other'));
+                        return matches.length === 0 ? '' : matches[matches.length - 1];
+                    }
+                    """,
+                    cancellationToken);
+                resourceUrl = resourceUrlResult.ValueKind == JsonValueKind.String
+                    ? resourceUrlResult.GetString()
+                    : null;
+            }
+
+            if (string.IsNullOrWhiteSpace(resourceUrl))
+                return;
+
+            var responseJson = await _browser.FetchTextAsync(resourceUrl, cancellationToken);
+            var totalWorkCount = adapter.TryReadTotalWorkCount(
+                resourceUrl,
+                responseJson,
+                _capturePageUrl,
+                requestBody: null);
+            if (totalWorkCount.HasValue)
+            {
+                SetTotalWorkCount(totalWorkCount.Value);
+                PublishProgress();
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            RaiseLog(RuntimeLocalization.Format(
+                "Log.Crawl.TotalWorkCountRecoveryFailed",
+                "补读抖音作者作品数失败，将继续正常采集：{0}",
+                ex.Message));
+        }
+    }
+
+    private void SetTotalWorkCount(int totalWorkCount)
+    {
+        if (_totalWorkCount == totalWorkCount)
+            return;
+
+        _totalWorkCount = totalWorkCount;
+        RaiseLog(RuntimeLocalization.Format(
+            "Log.Crawl.TotalWorkCountRead",
+            "已读取作者作品数：{0}",
+            totalWorkCount));
     }
 
     private void OnDownloadProgressChanged(object? sender, MediaTransferProgress progress)

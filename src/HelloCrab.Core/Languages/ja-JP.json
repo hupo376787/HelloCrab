@@ -284,6 +284,7 @@
     "Log.Crawl.UnlockFailed": "収集タブのロック解除に失敗しました：{0}",
     "Log.Crawl.ResponseCaptured": "作品レスポンスを取得：{0} ページ目",
     "Log.Crawl.TotalWorkCountRead": "作者の作品数を取得しました：{0}",
+    "Log.Crawl.TotalWorkCountRecoveryFailed": "Douyin の作者作品数を再取得できませんでした。収集は通常どおり続行します：{0}",
     "Log.Crawl.CursorFetchPage": "カーソルで次ページを直接リクエストしています：予定ページ {0}",
     "Log.Crawl.CursorFetchEnabled": "カーソルによる直接ページングを有効にしました。以降はページ描画を省略し、現在のログイン状態で作品 API を直接呼び出します。",
     "Log.Crawl.CursorFetchHttpFailed": "カーソル直接リクエストが HTTP {0} を返しました。",

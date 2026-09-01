@@ -284,6 +284,7 @@
     "Log.Crawl.UnlockFailed": "Failed to unlock the collection tab: {0}",
     "Log.Crawl.ResponseCaptured": "Captured works response: page {0}",
     "Log.Crawl.TotalWorkCountRead": "Author work count read: {0}",
+    "Log.Crawl.TotalWorkCountRecoveryFailed": "Could not recover the Douyin author work count; collection will continue normally: {0}",
     "Log.Crawl.CursorFetchPage": "Requesting the next page directly with a cursor: expected page {0}",
     "Log.Crawl.CursorFetchEnabled": "Direct cursor pagination is active. Later pages will skip rendering and reuse the current signed-in browser session.",
     "Log.Crawl.CursorFetchHttpFailed": "Direct cursor request returned HTTP {0}.",
