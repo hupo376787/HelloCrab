@@ -427,7 +427,8 @@ public partial class MainWindow
             ShowInTaskbar = false,
             WindowDecorations = WindowDecorations.None,
             ExtendClientAreaToDecorationsHint = true,
-            Background = Brushes.Transparent,
+            Background = frameBackground,
+            TransparencyBackgroundFallback = frameBackground,
             TransparencyLevelHint = new[]
             {
                 WindowTransparencyLevel.AcrylicBlur,
