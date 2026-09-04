@@ -44,17 +44,21 @@ public partial class MainWindow
             return;
         }
 
-        // 给文字区域右侧留出收藏按钮空间，避免“最后下载”文字与星形按钮重叠。
+        // 收藏按钮位于内容区右下角，只给最下面“最后下载”一行预留空间。
+        // 不再缩窄整个文字区域，这样顶部的平台标签可以使用完整宽度并稳定靠右对齐。
         var contentPanel = itemGrid.Children
             .OfType<StackPanel>()
             .FirstOrDefault(panel => Grid.GetColumn(panel) == 1);
-        if (contentPanel is not null && contentPanel.Margin.Right < 34)
+        var bottomText = contentPanel?.Children
+            .OfType<TextBlock>()
+            .LastOrDefault();
+        if (bottomText is not null && bottomText.Margin.Right < 34)
         {
-            contentPanel.Margin = new Thickness(
-                contentPanel.Margin.Left,
-                contentPanel.Margin.Top,
+            bottomText.Margin = new Thickness(
+                bottomText.Margin.Left,
+                bottomText.Margin.Top,
                 34,
-                contentPanel.Margin.Bottom);
+                bottomText.Margin.Bottom);
         }
 
         var star = new TextBlock
