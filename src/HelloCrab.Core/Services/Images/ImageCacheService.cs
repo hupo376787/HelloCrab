@@ -11,7 +11,12 @@ public sealed class ImageCacheService : IDisposable
 {
     private readonly HttpClient _httpClient;
     private readonly string _cacheDirectory;
-    private readonly ConcurrentDictionary<string, Task<Bitmap?>> _memoryCache = new(StringComparer.Ordinal);
+
+    // 这里只合并“正在进行中”的同 URL 加载，不再永久缓存解码后的 Bitmap。
+    // 当前作品封面会随着作品切换不断变化；若把每张 Bitmap 都强引用到程序退出，
+    // 批量采集几百个作品后会积累数 GB 的原生图像内存。
+    private readonly ConcurrentDictionary<string, Lazy<Task<Bitmap?>>> _inflightLoads =
+        new(StringComparer.Ordinal);
 
     public ImageCacheService()
     {
@@ -48,8 +53,8 @@ public sealed class ImageCacheService : IDisposable
     public string CacheDirectory => _cacheDirectory;
 
     /// <summary>
-    /// 删除 image-cache 目录中的磁盘文件。已经显示在界面中的 Bitmap 继续保留在内存中，
-    /// 避免清理缓存时让当前头像或封面突然失效；程序重新请求图片时会重新写入缓存。
+    /// 删除 image-cache 目录中的磁盘文件。界面当前正在显示的 Bitmap 由各自的
+    /// ViewModel/绑定持有，不依赖磁盘文件；后续再次请求时会重新下载并写入缓存。
     /// </summary>
     public Task<ImageCacheClearResult> ClearDiskCacheAsync(
         CancellationToken cancellationToken = default)
@@ -124,35 +129,27 @@ public sealed class ImageCacheService : IDisposable
         if (string.IsNullOrWhiteSpace(url) || !Uri.TryCreate(url, UriKind.Absolute, out _))
             return null;
 
-        // 下载失败不能永久缓存一个 null Task，否则 HeadUrl 后续即使恢复可用，
-        // 桌面端和远程端也永远不会再次请求。实际下载不绑定某个调用者的取消令牌，
-        // 调用者只取消自己的等待。
-        var task = _memoryCache.GetOrAdd(
+        // 同一 URL 的并发请求只执行一次实际下载/解码；任务一结束就从字典移除。
+        // 这样磁盘缓存仍然有效，但已经切换走的作品封面不会被内存字典永久强引用。
+        var lazy = _inflightLoads.GetOrAdd(
             url,
-            static (key, service) => service.LoadCoreAsync(key, CancellationToken.None),
+            static (key, service) => new Lazy<Task<Bitmap?>>(
+                () => service.LoadTrackedAsync(key),
+                LazyThreadSafetyMode.ExecutionAndPublication),
             this);
 
-        try
-        {
-            var bitmap = await task.WaitAsync(cancellationToken);
-            if (bitmap is null)
-                RemoveCachedTask(url, task);
-
-            return bitmap;
-        }
-        catch
-        {
-            RemoveCachedTask(url, task);
-            throw;
-        }
+        return await lazy.Value.WaitAsync(cancellationToken);
     }
 
-    private void RemoveCachedTask(string url, Task<Bitmap?> task)
+    private async Task<Bitmap?> LoadTrackedAsync(string url)
     {
-        if (_memoryCache.TryGetValue(url, out var current)
-            && ReferenceEquals(current, task))
+        try
         {
-            _memoryCache.TryRemove(url, out _);
+            return await LoadCoreAsync(url, CancellationToken.None);
+        }
+        finally
+        {
+            _inflightLoads.TryRemove(url, out _);
         }
     }
 
@@ -206,7 +203,6 @@ public sealed class ImageCacheService : IDisposable
         }
     }
 
-
     private static Uri ResolveReferrer(string url)
     {
         if (Uri.TryCreate(url, UriKind.Absolute, out var uri)
@@ -232,7 +228,6 @@ public sealed class ImageCacheService : IDisposable
         {
             return new Uri("https://www.kuaishou.com/");
         }
-
 
         if (Uri.TryCreate(url, UriKind.Absolute, out uri)
             && (uri.Host.Contains("xhscdn.com", StringComparison.OrdinalIgnoreCase)
@@ -279,12 +274,7 @@ public sealed class ImageCacheService : IDisposable
 
     public void Dispose()
     {
-        foreach (var task in _memoryCache.Values)
-        {
-            if (task.IsCompletedSuccessfully)
-                task.Result?.Dispose();
-        }
-        _memoryCache.Clear();
+        _inflightLoads.Clear();
         _httpClient.Dispose();
     }
 }

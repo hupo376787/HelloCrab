@@ -342,6 +342,14 @@ public sealed partial class MainWindowViewModel
                         BuildBatchIssueTarget(item.UserName, url),
                         _lastCaptureErrorMessage));
                 }
+
+                if (!linkedCts.IsCancellationRequested
+                    && index < history.Length - 1
+                    && !_browser.IsLoginRecoveryActive)
+                {
+                    await ReleaseCurrentAuthorPageResourcesAsync();
+                }
+
                 linkedCts.Token.ThrowIfCancellationRequested();
             }
 

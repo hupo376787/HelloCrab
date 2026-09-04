@@ -217,6 +217,12 @@ public sealed partial class MainWindowViewModel
                 finally
                 {
                     IsManualBatchSkipRequested = false;
+                    if (!cts.IsCancellationRequested
+                        && index < lines.Length - 1
+                        && !_browser.IsLoginRecoveryActive)
+                    {
+                        await ReleaseCurrentAuthorPageResourcesAsync();
+                    }
                     AddManualBatchLogSeparator();
                 }
             }
@@ -309,6 +315,35 @@ public sealed partial class MainWindowViewModel
         AddLog(BatchText(
             "Batch.Log.CancelRequested",
             "已请求停止批量采集；当前作者停止后不会继续处理后续地址。"));
+    }
+
+    private async Task ReleaseCurrentAuthorPageResourcesAsync()
+    {
+        if (!_browser.IsStarted || _browser.IsLoginRecoveryActive)
+            return;
+
+        try
+        {
+            // 保留 Persistent Context/profile 和登录 Cookie，只销毁上一作者的页面文档。
+            // setTimeout 让 Evaluate 先正常返回，随后再进入 about:blank，避免导航销毁执行上下文。
+            await _browser.EvaluatePageAsync(
+                """
+                () => {
+                    try {
+                        window.stop();
+                        performance.clearResourceTimings();
+                    } catch { }
+                    setTimeout(() => location.replace('about:blank'), 0);
+                    return true;
+                }
+                """,
+                CancellationToken.None);
+            await Task.Delay(250);
+        }
+        catch
+        {
+            // 页面可能已由站点或用户关闭；下一位作者仍可由 StartAsync 正常重新导航。
+        }
     }
 
     private void AddManualBatchLogSeparator()
