@@ -143,7 +143,7 @@ public partial class MainWindow
             if (current.DataContext is DownloadHistoryItem
                 && current.ContextMenu is { } menu)
             {
-                EventHandler? closedHandler = null;
+                EventHandler<Avalonia.Interactivity.RoutedEventArgs>? closedHandler = null;
                 closedHandler = (_, _) =>
                 {
                     menu.Closed -= closedHandler;
