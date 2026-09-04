@@ -1,4 +1,5 @@
 using System.Collections.Specialized;
+using System.Runtime.InteropServices;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -14,6 +15,9 @@ public partial class MainWindow
 {
     private const double HistoryAutoScrollEdge = 52d;
     private const double HistoryAutoScrollStep = 18d;
+    private const double DefaultHistoryWheelLineExtent = 96d;
+    private const uint SpiGetWheelScrollLines = 0x0068;
+    private const uint WheelPageScroll = 0xFFFFFFFF;
 
     private static readonly IDisposable HistoryInteractionsDataContextHandler =
         StyledElement.DataContextProperty.Changed.AddClassHandler<MainWindow>((window, _) =>
@@ -46,6 +50,11 @@ public partial class MainWindow
         HistoryList.AddHandler(
             PointerPressedEvent,
             HistoryList_DoubleClickPointerPressed,
+            RoutingStrategies.Tunnel,
+            handledEventsToo: true);
+        HistoryList.AddHandler(
+            PointerWheelChangedEvent,
+            HistoryList_PointerWheelChanged,
             RoutingStrategies.Tunnel,
             handledEventsToo: true);
         AddHandler(
@@ -137,6 +146,96 @@ public partial class MainWindow
             current = current.Parent as Control;
         }
     }
+
+    private void HistoryList_PointerWheelChanged(object? sender, PointerWheelEventArgs e)
+    {
+        // Avalonia ScrollViewer 默认按自己的像素步长处理滚轮，并不会读取 Windows
+        // “一次滚动几行”的系统设置。这里只在 Windows 接管历史列表滚轮；其他平台
+        // 继续使用各自 Avalonia/系统的原生滚动行为。
+        if (!OperatingSystem.IsWindows()
+            || Math.Abs(e.Delta.Y) < double.Epsilon
+            || GetHistoryListScrollViewer() is not { } scrollViewer)
+        {
+            return;
+        }
+
+        var scrollLines = GetWindowsWheelScrollLines();
+        if (scrollLines == 0)
+        {
+            e.Handled = true;
+            return;
+        }
+
+        var maximumY = Math.Max(0d, scrollViewer.Extent.Height - scrollViewer.Viewport.Height);
+        if (maximumY <= 0d)
+            return;
+
+        var distancePerDelta = scrollLines == WheelPageScroll
+            ? Math.Max(1d, scrollViewer.Viewport.Height)
+            : GetHistoryWheelLineExtent() * scrollLines;
+        var nextY = Math.Clamp(
+            scrollViewer.Offset.Y - e.Delta.Y * distancePerDelta,
+            0d,
+            maximumY);
+
+        if (Math.Abs(nextY - scrollViewer.Offset.Y) < 0.1d)
+            return;
+
+        scrollViewer.Offset = new Vector(scrollViewer.Offset.X, nextY);
+        e.Handled = true;
+    }
+
+    private double GetHistoryWheelLineExtent()
+    {
+        var containers = HistoryList
+            .GetRealizedContainers()
+            .OrderBy(HistoryList.IndexFromContainer)
+            .ToArray();
+
+        if (containers.Length >= 2)
+        {
+            var first = containers[0].TranslatePoint(default, HistoryList);
+            var second = containers[1].TranslatePoint(default, HistoryList);
+            if (first is { } firstPoint && second is { } secondPoint)
+            {
+                var distance = Math.Abs(secondPoint.Y - firstPoint.Y);
+                if (distance > 1d)
+                    return distance;
+            }
+        }
+
+        if (containers.Length > 0 && containers[0].Bounds.Height > 1d)
+        {
+            // historyList 的 ListBoxItem 还有 10px bottom margin。
+            return containers[0].Bounds.Height + 10d;
+        }
+
+        return DefaultHistoryWheelLineExtent;
+    }
+
+    private static uint GetWindowsWheelScrollLines()
+    {
+        if (OperatingSystem.IsWindows()
+            && SystemParametersInfo(
+                SpiGetWheelScrollLines,
+                0,
+                out var lines,
+                0))
+        {
+            return lines;
+        }
+
+        // Windows 默认值为 3 行；读取失败时按系统默认行为兜底。
+        return 3;
+    }
+
+    [DllImport("user32.dll", SetLastError = false)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool SystemParametersInfo(
+        uint uiAction,
+        uint uiParam,
+        out uint pvParam,
+        uint fWinIni);
 
     private void HistoryAutoScroll_PointerMoved(object? sender, PointerEventArgs e)
     {
