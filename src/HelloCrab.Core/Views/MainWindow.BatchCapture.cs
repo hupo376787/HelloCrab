@@ -418,7 +418,7 @@ public partial class MainWindow
         dialog = new Window
         {
             Title = titleText,
-            Width = 780,
+            Width = 900,
             Height = 580,
             MinWidth = 620,
             MinHeight = 460,
