@@ -594,7 +594,11 @@ public sealed class DownloadHistoryService
             return parts.Length >= 4 ? parts[3] : null;
         }
 
-        // 当前稳定格式：platform:authorId:workId:workId=...:cover=...
+        // 当前稳定完成索引格式：platform:authorId:workId。
+        if (parts.Length == 3)
+            return parts[2];
+
+        // 兼容上一个版本的完整设置键：platform:authorId:workId:workId=...:cover=...
         return parts.Length >= 4
                && parts[3].StartsWith("workId=", StringComparison.OrdinalIgnoreCase)
             ? parts[2]
