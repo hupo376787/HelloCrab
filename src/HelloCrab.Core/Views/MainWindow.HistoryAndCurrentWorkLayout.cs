@@ -88,7 +88,7 @@ public partial class MainWindow
             fileHintParent.Children.Remove(fileHintBorder);
         }
 
-        // 当前作品详情卡片固定高度，长标题或下载进度文本不再改变主布局高度。
+        // 当前作品详情卡片固定高度；作者昵称移到最上方并突出显示。
         var currentWorkLabel = localization?.Get("Metrics.CurrentWork", "当前作品") ?? "当前作品";
         var currentWorkText = descendants
             .OfType<TextBlock>()
@@ -104,6 +104,27 @@ public partial class MainWindow
             currentWorkCard.MinHeight = 156;
             currentWorkCard.MaxHeight = 156;
             currentWorkCard.ClipToBounds = true;
+
+            var authorNameText = currentWorkDetails.Children
+                .OfType<TextBlock>()
+                .FirstOrDefault(textBlock => textBlock.Classes.Contains("emojiText"));
+            if (authorNameText is not null)
+            {
+                var currentIndex = currentWorkDetails.Children.IndexOf(authorNameText);
+                if (currentIndex > 0)
+                {
+                    currentWorkDetails.Children.RemoveAt(currentIndex);
+                    currentWorkDetails.Children.Insert(0, authorNameText);
+                }
+
+                // 昵称是当前下载对象的主信息，不再使用 caption 的小号次级文字样式。
+                authorNameText.Classes.Remove("caption");
+                authorNameText.FontSize = 18;
+                authorNameText.FontWeight = Avalonia.Media.FontWeight.Bold;
+                authorNameText.TextWrapping = Avalonia.Media.TextWrapping.NoWrap;
+                authorNameText.TextTrimming = Avalonia.Media.TextTrimming.CharacterEllipsis;
+                authorNameText.Margin = new Thickness(0, 0, 0, 1);
+            }
         }
 
         if (_historyAuthorCountText is null)
