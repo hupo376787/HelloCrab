@@ -135,8 +135,6 @@ public sealed class CrawlCoordinator : IAsyncDisposable
         if (!_browser.IsStarted)
             throw new InvalidOperationException(RuntimeLocalization.Get("Error.Browser.NotStarted", "请先打开浏览器。"));
 
-        // Playwright 不会在用户切换 Chromium 标签页时自动更新 _page。点击开始采集时
-        // 主动检测 document.hasFocus()/visibilityState，确保使用屏幕上当前选中的标签页。
         var foregroundPageUrl = await _browser.SelectForegroundPageAsync(cancellationToken);
         if (!adapter.CanHandlePage(foregroundPageUrl))
             throw new InvalidOperationException(RuntimeLocalization.Get("Error.Crawl.WrongAuthorPage", "当前活动标签页不是该平台的作者主页。请切换到作者主页标签，再点击开始采集。"));
@@ -145,8 +143,6 @@ public sealed class CrawlCoordinator : IAsyncDisposable
         ResetState();
 
         _activeAdapter = adapter;
-        // 整个采集会话始终绑定到点击“开始采集”时的作者主页。
-        // 后续即使页面发生瞬时导航、旧请求延迟返回，也不能改变目标作者。
         _capturePageUrl = foregroundPageUrl;
         _downloadRoot = downloadRoot;
         _platformDownloadRoot = Path.Combine(
@@ -188,7 +184,6 @@ public sealed class CrawlCoordinator : IAsyncDisposable
         {
             await _browser.SetCaptureLockAsync(true, token);
             pageLocked = true;
-            // 锁定完成后以浏览器服务最终选中的 URL 为准，防止点击按钮瞬间发生标签切换。
             _capturePageUrl = _browser.CurrentUrl;
             if (!adapter.CanHandlePage(_capturePageUrl))
             {
@@ -219,8 +214,6 @@ public sealed class CrawlCoordinator : IAsyncDisposable
         }
         catch (OperationCanceledException ex)
         {
-            // Playwright 页面或上下文被关闭时，有些调用会以 TaskCanceledException 的形式结束。
-            // 只有采集令牌真的被取消，才能视为用户点击“停止”；否则应保留为采集失败。
             try { _captureCts?.Cancel(); } catch (ObjectDisposedException) { }
             _channel.Writer.TryComplete();
             try { await consumerTask; } catch (OperationCanceledException) { }
@@ -232,7 +225,6 @@ public sealed class CrawlCoordinator : IAsyncDisposable
         }
         catch
         {
-            // 初始化、刷新或滚动阶段异常时也必须关闭响应通道并等待消费者退出。
             try { _captureCts?.Cancel(); } catch (ObjectDisposedException) { }
             _channel.Writer.TryComplete();
             try
@@ -332,9 +324,6 @@ public sealed class CrawlCoordinator : IAsyncDisposable
                     response.RequestPostData))
                 return;
 
-            // 抖音的作者资料响应偶尔会在 Playwright 读取 body 时被 Chromium 提前释放，
-            // 表现为 Network.getResponseBody: No resource with given identifier found。
-            // 必须先保存完整的已签名 URL，之后才能在当前登录页面内重新 fetch 补读。
             if (adapter.Id.Equals("douyin", StringComparison.OrdinalIgnoreCase)
                 && response.Url.Contains(
                     "/aweme/v1/web/user/profile/other",
@@ -353,13 +342,8 @@ public sealed class CrawlCoordinator : IAsyncDisposable
                 _capturePageUrl,
                 response.RequestPostData);
             if (totalWorkCount.HasValue)
-            {
                 SetTotalWorkCount(totalWorkCount.Value);
-            }
 
-            // 作者资料等辅助响应必须在浏览器事件线程中立即解析。若与作品列表一起进入
-            // 单消费者队列，它可能会被一整页视频详情和下载任务阻塞，导致首个作品写入
-            // History.json 时头像仍为空。
             if (adapter.TryHandleAuxiliaryResponse(
                     response.Url,
                     text,
@@ -388,7 +372,13 @@ public sealed class CrawlCoordinator : IAsyncDisposable
                         response.RequestPostData,
                         response.RequestHeaders)),
                 cts.Token);
-            RaiseLog(RuntimeLocalization.Format("Log.Crawl.ResponseCaptured", "捕获作品响应：第 {0} 页", _responseCount));
+            RaiseLog(
+                RuntimeLocalization.Format(
+                    "Log.Crawl.ResponseCaptured",
+                    "捕获作品响应：第 {0} 页",
+                    _responseCount)
+                + Environment.NewLine
+                + $"URL: {response.Url}");
             PublishProgress();
         }
         catch (OperationCanceledException)
@@ -453,8 +443,6 @@ public sealed class CrawlCoordinator : IAsyncDisposable
                     cancellationToken.ThrowIfCancellationRequested();
                     var work = listedWork;
 
-                    // 在历史完成索引判断之前补全作者头像等轻量资料。B 站的 acc/info
-                    // 与作品列表可能并发返回，这一步只等待作者资料，不请求视频详情。
                     try
                     {
                         work = await adapter.EnrichWorkMetadataAsync(
@@ -471,8 +459,6 @@ public sealed class CrawlCoordinator : IAsyncDisposable
                         RaiseLog(RuntimeLocalization.Format("Log.Crawl.AuthorProfileFallback", "补充作者资料失败，将继续使用列表信息：{0}", ex.Message));
                     }
 
-                    // 一次采集任务只允许一个作者。即使平台接口以后出现字段变化，
-                    // 或某条异常数据绕过了站点适配器校验，也不能创建第二个作者目录。
                     if (_sessionAuthorId is null)
                     {
                         _sessionAuthorId = work.AuthorId;
@@ -492,8 +478,6 @@ public sealed class CrawlCoordinator : IAsyncDisposable
                     if (!_sessionSeen.Add(sessionKey))
                         continue;
 
-                    // 完成索引包含作者 UID、命名模式和全部可选处理开关。
-                    // 索引键不再携带 v3/v4 等版本前缀；旧索引会在首次读取时自动迁移。
                     var completionKey = JsonDownloadIndex.BuildKey(work, _downloadOptions);
 
                     Interlocked.Increment(ref _discoveredCount);
@@ -516,7 +500,6 @@ public sealed class CrawlCoordinator : IAsyncDisposable
                             _downloadOptions,
                             cancellationToken))
                     {
-                        // 即使全部作品都已下载，也要把新捕获的作者头像写回历史记录。
                         await RegisterTouchedAuthorAsync(work, authorFolder);
 
                         if (RegisterCompletedDuplicate(work.WorkId))
@@ -524,8 +507,6 @@ public sealed class CrawlCoordinator : IAsyncDisposable
                         continue;
                     }
 
-                    // 小红书和 Pinterest 的作者列表主要提供作品 ID；真实媒体地址
-                    // 分别位于作品详情文档中。其他平台默认原样返回，不增加请求。
                     try
                     {
                         var resolvedWork = await adapter.ResolveWorkAsync(
@@ -589,8 +570,6 @@ public sealed class CrawlCoordinator : IAsyncDisposable
                         continue;
                     }
 
-                    // 在真正开始下载前就登记本次作者。若前面的作品因已下载而只登记了
-                    // 列表元数据，则首个成功解析详情的作品会再更新一次完整作者资料。
                     await RegisterTouchedAuthorAsync(work, authorFolder);
 
                     try
@@ -626,9 +605,6 @@ public sealed class CrawlCoordinator : IAsyncDisposable
                     }
                 }
 
-                // 本页全部作品（包括已下载跳过项和失败项）处理完成后再统一等待。
-                // 把等待保留在 _processingCount > 0 的区间内，滚动线程会在这里等到结束，
-                // 从而确保延时发生在“本页完成”和“加载下一页”之间，而不是作品之间。
                 if (batch.Works.Count > 0 && !_duplicateStopRequested && _hasMore != false)
                 {
                     const int minimumSeconds = 2;
@@ -719,7 +695,6 @@ public sealed class CrawlCoordinator : IAsyncDisposable
                 continue;
             }
 
-            // 滚动位置确实向下移动，但还没到加载触发点，不能算作“无新增”。
             if (positionMoved && !after.IsNearBottom())
             {
                 stagnantRounds = 0;
@@ -768,7 +743,6 @@ public sealed class CrawlCoordinator : IAsyncDisposable
 
     private static async Task DelaySecondsAsync(long seconds, CancellationToken cancellationToken)
     {
-        // Task.Delay 对单次 TimeSpan 有平台上限；分段等待使设置值无需人为设置最大值。
         while (seconds > 0)
         {
             var chunkSeconds = Math.Min(seconds, 86_400);
@@ -798,21 +772,24 @@ public sealed class CrawlCoordinator : IAsyncDisposable
 
         try
         {
-            RaiseLog(RuntimeLocalization.Format(
-                "Log.Crawl.CursorFetchPage",
-                "正在使用游标直接请求下一页：预计第 {0} 页",
-                _responseCount + 1));
+            RaiseLog(
+                RuntimeLocalization.Format(
+                    "Log.Crawl.CursorFetchPage",
+                    "正在使用游标直接请求下一页：预计第 {0} 页",
+                    _responseCount + 1)
+                + Environment.NewLine
+                + $"URL: {nextRequest.Url}");
             var result = await _browser.EvaluatePageAsync(
                 CursorFetchScript,
                 nextRequest,
                 cancellationToken);
 
-            var ok = result.ValueKind == System.Text.Json.JsonValueKind.Object
+            var ok = result.ValueKind == JsonValueKind.Object
                      && result.TryGetProperty("ok", out var okElement)
-                     && okElement.ValueKind == System.Text.Json.JsonValueKind.True;
+                     && okElement.ValueKind == JsonValueKind.True;
             if (!ok)
             {
-                var status = result.ValueKind == System.Text.Json.JsonValueKind.Object
+                var status = result.ValueKind == JsonValueKind.Object
                              && result.TryGetProperty("status", out var statusElement)
                     ? statusElement.ToString()
                     : "unknown";
@@ -858,8 +835,6 @@ public sealed class CrawlCoordinator : IAsyncDisposable
                 ex.Message));
         }
 
-        // 直连返回了风控/签名错误 JSON 时，解析器可能得到空 cursor 或错误的
-        // has_more。恢复上一页状态后再滚动，让网页自身重新生成合法签名。
         _nextCursor = previousCursor;
         _hasMore = previousHasMore;
         _lastPaginationRequest = previousRequest;
@@ -990,9 +965,6 @@ public sealed class CrawlCoordinator : IAsyncDisposable
 
         try
         {
-            // 抖音会缓存作者资料，刷新作者主页时不一定再次请求 profile/other。
-            // 此时页面的 SSR/水合 JSON 或已经渲染的“作品 N”标签仍包含作品数，
-            // 先从页面读取，避免把是否触发资料接口作为显示作品数的前置条件。
             var pageCountResult = await _browser.EvaluatePageAsync(
                 """
                 () => {
@@ -1192,7 +1164,6 @@ public sealed class CrawlCoordinator : IAsyncDisposable
             : $"{displayValue:0.##} {units[unitIndex]}";
     }
 
-
     private async Task RegisterTouchedAuthorAsync(
         WorkItem work,
         string authorFolder)
@@ -1219,8 +1190,6 @@ public sealed class CrawlCoordinator : IAsyncDisposable
 
         try
         {
-            // 历史登记是很短的本地文件操作，不使用采集取消令牌，
-            // 避免“停止”恰好发生时作者记录还没建立或头像尚未写入。
             await _history.UpsertAuthorMetadataAsync(
                 work,
                 authorFolder,
@@ -1233,7 +1202,6 @@ public sealed class CrawlCoordinator : IAsyncDisposable
         }
         catch (Exception ex)
         {
-            // 历史写入失败不能阻断媒体下载；任务结束时还会再次刷新统计。
             RaiseLog(RuntimeLocalization.Format("Log.History.RegisterFailed", "登记作者下载历史失败：{0}", ex.Message));
         }
     }
