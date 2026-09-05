@@ -627,7 +627,10 @@ public sealed class CrawlCoordinator : IAsyncDisposable
 
     private async Task<string> RunScrollLoopAsync(ISiteAdapter adapter, CancellationToken cancellationToken)
     {
+        const int regularStagnantLimit = 10;
+        const int bottomStagnantLimit = 3;
         var stagnantRounds = 0;
+        var bottomStagnantRounds = 0;
         var lastHeight = 0d;
         var firstResponseDeadline = DateTimeOffset.Now.AddSeconds(25);
         var directPaginationDisabled = false;
@@ -660,6 +663,7 @@ public sealed class CrawlCoordinator : IAsyncDisposable
                     }
 
                     stagnantRounds = 0;
+                    bottomStagnantRounds = 0;
                     continue;
                 }
 
@@ -677,10 +681,14 @@ public sealed class CrawlCoordinator : IAsyncDisposable
             var before = await adapter.GetScrollStateAsync(_browser, cancellationToken);
             await adapter.ScrollNextAsync(_browser, cancellationToken);
 
+            // 已经滚到页面底部时，不再按普通分页等待 18 秒。先立即读取一次滚动状态，
+            // 底部采用 3 秒快速观察窗口；若连续多次仍无接口、DOM 或页面高度变化即可结束。
+            var afterScroll = await adapter.GetScrollStateAsync(_browser, cancellationToken);
+            var fastBottomCheck = afterScroll.IsNearBottom();
             var receivedSomething = await WaitForResponseOrNewWorkAsync(
                 beforeVersion,
                 beforeDiscovered,
-                TimeSpan.FromSeconds(18),
+                fastBottomCheck ? TimeSpan.FromSeconds(3) : TimeSpan.FromSeconds(18),
                 cancellationToken);
 
             var after = await adapter.GetScrollStateAsync(_browser, cancellationToken);
@@ -692,33 +700,53 @@ public sealed class CrawlCoordinator : IAsyncDisposable
             if (receivedSomething || heightGrew || domWorksGrew)
             {
                 stagnantRounds = 0;
+                bottomStagnantRounds = 0;
                 continue;
             }
 
             if (positionMoved && !after.IsNearBottom())
             {
                 stagnantRounds = 0;
+                bottomStagnantRounds = 0;
                 RaiseLog(RuntimeLocalization.Format("Log.Crawl.Scrolled", "页面已向下滚动：{0}，{1}->{2}/{3}，继续寻找下一页触发点。", after.ContainerName, $"{before.ScrollY:0}", $"{after.ScrollY:0}", $"{after.MaxScrollTop:0}"));
                 await Task.Delay(600, cancellationToken);
                 continue;
             }
 
-            stagnantRounds++;
-            RaiseLog(RuntimeLocalization.Format(
+            var atBottom = after.IsNearBottom();
+            if (atBottom)
+            {
+                bottomStagnantRounds++;
+                stagnantRounds = 0;
+            }
+            else
+            {
+                stagnantRounds++;
+                bottomStagnantRounds = 0;
+            }
+
+            var currentRounds = atBottom ? bottomStagnantRounds : stagnantRounds;
+            var currentLimit = atBottom ? bottomStagnantLimit : regularStagnantLimit;
+            var noNewContentLog = RuntimeLocalization.Format(
                 "Log.Crawl.NoNewContent",
                 "本轮滚动没有新增内容（{0}/10）：容器={1}，位置={2}->{3}/{4}，页面作品节点={5}->{6}，是否到底={7}",
-                stagnantRounds, after.ContainerName, $"{before.ScrollY:0}", $"{after.ScrollY:0}",
-                $"{after.MaxScrollTop:0}", before.WorkItemCount, after.WorkItemCount, after.IsNearBottom()));
+                currentRounds, after.ContainerName, $"{before.ScrollY:0}", $"{after.ScrollY:0}",
+                $"{after.MaxScrollTop:0}", before.WorkItemCount, after.WorkItemCount, atBottom);
+            if (currentLimit != regularStagnantLimit)
+            {
+                noNewContentLog = noNewContentLog.Replace(
+                    $"/{regularStagnantLimit}",
+                    $"/{currentLimit}",
+                    StringComparison.Ordinal);
+            }
+            RaiseLog(noNewContentLog);
 
-            if (stagnantRounds >= 10
-                && after.IsNearBottom()
-                && DateTimeOffset.Now - _lastResponseAt > TimeSpan.FromSeconds(45)
-                && DateTimeOffset.Now - _lastNewWorkAt > TimeSpan.FromSeconds(45))
+            if (atBottom && bottomStagnantRounds >= bottomStagnantLimit)
             {
                 return RuntimeLocalization.Get("Completion.PageBottom", "页面已到底部并连续多轮无新增作品，已自动判断采集结束。");
             }
 
-            await Task.Delay(1_500, cancellationToken);
+            await Task.Delay(atBottom ? 500 : 1_500, cancellationToken);
         }
 
         return RuntimeLocalization.Get("Status.CaptureStopped", "采集已停止");
