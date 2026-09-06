@@ -848,6 +848,45 @@ public sealed class CrawlCoordinator : IAsyncDisposable
                     _responseCount + 1)
                 + Environment.NewLine
                 + $"URL: {nextRequest.Url}");
+
+            if (adapter.Id.Equals("weibo", StringComparison.OrdinalIgnoreCase))
+            {
+                string? Header(string name)
+                    => nextRequest.Headers.FirstOrDefault(pair =>
+                        pair.Key.Equals(name, StringComparison.OrdinalIgnoreCase)).Value;
+
+                static string DisplayHeader(string? value)
+                {
+                    if (string.IsNullOrWhiteSpace(value))
+                        return "(none)";
+                    var compact = value.Replace('\r', ' ').Replace('\n', ' ').Trim();
+                    return compact.Length <= 160 ? compact : compact[..160] + "…";
+                }
+
+                var headerNames = nextRequest.Headers.Count == 0
+                    ? "(empty)"
+                    : string.Join(", ", nextRequest.Headers.Keys
+                        .OrderBy(name => name, StringComparer.OrdinalIgnoreCase));
+                var secFetchHeaders = nextRequest.Headers.Keys
+                    .Where(name => name.StartsWith("sec-fetch-", StringComparison.OrdinalIgnoreCase))
+                    .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
+                    .ToArray();
+                var accept = Header("accept");
+                var requestedWith = Header("x-requested-with");
+                var referer = Header("referer");
+                var origin = Header("origin");
+                var cookie = Header("cookie");
+                var userAgent = Header("user-agent");
+
+                RaiseLog(
+                    $"微博游标请求模板诊断：method={nextRequest.Method}，bodyLength={nextRequest.Body?.Length ?? 0}，Header数量={nextRequest.Headers.Count}，" +
+                    $"Cookie={cookie is not null}，Referer={referer is not null}，Origin={origin is not null}，User-Agent={userAgent is not null}，" +
+                    $"Accept={accept is not null}，X-Requested-With={requestedWith is not null}，Sec-Fetch-*={secFetchHeaders.Length > 0}。" +
+                    Environment.NewLine + $"原始请求模板Header名称: {headerNames}" +
+                    Environment.NewLine + $"Sec-Fetch Header名称: {(secFetchHeaders.Length == 0 ? "(none)" : string.Join(", ", secFetchHeaders))}" +
+                    Environment.NewLine + $"安全Header值: Accept={DisplayHeader(accept)}；X-Requested-With={DisplayHeader(requestedWith)}；Referer={DisplayHeader(referer)}；Origin={DisplayHeader(origin)}");
+            }
+
             var result = await _browser.EvaluatePageAsync(
                 CursorFetchScript,
                 nextRequest,
