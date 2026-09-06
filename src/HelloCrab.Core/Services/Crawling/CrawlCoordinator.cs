@@ -56,13 +56,29 @@ public sealed class CrawlCoordinator : IAsyncDisposable
             try {
                 const response = await fetch(request.url, options);
                 const text = await response.text();
+                const compactPreview = text.replace(/[\r\n\t]+/g, ' ').trim().slice(0, 180);
+                const trimmed = text.trimStart();
+                const bodyKind = trimmed.startsWith('{') || trimmed.startsWith('[')
+                    ? 'json'
+                    : trimmed.startsWith('<')
+                        ? 'html'
+                        : 'text';
                 return {
                     ok: response.ok,
                     status: response.status,
+                    statusText: response.statusText || '',
+                    requestedUrl: request.url,
                     url: response.url,
+                    redirected: response.redirected,
+                    responseType: response.type || '',
+                    contentType: response.headers.get('content-type') || '',
                     bodyLength: text.length,
+                    bodyKind,
+                    pageUrl: location.href,
+                    documentReferrer: document.referrer || '',
+                    sentHeaderNames: [...headers.keys()].sort(),
                     body: response.ok ? text : '',
-                    preview: response.ok ? '' : text.slice(0, 180)
+                    preview: compactPreview
                 };
             } finally {
                 clearTimeout(timeoutId);
@@ -845,6 +861,53 @@ public sealed class CrawlCoordinator : IAsyncDisposable
                              && statusElement.TryGetInt32(out var parsedStatusCode)
                 ? parsedStatusCode
                 : 0;
+            var statusText = ReadStringProperty(result, "statusText");
+            var responseUrl = ReadStringProperty(result, "url");
+            if (string.IsNullOrWhiteSpace(responseUrl))
+                responseUrl = nextRequest.Url;
+            var redirected = result.ValueKind == JsonValueKind.Object
+                             && result.TryGetProperty("redirected", out var redirectedElement)
+                             && redirectedElement.ValueKind == JsonValueKind.True;
+            var responseType = ReadStringProperty(result, "responseType") ?? "(unknown)";
+            var contentType = ReadStringProperty(result, "contentType") ?? "(empty)";
+            var bodyKind = ReadStringProperty(result, "bodyKind") ?? "(unknown)";
+            var pageUrl = ReadStringProperty(result, "pageUrl") ?? "(unknown)";
+            var documentReferrer = ReadStringProperty(result, "documentReferrer") ?? "(empty)";
+            var preview = ReadStringProperty(result, "preview") ?? "(empty)";
+            var bodyLength = result.ValueKind == JsonValueKind.Object
+                             && result.TryGetProperty("bodyLength", out var bodyLengthElement)
+                             && bodyLengthElement.TryGetInt32(out var parsedBodyLength)
+                ? parsedBodyLength
+                : -1;
+            var sentHeaderNames = result.ValueKind == JsonValueKind.Object
+                                  && result.TryGetProperty("sentHeaderNames", out var sentHeadersElement)
+                                  && sentHeadersElement.ValueKind == JsonValueKind.Array
+                ? string.Join(", ", sentHeadersElement.EnumerateArray()
+                    .Where(x => x.ValueKind == JsonValueKind.String)
+                    .Select(x => x.GetString())
+                    .Where(x => !string.IsNullOrWhiteSpace(x)))
+                : "(unknown)";
+
+            var recognized = adapter.IsTargetResponse(
+                responseUrl,
+                "fetch",
+                statusCode > 0 ? statusCode : 200,
+                nextRequest.Body);
+            var urlChanged = !string.Equals(nextRequest.Url, responseUrl, StringComparison.Ordinal);
+            var diagnostic =
+                $"游标直连响应诊断：HTTP {(statusCode > 0 ? statusCode.ToString() : "unknown")}" +
+                (string.IsNullOrWhiteSpace(statusText) ? string.Empty : $" {statusText}") +
+                $"，接口识别={(recognized ? "通过" : "失败")}，redirected={redirected}，URL变化={urlChanged}，" +
+                $"response.type={responseType}，Content-Type={contentType}，正文类型={bodyKind}，响应长度={bodyLength}。" +
+                Environment.NewLine + $"请求URL: {nextRequest.Url}" +
+                Environment.NewLine + $"最终URL: {responseUrl}" +
+                Environment.NewLine + $"执行页面: {pageUrl}" +
+                Environment.NewLine + $"document.referrer: {documentReferrer}" +
+                Environment.NewLine + $"实际设置的请求头名称: {sentHeaderNames}";
+            if (!ok || !recognized || redirected || urlChanged || !bodyKind.Equals("json", StringComparison.OrdinalIgnoreCase))
+                diagnostic += Environment.NewLine + $"内容前180字符: {preview}";
+            RaiseLog(diagnostic);
+
             if (!ok)
             {
                 RaiseLog(RuntimeLocalization.Format(
@@ -853,13 +916,6 @@ public sealed class CrawlCoordinator : IAsyncDisposable
                     statusCode > 0 ? statusCode : "unknown"));
                 return CursorFetchOutcome.Failed;
             }
-
-            var responseUrl = result.TryGetProperty("url", out var urlElement)
-                              && urlElement.ValueKind == JsonValueKind.String
-                ? urlElement.GetString()
-                : null;
-            if (string.IsNullOrWhiteSpace(responseUrl))
-                responseUrl = nextRequest.Url;
 
             var responseBody = result.TryGetProperty("body", out var bodyElement)
                                && bodyElement.ValueKind == JsonValueKind.String
@@ -876,11 +932,7 @@ public sealed class CrawlCoordinator : IAsyncDisposable
             // 直连 fetch 已经拿到了完整响应正文，直接交给现有解析/下载流水线。
             // 不再依赖 Playwright 的 ResponseReceived 事件来确认成功，否则某些站点
             // 会出现 HTTP 200 已返回、却因为事件未转发而空等 30 秒后误判失败。
-            if (!adapter.IsTargetResponse(
-                    responseUrl,
-                    "fetch",
-                    statusCode > 0 ? statusCode : 200,
-                    nextRequest.Body))
+            if (!recognized)
             {
                 RaiseLog(RuntimeLocalization.Get(
                     "Log.Crawl.CursorFetchUnexpectedResponse",
@@ -962,6 +1014,13 @@ public sealed class CrawlCoordinator : IAsyncDisposable
         _lastPaginationRequest = previousRequest;
         return CursorFetchOutcome.Failed;
     }
+
+    private static string? ReadStringProperty(JsonElement element, string propertyName)
+        => element.ValueKind == JsonValueKind.Object
+           && element.TryGetProperty(propertyName, out var property)
+           && property.ValueKind == JsonValueKind.String
+            ? property.GetString()
+            : null;
 
     private async Task WaitUntilPipelineIdleAsync(CancellationToken cancellationToken)
     {
