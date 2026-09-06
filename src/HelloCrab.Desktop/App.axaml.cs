@@ -55,7 +55,7 @@ public partial class App : Application
                 new KuaishouProfileFeedSiteAdapter(),
                 new KuaishouSiteAdapter(),
                 new XiaohongshuSiteAdapter(),
-                new WeiboSiteAdapter(),
+                new WeiboReliableSiteAdapter(),
                 new MeipianSiteAdapter()
             });
             var personImageDetector = new YoloPersonImageDetector();
