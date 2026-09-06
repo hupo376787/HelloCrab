@@ -40,25 +40,32 @@ public sealed class CrawlCoordinator : IAsyncDisposable
             }
 
             const method = String(request.method || (request.body ? 'POST' : 'GET')).toUpperCase();
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 5000);
             const options = {
                 method,
                 headers,
                 credentials: 'include',
                 cache: 'no-store',
-                redirect: 'follow'
+                redirect: 'follow',
+                signal: controller.signal
             };
             if (request.body && method !== 'GET' && method !== 'HEAD')
                 options.body = request.body;
 
-            const response = await fetch(request.url, options);
-            const text = await response.text();
-            return {
-                ok: response.ok,
-                status: response.status,
-                url: response.url,
-                bodyLength: text.length,
-                preview: response.ok ? '' : text.slice(0, 180)
-            };
+            try {
+                const response = await fetch(request.url, options);
+                const text = await response.text();
+                return {
+                    ok: response.ok,
+                    status: response.status,
+                    url: response.url,
+                    bodyLength: text.length,
+                    preview: response.ok ? '' : text.slice(0, 180)
+                };
+            } finally {
+                clearTimeout(timeoutId);
+            }
         }
         """;
 
@@ -628,7 +635,7 @@ public sealed class CrawlCoordinator : IAsyncDisposable
     private async Task<string> RunScrollLoopAsync(ISiteAdapter adapter, CancellationToken cancellationToken)
     {
         const int regularStagnantLimit = 10;
-        const int bottomStagnantLimit = 3;
+        const int bottomStagnantLimit = 2;
         var stagnantRounds = 0;
         var bottomStagnantRounds = 0;
         var lastHeight = 0d;
@@ -681,14 +688,17 @@ public sealed class CrawlCoordinator : IAsyncDisposable
             var before = await adapter.GetScrollStateAsync(_browser, cancellationToken);
             await adapter.ScrollNextAsync(_browser, cancellationToken);
 
-            // 已经滚到页面底部时，不再按普通分页等待 18 秒。先立即读取一次滚动状态，
-            // 底部采用 3 秒快速观察窗口；若连续多次仍无接口、DOM 或页面高度变化即可结束。
+            // 页面只要确实向下移动，就不应该在每个滚动步长后空等 18 秒。
+            // 已到底部或滚动位置已经前进时使用短观察窗口；只有页面完全没动且尚未到底时
+            // 才保留原来的 18 秒等待，用来兼容真正缓慢的懒加载。
             var afterScroll = await adapter.GetScrollStateAsync(_browser, cancellationToken);
             var fastBottomCheck = afterScroll.IsNearBottom();
+            var scrollMovedImmediately = afterScroll.ScrollY > before.ScrollY + 5;
+            var fastProgressCheck = fastBottomCheck || scrollMovedImmediately;
             var receivedSomething = await WaitForResponseOrNewWorkAsync(
                 beforeVersion,
                 beforeDiscovered,
-                fastBottomCheck ? TimeSpan.FromSeconds(3) : TimeSpan.FromSeconds(18),
+                fastProgressCheck ? TimeSpan.FromSeconds(2) : TimeSpan.FromSeconds(18),
                 cancellationToken);
 
             var after = await adapter.GetScrollStateAsync(_browser, cancellationToken);
@@ -709,7 +719,7 @@ public sealed class CrawlCoordinator : IAsyncDisposable
                 stagnantRounds = 0;
                 bottomStagnantRounds = 0;
                 RaiseLog(RuntimeLocalization.Format("Log.Crawl.Scrolled", "页面已向下滚动：{0}，{1}->{2}/{3}，继续寻找下一页触发点。", after.ContainerName, $"{before.ScrollY:0}", $"{after.ScrollY:0}", $"{after.MaxScrollTop:0}"));
-                await Task.Delay(600, cancellationToken);
+                await Task.Delay(350, cancellationToken);
                 continue;
             }
 
@@ -741,12 +751,16 @@ public sealed class CrawlCoordinator : IAsyncDisposable
             }
             RaiseLog(noNewContentLog);
 
-            if (atBottom && bottomStagnantRounds >= bottomStagnantLimit)
+            var bottomQuietLongEnough = DateTimeOffset.Now - _lastResponseAt >= TimeSpan.FromSeconds(4)
+                                        && DateTimeOffset.Now - _lastNewWorkAt >= TimeSpan.FromSeconds(4);
+            if (atBottom
+                && bottomStagnantRounds >= bottomStagnantLimit
+                && bottomQuietLongEnough)
             {
                 return RuntimeLocalization.Get("Completion.PageBottom", "页面已到底部并连续多轮无新增作品，已自动判断采集结束。");
             }
 
-            await Task.Delay(atBottom ? 500 : 1_500, cancellationToken);
+            await Task.Delay(atBottom ? 250 : 1_500, cancellationToken);
         }
 
         return RuntimeLocalization.Get("Status.CaptureStopped", "采集已停止");
@@ -828,15 +842,17 @@ public sealed class CrawlCoordinator : IAsyncDisposable
                 return CursorFetchOutcome.Failed;
             }
 
+            // 直连请求只是翻页加速路径，不能因为事件转发偶尔缺失而阻塞十几到几十秒。
+            // 真正成功的接口通常会立即触发 ResponseReceived；超时后回退页面滚动即可。
             var responseArrived = await WaitForResponseOrNewWorkAsync(
                 beforeVersion,
                 beforeDiscovered,
-                TimeSpan.FromSeconds(12),
+                TimeSpan.FromSeconds(5),
                 cancellationToken);
             var responseParsed = responseArrived
                                  && await WaitForParsedResponseAsync(
                                      beforeParsedCount,
-                                     TimeSpan.FromSeconds(12),
+                                     TimeSpan.FromSeconds(3),
                                      cancellationToken);
             if (responseParsed)
                 await WaitUntilPipelineIdleAsync(cancellationToken);
