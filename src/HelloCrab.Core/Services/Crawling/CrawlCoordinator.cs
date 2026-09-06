@@ -61,6 +61,7 @@ public sealed class CrawlCoordinator : IAsyncDisposable
                     status: response.status,
                     url: response.url,
                     bodyLength: text.length,
+                    body: response.ok ? text : '',
                     preview: response.ok ? '' : text.slice(0, 180)
                 };
             } finally {
@@ -88,6 +89,7 @@ public sealed class CrawlCoordinator : IAsyncDisposable
     private bool? _hasMore;
     private string? _nextCursor;
     private BrowserRequestSnapshot? _lastPaginationRequest;
+    private string? _directFetchResponseUrl;
     private string? _douyinProfileResponseUrl;
     private DateTimeOffset _lastResponseAt;
     private DateTimeOffset _lastNewWorkAt;
@@ -321,6 +323,15 @@ public sealed class CrawlCoordinator : IAsyncDisposable
         var cts = _captureCts;
         if (adapter is null || channel is null || cts is null || cts.IsCancellationRequested)
             return;
+
+        var directFetchUrl = Volatile.Read(ref _directFetchResponseUrl);
+        if (!string.IsNullOrWhiteSpace(directFetchUrl)
+            && string.Equals(response.Url, directFetchUrl, StringComparison.Ordinal))
+        {
+            // 游标直连的响应正文由 EvaluatePageAsync 直接回传并入队，避免同一响应
+            // 又经过 Playwright ResponseReceived 重复解析一次。
+            return;
+        }
 
         try
         {
@@ -807,10 +818,10 @@ public sealed class CrawlCoordinator : IAsyncDisposable
             return CursorFetchOutcome.NotAvailable;
         }
 
-        var beforeVersion = Interlocked.Read(ref _responseVersion);
         var beforeParsedCount = Volatile.Read(ref _parsedResponseCount);
         var beforeDiscovered = _discoveredCount;
         var previousHasMore = _hasMore;
+        Volatile.Write(ref _directFetchResponseUrl, nextRequest.Url);
 
         try
         {
@@ -829,31 +840,94 @@ public sealed class CrawlCoordinator : IAsyncDisposable
             var ok = result.ValueKind == JsonValueKind.Object
                      && result.TryGetProperty("ok", out var okElement)
                      && okElement.ValueKind == JsonValueKind.True;
+            var statusCode = result.ValueKind == JsonValueKind.Object
+                             && result.TryGetProperty("status", out var statusElement)
+                             && statusElement.TryGetInt32(out var parsedStatusCode)
+                ? parsedStatusCode
+                : 0;
             if (!ok)
             {
-                var status = result.ValueKind == JsonValueKind.Object
-                             && result.TryGetProperty("status", out var statusElement)
-                    ? statusElement.ToString()
-                    : "unknown";
                 RaiseLog(RuntimeLocalization.Format(
                     "Log.Crawl.CursorFetchHttpFailed",
                     "游标直连接口返回 HTTP {0}。",
-                    status));
+                    statusCode > 0 ? statusCode : "unknown"));
                 return CursorFetchOutcome.Failed;
             }
 
-            // 直连请求网络或接口响应偶尔会比较慢，统一给足 30 秒等待时间。
-            // 超过 30 秒仍未收到或解析成功时再回退页面滚动。
-            var responseArrived = await WaitForResponseOrNewWorkAsync(
-                beforeVersion,
-                beforeDiscovered,
+            var responseUrl = result.TryGetProperty("url", out var urlElement)
+                              && urlElement.ValueKind == JsonValueKind.String
+                ? urlElement.GetString()
+                : null;
+            if (string.IsNullOrWhiteSpace(responseUrl))
+                responseUrl = nextRequest.Url;
+
+            var responseBody = result.TryGetProperty("body", out var bodyElement)
+                               && bodyElement.ValueKind == JsonValueKind.String
+                ? bodyElement.GetString()
+                : null;
+            if (string.IsNullOrWhiteSpace(responseBody))
+            {
+                RaiseLog(RuntimeLocalization.Get(
+                    "Log.Crawl.CursorFetchEmptyBody",
+                    "游标直连接口已返回成功状态，但响应正文为空，已回退页面滚动。"));
+                return CursorFetchOutcome.Failed;
+            }
+
+            // 直连 fetch 已经拿到了完整响应正文，直接交给现有解析/下载流水线。
+            // 不再依赖 Playwright 的 ResponseReceived 事件来确认成功，否则某些站点
+            // 会出现 HTTP 200 已返回、却因为事件未转发而空等 30 秒后误判失败。
+            if (!adapter.IsTargetResponse(
+                    responseUrl,
+                    "fetch",
+                    statusCode > 0 ? statusCode : 200,
+                    nextRequest.Body))
+            {
+                RaiseLog(RuntimeLocalization.Get(
+                    "Log.Crawl.CursorFetchUnexpectedResponse",
+                    "游标直连接口已返回，但响应未通过站点接口识别，已回退页面滚动。"));
+                return CursorFetchOutcome.Failed;
+            }
+
+            var channel = _channel;
+            if (channel is null)
+                return CursorFetchOutcome.Failed;
+
+            var totalWorkCount = adapter.TryReadTotalWorkCount(
+                responseUrl,
+                responseBody,
+                _capturePageUrl,
+                nextRequest.Body);
+            if (totalWorkCount.HasValue)
+                SetTotalWorkCount(totalWorkCount.Value);
+
+            Interlocked.Increment(ref _responseCount);
+            Interlocked.Increment(ref _responseVersion);
+            _lastResponseAt = DateTimeOffset.Now;
+            await channel.Writer.WriteAsync(
+                new CapturedResponse(
+                    responseUrl,
+                    responseBody,
+                    _capturePageUrl,
+                    nextRequest.Body,
+                    new BrowserRequestSnapshot(
+                        responseUrl,
+                        nextRequest.Method,
+                        nextRequest.Body,
+                        nextRequest.Headers)),
+                cancellationToken);
+            RaiseLog(
+                RuntimeLocalization.Format(
+                    "Log.Crawl.ResponseCaptured",
+                    "捕获作品响应：第 {0} 页",
+                    _responseCount)
+                + Environment.NewLine
+                + $"URL: {responseUrl}");
+            PublishProgress();
+
+            var responseParsed = await WaitForParsedResponseAsync(
+                beforeParsedCount,
                 TimeSpan.FromSeconds(30),
                 cancellationToken);
-            var responseParsed = responseArrived
-                                 && await WaitForParsedResponseAsync(
-                                     beforeParsedCount,
-                                     TimeSpan.FromSeconds(30),
-                                     cancellationToken);
             if (responseParsed)
                 await WaitUntilPipelineIdleAsync(cancellationToken);
 
@@ -877,6 +951,10 @@ public sealed class CrawlCoordinator : IAsyncDisposable
                 "Log.Crawl.CursorFetchError",
                 "游标直连请求失败：{0}",
                 ex.Message));
+        }
+        finally
+        {
+            Volatile.Write(ref _directFetchResponseUrl, null);
         }
 
         _nextCursor = previousCursor;
@@ -926,6 +1004,7 @@ public sealed class CrawlCoordinator : IAsyncDisposable
         _hasMore = null;
         _nextCursor = null;
         _lastPaginationRequest = null;
+        _directFetchResponseUrl = null;
         _douyinProfileResponseUrl = null;
         _currentWork = null;
         _lastResponseAt = DateTimeOffset.Now;
@@ -955,6 +1034,7 @@ public sealed class CrawlCoordinator : IAsyncDisposable
         _personDetectionSessionId = null;
         _capturePageUrl = string.Empty;
         _downloadOptions = new CrawlerDownloadOptions();
+        _directFetchResponseUrl = null;
         _channel = null;
         _captureCts?.Dispose();
         _captureCts = null;
