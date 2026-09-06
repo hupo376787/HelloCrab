@@ -41,7 +41,7 @@ public sealed class CrawlCoordinator : IAsyncDisposable
 
             const method = String(request.method || (request.body ? 'POST' : 'GET')).toUpperCase();
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 5000);
+            const timeoutId = setTimeout(() => controller.abort(), 30000);
             const options = {
                 method,
                 headers,
@@ -842,17 +842,17 @@ public sealed class CrawlCoordinator : IAsyncDisposable
                 return CursorFetchOutcome.Failed;
             }
 
-            // 直连请求只是翻页加速路径，不能因为事件转发偶尔缺失而阻塞十几到几十秒。
-            // 真正成功的接口通常会立即触发 ResponseReceived；超时后回退页面滚动即可。
+            // 直连请求网络或接口响应偶尔会比较慢，统一给足 30 秒等待时间。
+            // 超过 30 秒仍未收到或解析成功时再回退页面滚动。
             var responseArrived = await WaitForResponseOrNewWorkAsync(
                 beforeVersion,
                 beforeDiscovered,
-                TimeSpan.FromSeconds(5),
+                TimeSpan.FromSeconds(30),
                 cancellationToken);
             var responseParsed = responseArrived
                                  && await WaitForParsedResponseAsync(
                                      beforeParsedCount,
-                                     TimeSpan.FromSeconds(3),
+                                     TimeSpan.FromSeconds(30),
                                      cancellationToken);
             if (responseParsed)
                 await WaitUntilPipelineIdleAsync(cancellationToken);
