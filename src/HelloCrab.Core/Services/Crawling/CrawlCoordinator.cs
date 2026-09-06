@@ -32,14 +32,17 @@ public sealed class CrawlCoordinator : IAsyncDisposable
                 'accept-encoding', 'connection', 'content-length', 'cookie', 'host',
                 'origin', 'referer', 'user-agent', ':authority', ':method', ':path', ':scheme'
             ]);
+            const requestHeaders = request.headers || request.Headers || {};
             const headers = new Headers();
-            for (const [name, value] of Object.entries(request.headers || {})) {
+            for (const [name, value] of Object.entries(requestHeaders)) {
                 const lower = name.toLowerCase();
                 if (forbiddenHeaders.has(lower) || lower.startsWith('sec-')) continue;
                 try { headers.set(name, value); } catch { }
             }
 
-            const method = String(request.method || (request.body ? 'POST' : 'GET')).toUpperCase();
+            const url = request.url || request.Url;
+            const body = request.body ?? request.Body ?? null;
+            const method = String(request.method || request.Method || (body ? 'POST' : 'GET')).toUpperCase();
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 30000);
             const options = {
@@ -50,11 +53,11 @@ public sealed class CrawlCoordinator : IAsyncDisposable
                 redirect: 'follow',
                 signal: controller.signal
             };
-            if (request.body && method !== 'GET' && method !== 'HEAD')
-                options.body = request.body;
+            if (body && method !== 'GET' && method !== 'HEAD')
+                options.body = body;
 
             try {
-                const response = await fetch(request.url, options);
+                const response = await fetch(url, options);
                 const text = await response.text();
                 const compactPreview = text.replace(/[\r\n\t]+/g, ' ').trim().slice(0, 180);
                 const trimmed = text.trimStart();
@@ -67,7 +70,7 @@ public sealed class CrawlCoordinator : IAsyncDisposable
                     ok: response.ok,
                     status: response.status,
                     statusText: response.statusText || '',
-                    requestedUrl: request.url,
+                    requestedUrl: url || '',
                     url: response.url,
                     redirected: response.redirected,
                     responseType: response.type || '',
