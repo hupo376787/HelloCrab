@@ -2,7 +2,7 @@
 set -uo pipefail
 
 CONFIGURATION="${1:-Release}"
-VERSION="${2:-1.0.0}"
+VERSION="${2:-2.0.0}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SCRIPT="$ROOT/scripts/publish-platform.sh"
 HOST_OS="$(uname -s)"
