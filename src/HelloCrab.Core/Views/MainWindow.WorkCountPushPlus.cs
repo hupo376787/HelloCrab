@@ -56,6 +56,7 @@ public partial class MainWindow
 
         if (e.PropertyName is nameof(MainWindowViewModel.TotalWorkCountText)
             or nameof(MainWindowViewModel.DiscoveredCount)
+            or nameof(MainWindowViewModel.CurrentAuthorName)
             or nameof(MainWindowViewModel.PushPlusToken))
         {
             TrySendWorkCountPushPlus(viewModel);
@@ -66,7 +67,8 @@ public partial class MainWindow
     {
         if (_workCountPushPlusSent
             || !viewModel.IsCapturing
-            || string.IsNullOrWhiteSpace(viewModel.PushPlusToken))
+            || string.IsNullOrWhiteSpace(viewModel.PushPlusToken)
+            || string.IsNullOrWhiteSpace(viewModel.CurrentAuthorName))
         {
             return;
         }
@@ -87,7 +89,8 @@ public partial class MainWindow
                 return;
         }
 
-        // 先置位再异步发送，避免 TotalWorkCount / DiscoveredCount 连续变更导致重复通知。
+        // 只有在作品数超阈值且当前作者名称已经明确后才置位并发送，
+        // 避免进度先到、作者信息稍后到时把提醒发送成“未知作者”。
         _workCountPushPlusSent = true;
         _ = viewModel.SendWorkCountExceededPushPlusAsync(actualTotalWorkCount);
     }
