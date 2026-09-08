@@ -332,6 +332,7 @@ public partial class MainWindow
     private void HistoryPinyinFilteredHistoryChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
         if (!_historyPinyinFilterApplying
+            && !_historyDisplaySortApplying
             && !string.IsNullOrWhiteSpace(_historyPinyinSearchBox?.Text))
         {
             QueueHistoryPinyinSearchRefresh();
