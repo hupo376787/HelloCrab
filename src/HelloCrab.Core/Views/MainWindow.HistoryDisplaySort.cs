@@ -217,7 +217,7 @@ public partial class MainWindow
         SetHistorySortMenuHeader(
             _historySortNameMenuItem,
             _historyDisplaySortKind == HistoryDisplaySortKind.Name,
-            HistorySortText("名称", "Name", "名前"));
+            HistorySortText("作者名称", "Author name", "作者名"));
         SetHistorySortMenuHeader(
             _historySortUpdatedAtMenuItem,
             _historyDisplaySortKind == HistoryDisplaySortKind.UpdatedAt,
@@ -225,7 +225,7 @@ public partial class MainWindow
         SetHistorySortMenuHeader(
             _historySortPlatformMenuItem,
             _historyDisplaySortKind == HistoryDisplaySortKind.Platform,
-            HistorySortText("平台", "Platform", "プラットフォーム"));
+            HistorySortText("平台来源", "Platform source", "配信元プラットフォーム"));
         SetHistorySortMenuHeader(
             _historySortAscendingMenuItem,
             _historyDisplaySortAscending,
@@ -239,9 +239,9 @@ public partial class MainWindow
         {
             var kindText = _historyDisplaySortKind switch
             {
-                HistoryDisplaySortKind.Name => HistorySortText("名称", "Name", "名前"),
+                HistoryDisplaySortKind.Name => HistorySortText("作者名称", "Author name", "作者名"),
                 HistoryDisplaySortKind.UpdatedAt => HistorySortText("更新日期", "Updated date", "更新日時"),
-                HistoryDisplaySortKind.Platform => HistorySortText("平台", "Platform", "プラットフォーム"),
+                HistoryDisplaySortKind.Platform => HistorySortText("平台来源", "Platform source", "配信元プラットフォーム"),
                 _ => HistorySortText("默认排序", "Default order", "既定の順序")
             };
             var directionText = _historyDisplaySortAscending
