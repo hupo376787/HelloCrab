@@ -104,13 +104,13 @@ public sealed class KuaishouLiveGuardedSiteAdapter : ISiteAdapter
         WorkItem work,
         IBrowserAutomationService browser,
         CancellationToken cancellationToken)
-        => _inner.EnrichWorkMetadataAsync(work, browser, cancellationToken);
+        => ((ISiteAdapter)_inner).EnrichWorkMetadataAsync(work, browser, cancellationToken);
 
     public Task<WorkItem?> ResolveWorkAsync(
         WorkItem work,
         IBrowserAutomationService browser,
         CancellationToken cancellationToken)
-        => _inner.ResolveWorkAsync(work, browser, cancellationToken);
+        => ((ISiteAdapter)_inner).ResolveWorkAsync(work, browser, cancellationToken);
 
     public async Task ScrollNextAsync(
         IBrowserAutomationService browser,
