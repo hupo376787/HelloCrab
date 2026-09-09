@@ -154,7 +154,7 @@ public sealed class KuaishouLiveGuardedSiteAdapter : ISiteAdapter
             var separator = pair.IndexOf('=');
             var encodedName = separator >= 0 ? pair[..separator] : pair;
             var name = WebUtility.UrlDecode(encodedName);
-            if (!name.Equals("pcursor", StringComparison.OrdinalIgnoreCase))
+            if (!string.Equals(name, "pcursor", StringComparison.OrdinalIgnoreCase))
                 continue;
 
             var encodedValue = separator >= 0 ? pair[(separator + 1)..] : string.Empty;
@@ -171,7 +171,7 @@ public sealed class KuaishouLiveGuardedSiteAdapter : ISiteAdapter
             return "<empty>";
 
         return string.Join(
-            '\u001f',
+            "\u001f",
             batch.Works
                 .Select(work => work.WorkId)
                 .OrderBy(workId => workId, StringComparer.Ordinal));
