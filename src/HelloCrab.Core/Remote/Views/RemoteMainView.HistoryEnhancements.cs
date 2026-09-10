@@ -8,7 +8,6 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
-using Avalonia.VisualTree;
 using HelloCrab.Core.Remote.ViewModels;
 using ToolGood.Words.Pinyin;
 
@@ -19,6 +18,10 @@ namespace HelloCrab.Core.Remote.Views;
 /// 1. 搜索规则与桌面端保持一致，支持中文、UID、平台、全拼、姓名拼音和拼音首字母。
 /// 2. Browser/WASM 无法可靠读取客户端系统 Emoji 字体，因此浏览器历史作者名中的 Emoji
 ///    使用 Twemoji PNG 作为内联图像显示，避免缺字方框。Android/iOS 继续使用系统字体。
+///
+/// 性能说明：ListBox 本身使用虚拟化列表。Emoji 处理只在历史作者 TextBlock 的
+/// DataContext 被创建/切换时执行，不能挂在 LayoutUpdated 上，否则滚动期间每一帧布局
+/// 都会扫描整棵可视树，抵消虚拟化收益并阻塞 WASM UI 线程。
 /// </summary>
 public partial class RemoteMainView
 {
@@ -28,11 +31,27 @@ public partial class RemoteMainView
                 view.InitializeRemoteHistoryEnhancements,
                 DispatcherPriority.Background));
 
+    private static readonly IDisposable RemoteHistoryEmojiDataContextHandler =
+        StyledElement.DataContextProperty.Changed.AddClassHandler<TextBlock>((textBlock, _) =>
+        {
+            if (!OperatingSystem.IsBrowser()
+                || !textBlock.Classes.Contains("emojiText")
+                || textBlock.DataContext is not RemoteHistoryItemViewModel item)
+            {
+                return;
+            }
+
+            var userName = item.UserName ?? string.Empty;
+            if (ContainsRemoteHistoryEmoji(userName))
+                RenderRemoteHistoryEmojiName(textBlock, userName);
+        });
+
     private static readonly HttpClient RemoteHistoryEmojiHttpClient = new()
     {
         Timeout = TimeSpan.FromSeconds(12)
     };
 
+    private static readonly SemaphoreSlim RemoteHistoryEmojiDownloadGate = new(4, 4);
     private static readonly object RemoteHistoryEmojiCacheGate = new();
     private static readonly Dictionary<string, Task<Bitmap?>> RemoteHistoryEmojiCache =
         new(StringComparer.Ordinal);
@@ -40,12 +59,10 @@ public partial class RemoteMainView
     private readonly Dictionary<string, RemoteHistoryPinyinIndex> _remoteHistoryPinyinCache =
         new(StringComparer.Ordinal);
     private readonly HashSet<RemoteHistoryItemViewModel> _remoteHistoryEnhancementObservedItems = new();
-    private readonly Dictionary<TextBlock, string> _remoteHistoryEmojiRenderedNames = new();
 
     private RemoteMainViewModel? _remoteHistoryEnhancementViewModel;
     private bool _remoteHistoryEnhancementsInitialized;
     private bool _remoteHistoryEnhancedFilterQueued;
-    private bool _remoteHistoryEmojiRefreshQueued;
     private int _remoteHistoryEnhancementInstallAttempts;
 
     private readonly record struct RemoteHistoryPinyinIndex(
@@ -79,15 +96,12 @@ public partial class RemoteMainView
             if (_mobileHistorySearchBox is not null)
                 _mobileHistorySearchBox.TextChanged += RemoteHistoryEnhancedSearchTextChanged;
 
-            // 浏览器 ListBox 会虚拟化列表项。滚动时新作者项可能刚刚进入可视树，
-            // LayoutUpdated 后补一次 Emoji 渲染，保证后续出现的作者也不会显示方框。
-            if (OperatingSystem.IsBrowser())
-                LayoutUpdated += (_, _) => QueueRemoteHistoryEmojiRefresh();
+            // 不再监听 LayoutUpdated。虚拟化列表滚动时会不断触发布局事件，
+            // 在该事件里扫描可视树会让 Browser/WASM 很快出现明显卡顿甚至假死。
         }
 
         BindRemoteHistoryEnhancements(viewModel);
         QueueRemoteHistoryEnhancedFilter();
-        QueueRemoteHistoryEmojiRefresh();
     }
 
     private void BindRemoteHistoryEnhancements(RemoteMainViewModel viewModel)
@@ -115,7 +129,6 @@ public partial class RemoteMainView
     {
         RefreshRemoteHistoryEnhancementItemSubscriptions();
         QueueRemoteHistoryEnhancedFilter();
-        QueueRemoteHistoryEmojiRefresh();
     }
 
     private void RefreshRemoteHistoryEnhancementItemSubscriptions()
@@ -156,9 +169,6 @@ public partial class RemoteMainView
         {
             QueueRemoteHistoryEnhancedFilter();
         }
-
-        if (e.PropertyName == nameof(RemoteHistoryItemViewModel.UserName))
-            QueueRemoteHistoryEmojiRefresh();
     }
 
     private void RemoteHistoryEnhancedSearchTextChanged(object? sender, TextChangedEventArgs e)
@@ -211,8 +221,6 @@ public partial class RemoteMainView
             _browserHistoryCountText.Text = countText;
         if (_mobileHistoryCountText is not null)
             _mobileHistoryCountText.Text = countText;
-
-        QueueRemoteHistoryEmojiRefresh();
     }
 
     private bool RemoteHistoryItemMatches(RemoteHistoryItemViewModel item, string keyword)
@@ -294,71 +302,6 @@ public partial class RemoteMainView
 
     private static bool IsRemoteHistoryAsciiLetter(char ch)
         => (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z');
-
-    private void QueueRemoteHistoryEmojiRefresh()
-    {
-        if (!OperatingSystem.IsBrowser() || _remoteHistoryEmojiRefreshQueued)
-            return;
-
-        _remoteHistoryEmojiRefreshQueued = true;
-        Dispatcher.UIThread.Post(
-            () =>
-            {
-                _remoteHistoryEmojiRefreshQueued = false;
-                RefreshRemoteHistoryEmojiText();
-            },
-            DispatcherPriority.Background);
-    }
-
-    private void RefreshRemoteHistoryEmojiText()
-    {
-        if (!OperatingSystem.IsBrowser())
-            return;
-
-        // 只处理历史作者行；“当前作者”等其他 emojiText 仍由原来的控件负责。
-        var authorNameBlocks = this
-            .GetVisualDescendants()
-            .OfType<TextBlock>()
-            .Where(block => block.Classes.Contains("emojiText")
-                            && block.DataContext is RemoteHistoryItemViewModel)
-            .ToArray();
-
-        var visibleBlocks = authorNameBlocks.ToHashSet();
-        foreach (var stale in _remoteHistoryEmojiRenderedNames.Keys
-                     .Where(block => !visibleBlocks.Contains(block))
-                     .ToArray())
-        {
-            _remoteHistoryEmojiRenderedNames.Remove(stale);
-        }
-
-        foreach (var textBlock in authorNameBlocks)
-        {
-            if (textBlock.DataContext is not RemoteHistoryItemViewModel item)
-                continue;
-
-            var userName = item.UserName ?? string.Empty;
-            if (_remoteHistoryEmojiRenderedNames.TryGetValue(textBlock, out var renderedName)
-                && string.Equals(renderedName, userName, StringComparison.Ordinal))
-            {
-                continue;
-            }
-
-            if (!ContainsRemoteHistoryEmoji(userName))
-            {
-                // 这个 TextBlock 之前若由我们接管过，作者名更新为纯文字后继续手动同步。
-                if (_remoteHistoryEmojiRenderedNames.ContainsKey(textBlock))
-                {
-                    textBlock.Inlines.Clear();
-                    textBlock.Text = userName;
-                    _remoteHistoryEmojiRenderedNames[textBlock] = userName;
-                }
-                continue;
-            }
-
-            RenderRemoteHistoryEmojiName(textBlock, userName);
-            _remoteHistoryEmojiRenderedNames[textBlock] = userName;
-        }
-    }
 
     private static bool ContainsRemoteHistoryEmoji(string value)
     {
@@ -486,6 +429,7 @@ public partial class RemoteMainView
 
     private static async Task<Bitmap?> DownloadRemoteHistoryEmojiBitmapAsync(string twemojiCode)
     {
+        await RemoteHistoryEmojiDownloadGate.WaitAsync();
         try
         {
             // Browser/WASM 的 Skia 画布不能依赖浏览器系统 Emoji 字体。
@@ -503,6 +447,10 @@ public partial class RemoteMainView
         {
             // Emoji 属于显示增强。CDN 暂时不可用时保留当前位置，不影响历史操作和搜索。
             return null;
+        }
+        finally
+        {
+            RemoteHistoryEmojiDownloadGate.Release();
         }
     }
 
