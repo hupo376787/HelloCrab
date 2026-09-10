@@ -10,7 +10,7 @@ param(
     [ValidateSet('Debug', 'Release')]
     [string]$Configuration = 'Release',
 
-    [string]$Version = '2.0.0',
+    [string]$Version = '2.1.0',
 
     [string]$CodesignKey = $env:HELLOCRAB_IOS_CODESIGN_KEY,
     [string]$CodesignProvision = $env:HELLOCRAB_IOS_PROVISION,
