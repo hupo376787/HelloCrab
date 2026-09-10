@@ -1,4 +1,4 @@
-﻿using System.Net;
+using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using Avalonia.Threading;
@@ -206,7 +206,11 @@ public sealed class RemoteApiHostService : IAsyncDisposable
     {
         try
         {
-            switch (action.Trim().ToLowerInvariant())
+            var normalizedAction = action.Trim();
+            if (TryParseHistoryAction(normalizedAction, out var historyId, out var historyAction))
+                return await ExecuteHistoryActionAsync(historyId, historyAction);
+
+            switch (normalizedAction.ToLowerInvariant())
             {
                 case "install-chromium":
                     return await StartAsyncCommandAsync(
@@ -251,6 +255,89 @@ public sealed class RemoteApiHostService : IAsyncDisposable
         {
             return RemoteCommandResult.Fail(ex.Message);
         }
+    }
+
+    private async Task<RemoteCommandResult> ExecuteHistoryActionAsync(
+        int historyId,
+        string action)
+    {
+        var item = await InvokeOnUiAsync(() =>
+            _viewModel.DownloadHistory.FirstOrDefault(history => history.Id == historyId));
+        if (item is null)
+            return RemoteCommandResult.Fail("未找到对应的历史作者记录，列表可能已经刷新。 ".Trim());
+
+        switch (action.Trim().ToLowerInvariant())
+        {
+            case "open-home":
+                if (await InvokeOnUiAsync(() => _viewModel.IsCapturing || _viewModel.IsBusy))
+                    return RemoteCommandResult.Fail(_viewModel.Localize("Remote.Api.ActionUnavailable"));
+
+                await InvokeOnUiAsync(() => _viewModel.OpenHistoryHomeAsync(item));
+                return RemoteCommandResult.Ok($"已在桌面端打开作者主页：{item.UserName}");
+
+            case "copy-author-url":
+            {
+                var authorUrl = item.OriginalUrl?.Trim();
+                return string.IsNullOrWhiteSpace(authorUrl)
+                    ? RemoteCommandResult.Fail($"作者 {item.UserName} 没有可复制的主页地址。")
+                    : RemoteCommandResult.Ok(authorUrl);
+            }
+
+            case "open-folder":
+                await InvokeOnUiAsync(() => _viewModel.OpenHistoryFolder(item));
+                return RemoteCommandResult.Ok($"已在桌面端打开作者文件夹：{item.UserName}");
+
+            case "recollect":
+                if (await InvokeOnUiAsync(() => _viewModel.IsCapturing || _viewModel.IsBusy))
+                    return RemoteCommandResult.Fail(_viewModel.Localize("Remote.Api.ActionUnavailable"));
+
+                await InvokeOnUiAsync(() =>
+                {
+                    _ = _viewModel.RecollectHistoryAsync(item);
+                });
+                return RemoteCommandResult.Ok($"已向桌面端发送重新采集命令：{item.UserName}");
+
+            case "remove-history":
+                await InvokeOnUiAsync(() =>
+                {
+                    _ = _viewModel.RemoveHistoryAsync(item, deleteDiskFiles: false);
+                });
+                return RemoteCommandResult.Ok($"已向桌面端发送移除历史命令：{item.UserName}");
+
+            case "remove-files":
+                await InvokeOnUiAsync(() =>
+                {
+                    _ = _viewModel.RemoveHistoryAsync(item, deleteDiskFiles: true);
+                });
+                return RemoteCommandResult.Ok($"已向桌面端发送删除历史和磁盘文件命令：{item.UserName}");
+
+            default:
+                return RemoteCommandResult.Fail($"未知历史操作：{action}");
+        }
+    }
+
+    private static bool TryParseHistoryAction(
+        string action,
+        out int historyId,
+        out string historyAction)
+    {
+        const string prefix = "history:";
+        historyId = 0;
+        historyAction = string.Empty;
+
+        if (!action.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        var remainder = action[prefix.Length..];
+        var separatorIndex = remainder.IndexOf(':');
+        if (separatorIndex <= 0 || separatorIndex >= remainder.Length - 1)
+            return false;
+
+        if (!int.TryParse(remainder[..separatorIndex], out historyId))
+            return false;
+
+        historyAction = remainder[(separatorIndex + 1)..].Trim();
+        return !string.IsNullOrWhiteSpace(historyAction);
     }
 
     private async Task<RemoteCommandResult> StartAsyncCommandAsync(
