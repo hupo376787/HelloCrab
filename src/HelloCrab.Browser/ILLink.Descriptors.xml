@@ -1,0 +1,11 @@
+<linker>
+  <assembly fullname="HelloCrab.Core">
+    <!--
+      RemoteMainView intentionally uses Avalonia reflection bindings, including Binding(path)
+      instances created in C# for the recycled browser history rows. Release Browser/WASM publish
+      trims members that are only reached by reflection unless they are explicitly preserved.
+    -->
+    <type fullname="HelloCrab.Core.Remote.ViewModels.RemoteMainViewModel" preserve="all" />
+    <type fullname="HelloCrab.Core.Remote.ViewModels.RemoteHistoryItemViewModel" preserve="all" />
+  </assembly>
+</linker>
