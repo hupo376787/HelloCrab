@@ -8,7 +8,7 @@ namespace HelloCrab.Browser;
 /// page is served over plain HTTP and navigator.clipboard is unavailable because the page isn't a
 /// secure context.
 /// </summary>
-internal static class BrowserPasteInterop
+internal static partial class BrowserPasteInterop
 {
     [JSExport]
     internal static bool PasteText(string text)

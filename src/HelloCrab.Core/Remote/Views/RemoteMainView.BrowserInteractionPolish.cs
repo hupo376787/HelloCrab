@@ -31,6 +31,18 @@ public partial class RemoteMainView
                 view.InitializeBrowserInteractionPolish,
                 DispatcherPriority.Background));
 
+    // Avalonia 12 的 GotFocusEvent 使用自己的泛型事件参数。这里让编译器直接推断参数类型，
+    // 避免显式引用版本间会变化的 GotFocusEventArgs，同时覆盖运行期创建出来的搜索框等 TextBox。
+    private static readonly IDisposable BrowserTextBoxFocusHandler =
+        InputElement.GotFocusEvent.AddClassHandler<TextBox>(
+            (textBox, _) =>
+            {
+                if (OperatingSystem.IsBrowser())
+                    BrowserTextInputPasteBridge.SetTarget(textBox);
+            },
+            RoutingStrategies.Bubble,
+            handledEventsToo: true);
+
     private bool _browserInteractionPolishInitialized;
     private int _browserInteractionPolishInstallAttempts;
     private Button? _browserThemeButton;
@@ -59,16 +71,6 @@ public partial class RemoteMainView
 
         _browserInteractionPolishInitialized = true;
         _browserThemeButton = themeButton;
-
-        // TextBox Ctrl+V in Avalonia Browser normally reads navigator.clipboard. On an HTTP URL
-        // such as a Tailscale/LAN address the browser can reject that API. Track the focused
-        // Avalonia TextBox so BrowserPasteInterop can inject ClipboardEvent.clipboardData instead.
-        AddHandler(
-            InputElement.GotFocusEvent,
-            BrowserTextInputGotFocus,
-            RoutingStrategies.Bubble,
-            handledEventsToo: true);
-
         ConfigureBrowserThemeButton(viewModel);
     }
 
@@ -80,23 +82,6 @@ public partial class RemoteMainView
         Dispatcher.UIThread.Post(
             InitializeBrowserInteractionPolish,
             DispatcherPriority.Background);
-    }
-
-    private static TextBox? FindFocusedTextBox(object? source)
-    {
-        if (source is TextBox textBox)
-            return textBox;
-
-        if (source is Visual visual)
-            return visual.GetVisualAncestors().OfType<TextBox>().FirstOrDefault();
-
-        return null;
-    }
-
-    private void BrowserTextInputGotFocus(object? sender, GotFocusEventArgs e)
-    {
-        var textBox = FindFocusedTextBox(e.Source);
-        BrowserTextInputPasteBridge.SetTarget(textBox);
     }
 
     private void ConfigureBrowserThemeButton(RemoteMainViewModel viewModel)
