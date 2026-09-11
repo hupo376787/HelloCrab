@@ -1,0 +1,6 @@
+<linker>
+  <assembly fullname="HelloCrab.Core">
+    <type fullname="HelloCrab.Core.Remote.ViewModels.RemoteMainViewModel" preserve="all" />
+    <type fullname="HelloCrab.Core.Remote.ViewModels.RemoteHistoryItemViewModel" preserve="all" />
+  </assembly>
+</linker>

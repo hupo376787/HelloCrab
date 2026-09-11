@@ -19,4 +19,12 @@
          通过 WithFont_SourceHanSansCN() 直接注册并保留该字体程序集。 -->
     <PackageReference Include="Quick.AvaloniaFonts.SourceHanSansCN.Slim" Version="1.0.0" />
   </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      Release Browser/WASM 默认会执行 trimming。RemoteMainView 目前仍有 XAML 与 C#
+      动态模板使用反射 Binding(path)，因此显式保留远程 ViewModel 的可绑定成员。
+    -->
+    <TrimmerRootDescriptor Include="$(MSBuildThisFileDirectory)ILLink.Descriptors.xml" />
+  </ItemGroup>
 </Project>
