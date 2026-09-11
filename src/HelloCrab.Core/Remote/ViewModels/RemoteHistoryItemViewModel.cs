@@ -17,6 +17,7 @@ public sealed class RemoteHistoryItemViewModel : ObservableObject, IDisposable
     private string _platform = string.Empty;
     private string _userId = string.Empty;
     private string _userName = string.Empty;
+    private string _pinyinSearchText = string.Empty;
     private string _originalUrl = string.Empty;
     private string _folderPath = string.Empty;
     private string _headUrl = string.Empty;
@@ -69,6 +70,7 @@ public sealed class RemoteHistoryItemViewModel : ObservableObject, IDisposable
     }
 
     public string UserName { get => _userName; private set => SetProperty(ref _userName, value); }
+    public string PinyinSearchText { get => _pinyinSearchText; private set => SetProperty(ref _pinyinSearchText, value); }
     public string OriginalUrl { get => _originalUrl; private set => SetProperty(ref _originalUrl, value); }
     public string FolderPath { get => _folderPath; private set => SetProperty(ref _folderPath, value); }
     public string HeadUrl { get => _headUrl; private set => SetProperty(ref _headUrl, value); }
@@ -139,6 +141,7 @@ public sealed class RemoteHistoryItemViewModel : ObservableObject, IDisposable
         Platform = source.Platform ?? string.Empty;
         UserId = source.UserId ?? string.Empty;
         UserName = source.UserName ?? string.Empty;
+        PinyinSearchText = source.PinyinSearchText ?? string.Empty;
         OriginalUrl = source.OriginalUrl ?? string.Empty;
         FolderPath = source.FolderPath ?? string.Empty;
         HeadUrl = source.HeadUrl ?? string.Empty;

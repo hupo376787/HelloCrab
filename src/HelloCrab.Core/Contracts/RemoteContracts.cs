@@ -1,3 +1,5 @@
+using HelloCrab.Core.Utilities;
+
 namespace HelloCrab.Core.Contracts;
 
 public sealed class RemoteHealthDto
@@ -59,10 +61,25 @@ public sealed class RemoteSettingsDto
 
 public sealed class RemoteHistoryItemDto
 {
+    private string _pinyinSearchText = string.Empty;
+
     public int Id { get; set; }
     public string Platform { get; set; } = string.Empty;
     public string UserId { get; set; } = string.Empty;
     public string UserName { get; set; } = string.Empty;
+
+    /// <summary>
+    /// 由桌面主机预计算后随历史数据下发的拼音搜索索引。
+    /// Browser/WASM 直接使用该值，不再依赖浏览器运行时加载第三方拼音词典资源。
+    /// </summary>
+    public string PinyinSearchText
+    {
+        get => string.IsNullOrWhiteSpace(_pinyinSearchText)
+            ? HistoryPinyinMatcher.BuildSearchText(UserName)
+            : _pinyinSearchText;
+        set => _pinyinSearchText = value ?? string.Empty;
+    }
+
     public string OriginalUrl { get; set; } = string.Empty;
     public string FolderPath { get; set; } = string.Empty;
     public string HeadUrl { get; set; } = string.Empty;

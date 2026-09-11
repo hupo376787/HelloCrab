@@ -14,6 +14,9 @@ namespace HelloCrab.Core.Remote.Views;
 /// 旧实现曾经同时存在基础文本筛选、远程拼音增强、统一搜索、全部读音搜索等多层处理，
 /// 在 WASM 中会出现后执行的旧筛选覆盖拼音结果。这里把输入、数据刷新以及旧筛选覆盖后的
 /// 最终结果都收口到与桌面端共用的 HistoryPinyinMatcher。
+///
+/// Browser/WASM 优先使用桌面主机已经计算好的 PinyinSearchText，避免浏览器运行时
+/// ToolGood.Words.Pinyin 资源加载差异导致转换结果为空；老版本主机没有该字段时才回退本地转换。
 /// </summary>
 public partial class RemoteMainView
 {
@@ -171,7 +174,8 @@ public partial class RemoteMainView
         if (e.PropertyName is nameof(RemoteHistoryItemViewModel.UserName)
             or nameof(RemoteHistoryItemViewModel.UserId)
             or nameof(RemoteHistoryItemViewModel.Platform)
-            or nameof(RemoteHistoryItemViewModel.PlatformDisplayText))
+            or nameof(RemoteHistoryItemViewModel.PlatformDisplayText)
+            or nameof(RemoteHistoryItemViewModel.PinyinSearchText))
         {
             QueueSharedRemoteHistoryPinyinFilter();
         }
@@ -224,7 +228,8 @@ public partial class RemoteMainView
                                    item.UserId,
                                    item.Platform,
                                    item.PlatformDisplayText,
-                                   keyword)))
+                                   keyword,
+                                   item.PinyinSearchText)))
             .ToArray();
 
         _sharedRemoteHistoryPinyinFilterApplying = true;

@@ -14,7 +14,7 @@ namespace HelloCrab.Core.Remote.Views;
 
 /// <summary>
 /// Browser history cards mirror the desktop HistoryList item layout.
-/// The right-side desktop drag glyph is kept visually identical, but opens the author menu on web.
+/// The right-side desktop drag area opens the author menu on web.
 /// </summary>
 public partial class RemoteMainView
 {
@@ -46,9 +46,32 @@ public partial class RemoteMainView
         }
 
         _browserDesktopHistoryCardInitialized = true;
+
+        _finalBrowserHistoryList.Classes.Add("browserHistoryList");
+        _finalBrowserHistoryList.Margin = new Thickness(0);
         _finalBrowserHistoryList.ItemTemplate = new FuncDataTemplate<RemoteHistoryItemViewModel>(
             (_, _) => CreateBrowserDesktopHistoryRow(),
             supportsRecycling: true);
+
+        // 空的“操作结果”TextBlock 之前仍会占一行高度，造成计数文字与第一张卡片之间的大空白。
+        if (_legacyHistoryCard?.Child is StackPanel browserHistoryStack)
+            browserHistoryStack.Spacing = 5;
+
+        if (_browserHistoryActionText is not null)
+        {
+            UpdateBrowserHistoryActionTextVisibility();
+            _browserHistoryActionText.PropertyChanged += (_, e) =>
+            {
+                if (e.Property == TextBlock.TextProperty)
+                    UpdateBrowserHistoryActionTextVisibility();
+            };
+        }
+    }
+
+    private void UpdateBrowserHistoryActionTextVisibility()
+    {
+        if (_browserHistoryActionText is not null)
+            _browserHistoryActionText.IsVisible = !string.IsNullOrWhiteSpace(_browserHistoryActionText.Text);
     }
 
     private Control CreateBrowserDesktopHistoryRow()
@@ -144,24 +167,47 @@ public partial class RemoteMainView
             Children = { titleGrid, uidText, summaryText, updatedText }
         };
 
-        var actionGlyph = new TextBlock
+        // 不再使用“⋮⋮ / ⋯”字体字符。WASM 字体缺少对应 glyph 时会显示方框，
+        // 直接绘制三个圆点，任何浏览器字体环境下都不会乱码。
+        var dots = new StackPanel
         {
-            Text = "⋮⋮",
-            FontSize = 17,
-            VerticalAlignment = VerticalAlignment.Center,
+            Orientation = Orientation.Horizontal,
+            Spacing = 3,
             HorizontalAlignment = HorizontalAlignment.Center,
-            Cursor = new Cursor(StandardCursorType.Hand)
+            VerticalAlignment = VerticalAlignment.Center,
+            IsHitTestVisible = false
         };
-        actionGlyph.Classes.Add("browserDesktopHistorySecondary");
-        ToolTip.SetTip(actionGlyph, "作者操作");
-        actionGlyph.PointerPressed += (_, e) =>
+        for (var index = 0; index < 3; index++)
         {
-            var point = e.GetCurrentPoint(actionGlyph);
+            var dot = new Border
+            {
+                Width = 4,
+                Height = 4,
+                CornerRadius = new CornerRadius(2)
+            };
+            dot.Classes.Add("browserHistoryActionDot");
+            dots.Children.Add(dot);
+        }
+
+        var actionHost = new Border
+        {
+            Width = 34,
+            Height = 34,
+            Background = Brushes.Transparent,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            Cursor = new Cursor(StandardCursorType.Hand),
+            Child = dots
+        };
+        ToolTip.SetTip(actionHost, "作者操作");
+        actionHost.PointerPressed += (_, e) =>
+        {
+            var point = e.GetCurrentPoint(actionHost);
             if (!point.Properties.IsLeftButtonPressed)
                 return;
 
-            if (actionGlyph.DataContext is RemoteHistoryItemViewModel)
-                CreateRecyclableRemoteHistoryContextMenu(actionGlyph).Open(actionGlyph);
+            if (actionHost.DataContext is RemoteHistoryItemViewModel)
+                CreateRecyclableRemoteHistoryContextMenu(actionHost).Open(actionHost);
 
             e.Handled = true;
         };
@@ -177,20 +223,21 @@ public partial class RemoteMainView
             Width = new GridLength(1, GridUnitType.Star),
             MinWidth = 0
         });
-        contentGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        contentGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(34) });
         contentGrid.Children.Add(avatarBorder);
         Grid.SetColumn(textStack, 1);
         contentGrid.Children.Add(textStack);
-        Grid.SetColumn(actionGlyph, 2);
-        contentGrid.Children.Add(actionGlyph);
+        Grid.SetColumn(actionHost, 2);
+        contentGrid.Children.Add(actionHost);
 
         var row = new Border
         {
             CornerRadius = new CornerRadius(9),
             Padding = new Thickness(11),
-            Margin = new Thickness(0, 0, 0, 10),
+            Margin = new Thickness(0, 5),
             BorderThickness = new Thickness(1),
             HorizontalAlignment = HorizontalAlignment.Stretch,
+            VerticalAlignment = VerticalAlignment.Center,
             Child = contentGrid
         };
         row.Classes.Add("browserDesktopHistoryItem");

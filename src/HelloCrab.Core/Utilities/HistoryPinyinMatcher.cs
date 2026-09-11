@@ -5,25 +5,26 @@ namespace HelloCrab.Core.Utilities;
 
 /// <summary>
 /// 下载历史作者搜索共用的拼音匹配核心。
-/// Desktop / Browser WASM / mobile 都通过这一处执行作者名拼音转换，
-/// 避免不同前端各自维护一份实现后出现行为偏差。
+/// Desktop / Browser WASM / mobile 都通过这一处执行作者名拼音匹配。
+///
+/// Browser/WASM 端优先使用桌面主机随历史 DTO 一起下发的预计算拼音索引，
+/// 避免浏览器运行时对第三方拼音词典资源的加载差异影响搜索结果；桌面端仍然
+/// 使用同一方法构建这份索引，因此两端的匹配规则保持一致。
 /// </summary>
 public sealed class HistoryPinyinMatcher
 {
-    private readonly Dictionary<string, HistoryPinyinIndex> _cache =
+    private const int MaxCacheEntries = 4096;
+    private static readonly object SharedCacheGate = new();
+    private static readonly Dictionary<string, string> SharedSearchTextCache =
         new(StringComparer.Ordinal);
-
-    private readonly record struct HistoryPinyinIndex(
-        string Full,
-        string NameFull,
-        string Initials);
 
     public bool Matches(
         string? userName,
         string? userId,
         string? platform,
         string? platformDisplayText,
-        string keyword)
+        string keyword,
+        string? precomputedPinyinSearchText = null)
     {
         if (ContainsText(userName, keyword)
             || ContainsText(userId, keyword)
@@ -43,41 +44,85 @@ public sealed class HistoryPinyinMatcher
         if (normalizedKeyword.Length == 0)
             return false;
 
-        var pinyin = GetIndex(userName);
-        return pinyin.Full.Contains(normalizedKeyword, StringComparison.OrdinalIgnoreCase)
-               || pinyin.NameFull.Contains(normalizedKeyword, StringComparison.OrdinalIgnoreCase)
-               || pinyin.Initials.Contains(normalizedKeyword, StringComparison.OrdinalIgnoreCase);
+        var searchText = string.IsNullOrWhiteSpace(precomputedPinyinSearchText)
+            ? BuildSearchText(userName)
+            : precomputedPinyinSearchText;
+
+        return !string.IsNullOrWhiteSpace(searchText)
+               && searchText.Contains(normalizedKeyword, StringComparison.OrdinalIgnoreCase);
     }
 
-    public void Clear() => _cache.Clear();
-
-    private HistoryPinyinIndex GetIndex(string userName)
+    public void Clear()
     {
-        if (_cache.TryGetValue(userName, out var cached))
-            return cached;
+        lock (SharedCacheGate)
+            SharedSearchTextCache.Clear();
+    }
 
-        // 与桌面端现有行为完全一致：普通全拼、姓名模式全拼、拼音首字母。
-        var full = TryConvert(() => WordsHelper.GetPinyin(userName));
-        var nameFull = TryConvert(() => WordsHelper.GetPinyinForName(userName));
-        var initials = TryConvert(() => WordsHelper.GetFirstPinyin(userName));
-        var result = new HistoryPinyinIndex(full, nameFull, initials);
+    /// <summary>
+    /// 构建供桌面端和远程端共同使用的拼音搜索索引。
+    /// 索引包含：普通全拼、姓名模式全拼、首字母，以及每个汉字的全部读音。
+    /// 因此输入 HUI 可以命中作者名中的“会 / 回 / 慧 / 汇”等字；完整全拼和首字母
+    /// 搜索仍然继续支持。
+    /// </summary>
+    public static string BuildSearchText(string? userName)
+    {
+        if (string.IsNullOrWhiteSpace(userName))
+            return string.Empty;
 
-        if (_cache.Count >= 4096)
-            _cache.Clear();
+        lock (SharedCacheGate)
+        {
+            if (SharedSearchTextCache.TryGetValue(userName, out var cached))
+                return cached;
+        }
 
-        _cache[userName] = result;
+        var parts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        AddConverted(parts, () => WordsHelper.GetPinyin(userName));
+        AddConverted(parts, () => WordsHelper.GetPinyinForName(userName));
+        AddConverted(parts, () => WordsHelper.GetFirstPinyin(userName));
+
+        foreach (var ch in userName)
+        {
+            if (!IsSupportedChineseChar(ch))
+                continue;
+
+            try
+            {
+                foreach (var reading in WordsHelper.GetAllPinyin(ch))
+                {
+                    var normalized = Normalize(reading);
+                    if (normalized.Length > 0)
+                        parts.Add(normalized);
+                }
+            }
+            catch
+            {
+                // 个别字符读取失败时保留其余拼音索引，不让一次异常使整个作者不可搜索。
+            }
+        }
+
+        var result = string.Join('|', parts);
+        lock (SharedCacheGate)
+        {
+            if (SharedSearchTextCache.Count >= MaxCacheEntries)
+                SharedSearchTextCache.Clear();
+
+            SharedSearchTextCache[userName] = result;
+        }
+
         return result;
     }
 
-    private static string TryConvert(Func<string> converter)
+    private static void AddConverted(HashSet<string> target, Func<string> converter)
     {
         try
         {
-            return Normalize(converter());
+            var normalized = Normalize(converter());
+            if (normalized.Length > 0)
+                target.Add(normalized);
         }
         catch
         {
-            return string.Empty;
+            // 保留其它索引。WASM 若无法加载第三方词典时会使用主机下发的预计算结果。
         }
     }
 
@@ -102,4 +147,8 @@ public sealed class HistoryPinyinMatcher
 
     private static bool IsAsciiLetter(char ch)
         => (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z');
+
+    private static bool IsSupportedChineseChar(char ch)
+        => ch is >= '\u3400' and <= '\u4DB5'
+           || ch is >= '\u4E00' and <= '\u9FD5';
 }
