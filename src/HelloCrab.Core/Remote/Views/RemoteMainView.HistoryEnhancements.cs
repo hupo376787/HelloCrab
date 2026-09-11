@@ -322,7 +322,7 @@ public partial class RemoteMainView
     {
         // Text 与 Inlines 不能同时作为内容来源；移除原 UserName Binding 后由本方法维护。
         textBlock.ClearValue(TextBlock.TextProperty);
-        textBlock.Inlines.Clear();
+        textBlock.Inlines?.Clear();
 
         var normalText = new StringBuilder();
         var enumerator = StringInfo.GetTextElementEnumerator(userName);
@@ -357,7 +357,7 @@ public partial class RemoteMainView
             ToolTip.SetTip(image, element);
 
             // InlineCollection 会自动把 Control 包装成 InlineUIContainer。
-            textBlock.Inlines.Add(image);
+            textBlock.Inlines?.Add(image);
             _ = SetRemoteHistoryEmojiImageAsync(image, twemojiCode);
         }
 
@@ -369,7 +369,7 @@ public partial class RemoteMainView
         if (text.Length == 0)
             return;
 
-        textBlock.Inlines.Add(text.ToString());
+        textBlock.Inlines?.Add(text.ToString());
         text.Clear();
     }
 
