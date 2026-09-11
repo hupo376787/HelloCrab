@@ -3,6 +3,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Templates;
 using Avalonia.Layout;
+using Avalonia.Media;
 using Avalonia.Threading;
 using HelloCrab.Core.Remote.ViewModels;
 
