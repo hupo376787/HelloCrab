@@ -1,9 +1,7 @@
 name: Build all platform packages
 
 on:
-  workflow_dispatch:
   push:
-    branches: [main]
     tags: ['v*']
 
 permissions:
