@@ -6,11 +6,10 @@ using Avalonia.VisualTree;
 namespace HelloCrab.Core.Remote.Views;
 
 /// <summary>
-/// 浏览器历史搜索的最终桥接。
+/// 浏览器历史搜索的最终属性桥接。
 ///
-/// 浏览器端历史搜索此前经历了多层 TextChanged 增强，初始化先后顺序可能导致
-/// 最终仍由旧的单读音筛选处理输入。这里直接监听 TextBox.TextProperty，
-/// 对浏览器历史搜索框始终执行“全部读音”筛选，避免事件安装顺序影响结果。
+/// WASM 下直接监听 TextBox.TextProperty，确保无论 TextChanged 的安装顺序如何，
+/// 最终都进入与桌面端共用的 HistoryPinyinMatcher 搜索路径。
 /// </summary>
 public partial class RemoteMainView
 {
@@ -29,11 +28,10 @@ public partial class RemoteMainView
                 return;
             }
 
-            // 不依赖旧 TextChanged 事件是否已安装，直接以当前输入作为查询文本。
             view._remoteHistorySearchText = textBox.Text ?? string.Empty;
 
             Dispatcher.UIThread.Post(
-                view.ApplyRemoteHistoryAllPinyinFilter,
+                view.ApplySharedRemoteHistoryPinyinFilter,
                 DispatcherPriority.Background);
         });
 }
