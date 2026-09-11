@@ -16,6 +16,10 @@
           <SolidColorBrush x:Key="RemoteCardBorderBrush" Color="#306366F1" />
           <SolidColorBrush x:Key="RemoteCaptionBrush" Color="#64748B" />
           <SolidColorBrush x:Key="RemotePrimaryTextBrush" Color="#172033" />
+          <SolidColorBrush x:Key="RemoteHistoryDesktopItemBrush" Color="#AFFFFFFF" />
+          <SolidColorBrush x:Key="RemoteHistoryDesktopBorderBrush" Color="#66FFFFFF" />
+          <SolidColorBrush x:Key="RemoteHistoryDesktopPrimaryTextBrush" Color="#FF172033" />
+          <SolidColorBrush x:Key="RemoteHistoryDesktopSecondaryTextBrush" Color="#FF667085" />
           <LinearGradientBrush x:Key="RemoteIconBackgroundBrush" StartPoint="0%,0%" EndPoint="100%,100%">
             <GradientStop Color="#DDE7FF" Offset="0" />
             <GradientStop Color="#FFE0F0" Offset="1" />
@@ -37,6 +41,10 @@
           <SolidColorBrush x:Key="RemoteCardBorderBrush" Color="#38A5B4FC" />
           <SolidColorBrush x:Key="RemoteCaptionBrush" Color="#B7C4CEDF" />
           <SolidColorBrush x:Key="RemotePrimaryTextBrush" Color="#FFFFFFFF" />
+          <SolidColorBrush x:Key="RemoteHistoryDesktopItemBrush" Color="#A6262D43" />
+          <SolidColorBrush x:Key="RemoteHistoryDesktopBorderBrush" Color="#42FFFFFF" />
+          <SolidColorBrush x:Key="RemoteHistoryDesktopPrimaryTextBrush" Color="#FFF5F7FF" />
+          <SolidColorBrush x:Key="RemoteHistoryDesktopSecondaryTextBrush" Color="#FFAAB3C7" />
           <LinearGradientBrush x:Key="RemoteIconBackgroundBrush" StartPoint="0%,0%" EndPoint="100%,100%">
             <GradientStop Color="#507C3AED" Offset="0" />
             <GradientStop Color="#50EC4899" Offset="1" />
@@ -145,6 +153,16 @@
     <Style Selector="TextBlock.caption">
       <Setter Property="Foreground" Value="{DynamicResource RemoteCaptionBrush}" />
       <Setter Property="FontSize" Value="12" />
+    </Style>
+    <Style Selector="Border.browserDesktopHistoryItem">
+      <Setter Property="Background" Value="{DynamicResource RemoteHistoryDesktopItemBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource RemoteHistoryDesktopBorderBrush}" />
+    </Style>
+    <Style Selector="TextBlock.browserDesktopHistoryPrimary">
+      <Setter Property="Foreground" Value="{DynamicResource RemoteHistoryDesktopPrimaryTextBrush}" />
+    </Style>
+    <Style Selector="TextBlock.browserDesktopHistorySecondary">
+      <Setter Property="Foreground" Value="{DynamicResource RemoteHistoryDesktopSecondaryTextBrush}" />
     </Style>
   </Application.Styles>
 </Application>

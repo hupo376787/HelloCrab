@@ -1,6 +1,7 @@
 using Avalonia.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 using HelloCrab.Core.Contracts;
+using HelloCrab.Core.Services.Localization;
 
 namespace HelloCrab.Core.Remote.ViewModels;
 
@@ -31,7 +32,32 @@ public sealed class RemoteHistoryItemViewModel : ObservableObject, IDisposable
     }
 
     public int Id { get => _id; private set => SetProperty(ref _id, value); }
-    public string Platform { get => _platform; private set => SetProperty(ref _platform, value); }
+    public string Platform
+    {
+        get => _platform;
+        private set
+        {
+            if (SetProperty(ref _platform, value))
+                OnPropertyChanged(nameof(PlatformDisplayText));
+        }
+    }
+
+    public string PlatformDisplayText
+    {
+        get
+        {
+            if (string.IsNullOrWhiteSpace(Platform))
+                return RuntimeLocalization.Get("Common.UnknownPlatform", "未知平台");
+
+            var id = Platform.Trim().ToLowerInvariant() switch
+            {
+                "xhs" => "xiaohongshu",
+                _ => Platform.Trim().ToLowerInvariant()
+            };
+            return RuntimeLocalization.Get($"Platform.{id}", Platform.Trim());
+        }
+    }
+
     public string UserId
     {
         get => _userId;
