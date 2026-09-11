@@ -3,7 +3,7 @@ set -euo pipefail
 
 TARGET="${1:-linux-x64}"
 CONFIGURATION="${2:-Release}"
-VERSION="${3:-2.1.0}"
+VERSION="${3:-2.2.0}"
 
 case "$TARGET" in
   win-x64|win-arm64|linux-x64|linux-arm64|osx-x64|osx-arm64|browser|android|ios-simulator|ios) ;;

@@ -54,7 +54,7 @@ jobs:
           if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
             VERSION="${GITHUB_REF_NAME#v}"
           else
-            VERSION="2.1.0"
+            VERSION="2.2.0"
           fi
           echo "value=$VERSION" >> "$GITHUB_OUTPUT"
           echo "Package version: $VERSION"
@@ -116,7 +116,7 @@ jobs:
           if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
             VERSION="${GITHUB_REF_NAME#v}"
           else
-            VERSION="2.1.0"
+            VERSION="2.2.0"
           fi
           echo "value=$VERSION" >> "$GITHUB_OUTPUT"
           echo "Package version: $VERSION"
@@ -169,7 +169,7 @@ jobs:
           if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
             VERSION="${GITHUB_REF_NAME#v}"
           else
-            VERSION="2.1.0"
+            VERSION="2.2.0"
           fi
           echo "value=$VERSION" >> "$GITHUB_OUTPUT"
           echo "Package version: $VERSION"

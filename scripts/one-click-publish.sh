@@ -3,7 +3,7 @@ set -euo pipefail
 
 TARGET="${1:-all}"
 CONFIGURATION="${CONFIGURATION:-Release}"
-VERSION="${VERSION:-2.1.0}"
+VERSION="${VERSION:-2.2.0}"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ARTIFACTS="$ROOT/artifacts"
 PUBLISH_PLATFORM="$ROOT/scripts/publish-platform.sh"
