@@ -270,7 +270,7 @@ public partial class RemoteMainView
 
         // 不使用上一版 emojiText 的全局 DataContext handler，避免 recycling 时
         // “Emoji 作者 -> 普通作者”沿用旧 Inlines。每次都按当前 DataContext 重建当前昵称。
-        textBlock.Inlines.Clear();
+        textBlock.Inlines?.Clear();
         textBlock.ClearValue(TextBlock.TextProperty);
 
         if (OperatingSystem.IsBrowser() && ContainsRemoteHistoryEmoji(name))
