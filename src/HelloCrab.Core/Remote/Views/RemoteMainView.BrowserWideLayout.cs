@@ -16,6 +16,7 @@ public partial class RemoteMainView
 {
     private const double BrowserWideLayoutThreshold = 1280d;
     private const double BrowserWideContentMaxWidth = 1760d;
+    private const double BrowserWideBottomMargin = 18d;
 
     private static readonly IDisposable BrowserWideLayoutDataContextHandler =
         StyledElement.DataContextProperty.Changed.AddClassHandler<RemoteMainView>((view, _) =>
@@ -27,6 +28,7 @@ public partial class RemoteMainView
 
     private StackPanel? _browserWideRootStack;
     private Grid? _browserWideGrid;
+    private ScrollViewer? _browserWideLeftScrollViewer;
     private StackPanel? _browserWideLeftColumn;
     private StackPanel? _browserWideCenterColumn;
     private StackPanel? _browserWideRightColumn;
@@ -169,12 +171,16 @@ public partial class RemoteMainView
         }
 
         var useWideLayout = Bounds.Width >= BrowserWideLayoutThreshold;
-        if (useWideLayout == _browserWideLayoutActive)
-            return;
-
         if (useWideLayout)
-            ApplyBrowserWideLayout();
-        else
+        {
+            if (!_browserWideLayoutActive)
+                ApplyBrowserWideLayout();
+
+            UpdateBrowserWideLeftScrollHeight();
+            return;
+        }
+
+        if (_browserWideLayoutActive)
             RestoreBrowserNarrowLayout();
     }
 
@@ -187,6 +193,16 @@ public partial class RemoteMainView
         {
             Spacing = 14,
             VerticalAlignment = VerticalAlignment.Top
+        };
+
+        _browserWideLeftScrollViewer = new ScrollViewer
+        {
+            Content = _browserWideLeftColumn,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            VerticalAlignment = VerticalAlignment.Top,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            IsScrollChainingEnabled = false
         };
 
         _browserWideCenterColumn = new StackPanel
@@ -220,10 +236,10 @@ public partial class RemoteMainView
             Width = new GridLength(360)
         });
 
-        Grid.SetColumn(_browserWideLeftColumn, 0);
+        Grid.SetColumn(_browserWideLeftScrollViewer, 0);
         Grid.SetColumn(_browserWideCenterColumn, 1);
         Grid.SetColumn(_browserWideRightColumn, 2);
-        _browserWideGrid.Children.Add(_browserWideLeftColumn);
+        _browserWideGrid.Children.Add(_browserWideLeftScrollViewer);
         _browserWideGrid.Children.Add(_browserWideCenterColumn);
         _browserWideGrid.Children.Add(_browserWideRightColumn);
     }
@@ -244,6 +260,7 @@ public partial class RemoteMainView
 
         EnsureBrowserWideGrid();
         if (_browserWideGrid is null
+            || _browserWideLeftScrollViewer is null
             || _browserWideLeftColumn is null
             || _browserWideCenterColumn is null
             || _browserWideRightColumn is null)
@@ -269,6 +286,29 @@ public partial class RemoteMainView
 
         _browserWideRootStack.MaxWidth = BrowserWideContentMaxWidth;
         _browserWideLayoutActive = true;
+
+        Dispatcher.UIThread.Post(
+            UpdateBrowserWideLeftScrollHeight,
+            DispatcherPriority.Loaded);
+    }
+
+    private void UpdateBrowserWideLeftScrollHeight()
+    {
+        if (!_browserWideLayoutActive
+            || _browserWideLeftScrollViewer is null
+            || _browserWideGrid is null
+            || Bounds.Height <= 0)
+        {
+            return;
+        }
+
+        var topLeft = _browserWideGrid.TranslatePoint(default, this);
+        if (topLeft is null)
+            return;
+
+        var availableHeight = Bounds.Height - topLeft.Value.Y - BrowserWideBottomMargin;
+        if (availableHeight > 0)
+            _browserWideLeftScrollViewer.Height = availableHeight;
     }
 
     private void RestoreBrowserNarrowLayout()
