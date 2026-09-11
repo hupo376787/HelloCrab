@@ -29,7 +29,10 @@ public sealed partial class MainWindowViewModel
         var authorName = string.IsNullOrWhiteSpace(CurrentAuthorName)
             ? WorkCountPushPlusText("未知作者", "Unknown author", "不明な作者")
             : CurrentAuthorName.Trim();
-        var title = $"HelloCrab({authorName}){summary}";
+        var platformName = string.IsNullOrWhiteSpace(SelectedPlatform.DisplayName)
+            ? SelectedPlatform.Id
+            : SelectedPlatform.DisplayName.Trim();
+        var title = $"HelloCrab {platformName} ({authorName}){summary}";
         var content = WebUtility.HtmlEncode(summary);
         var requestUrl =
             "http://www.pushplus.plus/send" +
