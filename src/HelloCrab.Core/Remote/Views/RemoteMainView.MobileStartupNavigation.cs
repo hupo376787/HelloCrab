@@ -43,11 +43,19 @@ public partial class RemoteMainView
     }
 
     /// <summary>
-    /// Android 系统返回键优先关闭当前的历史子页面/对话框，而不是直接退出 Activity。
+    /// Android 系统返回键优先关闭当前子页面/对话框，而不是直接退出 Activity。
     /// 返回 true 表示本次返回事件已经由应用内部消费。
     /// </summary>
     public bool TryHandleSystemBack()
     {
+        // 批量下载在手机端表现为独立页面，但实际是 RemoteMainView 顶层 Overlay。
+        // 系统返回必须先隐藏它并消费 BackRequested，否则 Activity 会直接退出 App。
+        if (_remoteBatchOverlay?.IsVisible == true)
+        {
+            HideRemoteBatchEditor();
+            return true;
+        }
+
         if (_remoteHistoryDeleteOverlay?.IsVisible == true)
         {
             HideRemoteHistoryDeleteDialog();
