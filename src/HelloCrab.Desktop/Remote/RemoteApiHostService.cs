@@ -153,6 +153,7 @@ public sealed class RemoteApiHostService : IAsyncDisposable
                     _viewModel.ApplyRemoteSettingsAsync(settings));
                 return RemoteCommandResult.Ok(_viewModel.Localize("Remote.Api.SettingsSaved"));
             });
+            RemoteBatchDownloadEndpoint.Map(app, _viewModel);
             app.MapPost("/api/actions/{action}", (string action) => ExecuteActionAsync(action));
 
             await app.StartAsync(cancellationToken);
