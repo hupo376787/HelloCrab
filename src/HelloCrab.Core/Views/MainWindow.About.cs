@@ -142,6 +142,15 @@ public partial class MainWindow
             }
         };
 
+        var github = new TextBlock
+        {
+            Text = "GitHub: https://github.com/hupo376787/HelloCrab",
+            FontSize = 11,
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 2, 0, 0)
+        };
+        github.Classes.Add("caption");
+
         var copyright = new TextBlock
         {
             Text = "© 2026 HelloCrab",
@@ -158,6 +167,7 @@ public partial class MainWindow
                 productName,
                 _aboutDescriptionText,
                 meta,
+                github,
                 copyright
             }
         };
