@@ -21,6 +21,7 @@ public partial class MainWindow
         Default,
         Name,
         UpdatedAt,
+        DirectorySize,
         Platform
     }
 
@@ -38,6 +39,7 @@ public partial class MainWindow
     private MenuItem? _historySortDefaultMenuItem;
     private MenuItem? _historySortNameMenuItem;
     private MenuItem? _historySortUpdatedAtMenuItem;
+    private MenuItem? _historySortDirectorySizeMenuItem;
     private MenuItem? _historySortPlatformMenuItem;
     private MenuItem? _historySortAscendingMenuItem;
     private MenuItem? _historySortDescendingMenuItem;
@@ -69,6 +71,8 @@ public partial class MainWindow
             () => SetHistoryDisplaySortKind(HistoryDisplaySortKind.Name));
         _historySortUpdatedAtMenuItem = CreateHistorySortMenuItem(
             () => SetHistoryDisplaySortKind(HistoryDisplaySortKind.UpdatedAt));
+        _historySortDirectorySizeMenuItem = CreateHistorySortMenuItem(
+            () => SetHistoryDisplaySortKind(HistoryDisplaySortKind.DirectorySize));
         _historySortPlatformMenuItem = CreateHistorySortMenuItem(
             () => SetHistoryDisplaySortKind(HistoryDisplaySortKind.Platform));
         _historySortAscendingMenuItem = CreateHistorySortMenuItem(
@@ -83,6 +87,7 @@ public partial class MainWindow
                 _historySortDefaultMenuItem,
                 _historySortNameMenuItem,
                 _historySortUpdatedAtMenuItem,
+                _historySortDirectorySizeMenuItem,
                 _historySortPlatformMenuItem,
                 new Separator(),
                 _historySortAscendingMenuItem,
@@ -223,6 +228,10 @@ public partial class MainWindow
             _historyDisplaySortKind == HistoryDisplaySortKind.UpdatedAt,
             HistorySortText("更新日期", "Updated date", "更新日時"));
         SetHistorySortMenuHeader(
+            _historySortDirectorySizeMenuItem,
+            _historyDisplaySortKind == HistoryDisplaySortKind.DirectorySize,
+            HistorySortText("目录大小", "Folder size", "フォルダーサイズ"));
+        SetHistorySortMenuHeader(
             _historySortPlatformMenuItem,
             _historyDisplaySortKind == HistoryDisplaySortKind.Platform,
             HistorySortText("平台来源", "Platform source", "配信元プラットフォーム"));
@@ -241,6 +250,7 @@ public partial class MainWindow
             {
                 HistoryDisplaySortKind.Name => HistorySortText("作者名称", "Author name", "作者名"),
                 HistoryDisplaySortKind.UpdatedAt => HistorySortText("更新日期", "Updated date", "更新日時"),
+                HistoryDisplaySortKind.DirectorySize => HistorySortText("目录大小", "Folder size", "フォルダーサイズ"),
                 HistoryDisplaySortKind.Platform => HistorySortText("平台来源", "Platform source", "配信元プラットフォーム"),
                 _ => HistorySortText("默认排序", "Default order", "既定の順序")
             };
@@ -332,6 +342,7 @@ public partial class MainWindow
         {
             HistoryDisplaySortKind.Name => comparer.Compare(left.UserName, right.UserName),
             HistoryDisplaySortKind.UpdatedAt => left.UpdatedAt.CompareTo(right.UpdatedAt),
+            HistoryDisplaySortKind.DirectorySize => left.ItemsSize.CompareTo(right.ItemsSize),
             HistoryDisplaySortKind.Platform => CompareHistoryPlatforms(left, right, comparer),
             _ => leftDefaultIndex.CompareTo(rightDefaultIndex)
         };
@@ -417,6 +428,7 @@ public partial class MainWindow
         {
             HistoryDisplaySortKind.Name => e.PropertyName == nameof(DownloadHistoryItem.UserName),
             HistoryDisplaySortKind.UpdatedAt => e.PropertyName == nameof(DownloadHistoryItem.UpdatedAt),
+            HistoryDisplaySortKind.DirectorySize => e.PropertyName == nameof(DownloadHistoryItem.ItemsSize),
             HistoryDisplaySortKind.Platform => e.PropertyName is nameof(DownloadHistoryItem.Platform)
                 or nameof(DownloadHistoryItem.PlatformDisplayText)
                 or nameof(DownloadHistoryItem.UserName),
