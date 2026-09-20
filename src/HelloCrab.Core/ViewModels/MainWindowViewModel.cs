@@ -1583,11 +1583,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
 
     public async Task RecollectHistoryAsync(DownloadHistoryItem item)
     {
-        if (IsCapturing || IsBusy)
-        {
-            AddLocalizedLog("Log.History.RecollectBusy");
+        // 当前有任何采集/批量/计划任务，或远程批量队列已经有待处理项目时，
+        // 不再拒绝“重新采集”，而是把作者追加到统一任务队列。
+        if (TryQueueHistoryRecollectIfNeeded(item))
             return;
-        }
 
         var platform = Platforms.FirstOrDefault(x =>
             x.Id.Equals(item.Platform, StringComparison.OrdinalIgnoreCase)

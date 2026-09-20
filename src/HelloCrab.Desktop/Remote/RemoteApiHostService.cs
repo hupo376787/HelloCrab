@@ -289,14 +289,14 @@ public sealed class RemoteApiHostService : IAsyncDisposable
                 return RemoteCommandResult.Ok($"已在桌面端打开作者文件夹：{item.UserName}");
 
             case "recollect":
-                if (await InvokeOnUiAsync(() => _viewModel.IsCapturing || _viewModel.IsBusy))
-                    return RemoteCommandResult.Fail(_viewModel.Localize("Remote.Api.ActionUnavailable"));
-
+                // 桌面端 RecollectHistoryAsync 会在主机忙碌时自动把作者追加到统一任务队列，
+                // 因此远程端不再因为当前有下载任务而拒绝重新采集。
                 await InvokeOnUiAsync(() =>
                 {
                     _ = _viewModel.RecollectHistoryAsync(item);
                 });
-                return RemoteCommandResult.Ok($"已向桌面端发送重新采集命令：{item.UserName}");
+                return RemoteCommandResult.Ok(
+                    $"已提交重新采集任务：{item.UserName}；如果桌面端正在执行其他任务，会自动进入队列。");
 
             case "remove-history":
                 await InvokeOnUiAsync(() =>

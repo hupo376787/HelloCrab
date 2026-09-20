@@ -1,5 +1,6 @@
 using Avalonia.Threading;
 using HelloCrab.Core.Contracts;
+using HelloCrab.Core.Models;
 
 namespace HelloCrab.Core.ViewModels;
 
@@ -13,6 +14,60 @@ public sealed partial class MainWindowViewModel
     private readonly object _remoteBatchQueueGate = new();
     private readonly Queue<string> _remoteBatchPendingLines = new();
     private bool _remoteBatchQueueWorkerRunning;
+
+    /// <summary>
+    /// 下载历史中的“重新采集”在桌面端已有任务时复用同一批量队列。
+    /// 返回 true 表示本次操作已经被队列接管；false 表示当前空闲，应立即重新采集。
+    /// </summary>
+    private bool TryQueueHistoryRecollectIfNeeded(DownloadHistoryItem item)
+    {
+        bool shouldQueue;
+        lock (_remoteBatchQueueGate)
+        {
+            shouldQueue = !CanStartManualBatchCapture
+                          || _remoteBatchQueueWorkerRunning
+                          || _remoteBatchPendingLines.Count > 0;
+        }
+
+        if (!shouldQueue)
+            return false;
+
+        var url = ExtractFirstUrl(item.OriginalUrl);
+        if (string.IsNullOrWhiteSpace(url))
+        {
+            AddLocalizedLog("Log.History.HomeUrlMissing", item.UserName);
+            return true;
+        }
+
+        bool startWorker;
+        int pendingCount;
+        lock (_remoteBatchQueueGate)
+        {
+            _remoteBatchPendingLines.Enqueue(url);
+            pendingCount = _remoteBatchPendingLines.Count;
+
+            startWorker = !_remoteBatchQueueWorkerRunning;
+            if (startWorker)
+                _remoteBatchQueueWorkerRunning = true;
+        }
+
+        AddLog(BatchLocalizedText(
+            "Log.History.RecollectQueued",
+            "作者“{0}”的重新采集任务已进入队列，当前有 {1} 条任务等待处理；当前任务完成后会自动开始。",
+            "Re-collection for author “{0}” was added to the queue. {1} task(s) are waiting and it will start automatically after the current task finishes.",
+            "作者「{0}」の再収集タスクをキューに追加しました。現在 {1} 件待機中で、現在のタスク完了後に自動で開始します。",
+            item.UserName,
+            pendingCount));
+
+        if (startWorker)
+        {
+            Dispatcher.UIThread.Post(
+                () => _ = RunRemoteBatchQueueAsync(),
+                DispatcherPriority.Background);
+        }
+
+        return true;
+    }
 
     public RemoteCommandResult QueueRemoteManualBatchCapture(string? content)
     {
