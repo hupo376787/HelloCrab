@@ -51,6 +51,13 @@ public partial class MainWindow
         _historyMultiSelectInstalled = true;
         HistoryList.SelectionMode = SelectionMode.Multiple;
 
+        // Avalonia 的 SelectingItemsControl 默认 AutoScrollToSelectedItem=true。
+        // 当筛选/排序改变 ItemsSource，而旧选择还没来得及清空时，它会主动
+        // BringIntoView 选中项，视觉上产生一段缓慢的自动滚动。历史列表的选择
+        // 全部来自当前可见项，不需要这种自动定位；关闭后列表变化时保持当前视口，
+        // 清空选择也会立即完成，不再先滚到旧选中项。
+        HistoryList.AutoScrollToSelectedItem = false;
+
         HistoryList.AddHandler(
             PointerPressedEvent,
             HistoryMultiSelect_PointerPressed,
