@@ -194,6 +194,7 @@ public partial class MainWindow
             return;
 
         EndHistoryDrag(saveOrder: false);
+        ClearHistorySelectionBeforeSort();
         _historyDisplaySortKind = kind;
         UpdateHistoryDisplaySortUi();
         QueueHistoryDisplaySort();
@@ -205,9 +206,20 @@ public partial class MainWindow
             return;
 
         EndHistoryDrag(saveOrder: false);
+        ClearHistorySelectionBeforeSort();
         _historyDisplaySortAscending = ascending;
         UpdateHistoryDisplaySortUi();
         QueueHistoryDisplaySort();
+    }
+
+    private void ClearHistorySelectionBeforeSort()
+    {
+        // 排序会移动 FilteredDownloadHistory 中的项目。先清空选择和 Shift 锚点，
+        // 避免排序后仍保留旧项目的选中框，或下一次 Shift 选择沿用排序前的位置。
+        HistoryList.SelectedItems?.Clear();
+        HistoryList.SelectedItem = null;
+        _historySelectionAnchorItem = null;
+        Dispatcher.UIThread.Post(RefreshHistorySelectionMarkers, DispatcherPriority.Render);
     }
 
     private void UpdateHistoryDisplaySortUi()
