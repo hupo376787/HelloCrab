@@ -20,6 +20,7 @@ public partial class MainWindow
     private readonly HistoryPinyinMatcher _sharedHistoryPinyinMatcher = new();
     private bool _sharedHistoryPinyinSearchInitialized;
     private int _sharedHistoryPinyinSearchInstallAttempts;
+    private string _sharedHistoryPreviousSearchText = string.Empty;
 
     private void EnsureSharedHistoryPinyinSearch()
     {
@@ -43,6 +44,7 @@ public partial class MainWindow
         }
 
         _sharedHistoryPinyinSearchInitialized = true;
+        _sharedHistoryPreviousSearchText = _historyPinyinSearchBox.Text ?? string.Empty;
 
         // 搜索输入只保留共享 matcher 这一条路径；旧实现仍保留在文件中用于兼容已有内部刷新逻辑。
         _historyPinyinSearchBox.TextChanged -= HistoryPinyinSearchTextChanged;
@@ -52,6 +54,11 @@ public partial class MainWindow
 
     private void SharedHistoryPinyinSearchTextChanged(object? sender, TextChangedEventArgs e)
     {
+        var currentText = _historyPinyinSearchBox?.Text ?? string.Empty;
+        if (currentText.Length < _sharedHistoryPreviousSearchText.Length)
+            ClearHistorySelection();
+
+        _sharedHistoryPreviousSearchText = currentText;
         RefreshHistoryPinyinClearButton();
 
         Dispatcher.UIThread.Post(
