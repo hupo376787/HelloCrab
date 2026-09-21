@@ -1,3 +1,4 @@
+using System.Collections.Specialized;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -41,7 +42,9 @@ public partial class MainWindow
 
     private DownloadHistoryItem? _historySelectionAnchorItem;
     private IReadOnlyList<DownloadHistoryItem> _pendingBatchHistoryDeleteItems = Array.Empty<DownloadHistoryItem>();
+    private MainWindowViewModel? _historyMultiSelectViewModel;
     private bool _historyMultiSelectInstalled;
+    private long _historySelectionScrollVersion;
 
     private void InstallHistoryMultiSelect()
     {
@@ -57,6 +60,13 @@ public partial class MainWindow
         // 全部来自当前可见项，不需要这种自动定位；关闭后列表变化时保持当前视口，
         // 清空选择也会立即完成，不再先滚到旧选中项。
         HistoryList.AutoScrollToSelectedItem = false;
+
+        if (DataContext is MainWindowViewModel viewModel)
+        {
+            _historyMultiSelectViewModel = viewModel;
+            viewModel.FilteredDownloadHistory.CollectionChanged +=
+                HistoryMultiSelect_FilteredHistoryChanged;
+        }
 
         HistoryList.AddHandler(
             PointerPressedEvent,
@@ -236,6 +246,42 @@ public partial class MainWindow
 
     private void HistoryMultiSelect_SelectionChanged(object? sender, SelectionChangedEventArgs e)
         => Dispatcher.UIThread.Post(RefreshHistorySelectionMarkers, DispatcherPriority.Render);
+
+    private void HistoryMultiSelect_FilteredHistoryChanged(
+        object? sender,
+        NotifyCollectionChangedEventArgs e)
+    {
+        if (HistoryList.SelectedItems is not { Count: > 0 })
+            return;
+
+        var version = Interlocked.Increment(ref _historySelectionScrollVersion);
+        Dispatcher.UIThread.Post(
+            () =>
+            {
+                if (version != Interlocked.Read(ref _historySelectionScrollVersion)
+                    || _historyMultiSelectViewModel is not { } viewModel
+                    || HistoryList.SelectedItems is not { Count: > 0 } selectedItems)
+                {
+                    return;
+                }
+
+                var selected = HistoryList.SelectedItem as DownloadHistoryItem;
+                if (selected is null || !viewModel.FilteredDownloadHistory.Contains(selected))
+                {
+                    selected = selectedItems
+                        .OfType<DownloadHistoryItem>()
+                        .FirstOrDefault(viewModel.FilteredDownloadHistory.Contains);
+                }
+
+                if (selected is not null)
+                {
+                    // AutoScrollToSelectedItem 已关闭，避免 Avalonia 的缓慢自动跟随。
+                    // 列表内容变化后若仍有可见选中项，只执行一次无动画的即时定位。
+                    HistoryList.ScrollIntoView(selected);
+                }
+            },
+            DispatcherPriority.Render);
+    }
 
     private void EnsureHistoryMultiSelectItem(Border historyItemBorder)
     {
@@ -675,11 +721,19 @@ public partial class MainWindow
             PointerPressedEvent,
             HistoryMultiSelect_PointerPressed);
         HistoryList.SelectionChanged -= HistoryMultiSelect_SelectionChanged;
+        if (_historyMultiSelectViewModel is not null)
+        {
+            _historyMultiSelectViewModel.FilteredDownloadHistory.CollectionChanged -=
+                HistoryMultiSelect_FilteredHistoryChanged;
+            _historyMultiSelectViewModel = null;
+        }
+
         HistoryDeleteOverlay.RemoveHandler(
             Button.ClickEvent,
             HistoryBatchDeleteOverlay_ButtonClick);
         Closed -= HistoryMultiSelectWindowClosed;
         _pendingBatchHistoryDeleteItems = Array.Empty<DownloadHistoryItem>();
+        Interlocked.Increment(ref _historySelectionScrollVersion);
         _historyMultiSelectInstalled = false;
     }
 }

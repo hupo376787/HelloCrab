@@ -194,7 +194,6 @@ public partial class MainWindow
             return;
 
         EndHistoryDrag(saveOrder: false);
-        ClearHistorySelection();
         _historyDisplaySortKind = kind;
         UpdateHistoryDisplaySortUi();
         QueueHistoryDisplaySort();
@@ -206,20 +205,9 @@ public partial class MainWindow
             return;
 
         EndHistoryDrag(saveOrder: false);
-        ClearHistorySelection();
         _historyDisplaySortAscending = ascending;
         UpdateHistoryDisplaySortUi();
         QueueHistoryDisplaySort();
-    }
-
-    private void ClearHistorySelection()
-    {
-        // 清空下载历史当前选择和 Shift 锚点。排序、删除搜索关键词等会改变
-        // 当前可见集合，统一在变化前清掉选择，避免旧项目继续保持高亮。
-        HistoryList.SelectedItems?.Clear();
-        HistoryList.SelectedItem = null;
-        _historySelectionAnchorItem = null;
-        Dispatcher.UIThread.Post(RefreshHistorySelectionMarkers, DispatcherPriority.Render);
     }
 
     private void UpdateHistoryDisplaySortUi()
