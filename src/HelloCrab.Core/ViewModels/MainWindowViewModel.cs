@@ -100,6 +100,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
     private bool _isDarkTheme;
     private bool _isHistoryVisible;
     private string _historySearchText = string.Empty;
+    private readonly HistoryPinyinMatcher _historySearchMatcher = new();
     private Func<DownloadHistoryItem, bool>? _additionalHistoryFilter;
     private string? _currentAuthorDirectory;
     private string? _currentAuthorName;
@@ -2100,17 +2101,19 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
             item.IsDownloading = false;
     }
 
-    private static bool HistoryItemMatchesSearch(DownloadHistoryItem item, string keyword)
+    private bool HistoryItemMatchesSearch(DownloadHistoryItem item, string keyword)
     {
-        return ContainsSearchKeyword(item.UserName, keyword)
-               || ContainsSearchKeyword(item.UserId, keyword)
-               || ContainsSearchKeyword(item.Platform, keyword)
-               || ContainsSearchKeyword(item.PlatformDisplayText, keyword);
+        // ViewModel 自己的筛选必须与桌面搜索框使用完全相同的拼音规则。
+        // 否则重新采集触发 HistoryChanged -> SyncHistory 时，这里会先按“纯文本”
+        // 把拼音搜索结果临时清空，随后 View 层再补回，ListBox 的 ScrollViewer
+        // 会因为集合瞬间变空而把 Offset 夹到 0，表现为下载过程中突然跳到顶部。
+        return _historySearchMatcher.Matches(
+            item.UserName,
+            item.UserId,
+            item.Platform,
+            item.PlatformDisplayText,
+            keyword);
     }
-
-    private static bool ContainsSearchKeyword(string? value, string keyword)
-        => !string.IsNullOrWhiteSpace(value)
-           && value.Contains(keyword, StringComparison.OrdinalIgnoreCase);
 
     private static void CopyHistoryFields(DownloadHistoryItem target, DownloadHistoryItem source)
     {
