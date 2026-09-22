@@ -273,14 +273,38 @@ public partial class MainWindow
                         .FirstOrDefault(viewModel.FilteredDownloadHistory.Contains);
                 }
 
-                if (selected is not null)
+                if (selected is not null
+                    && !IsHistoryItemCurrentlyVisible(selected))
                 {
                     // AutoScrollToSelectedItem 已关闭，避免 Avalonia 的缓慢自动跟随。
-                    // 列表内容变化后若仍有可见选中项，只执行一次无动画的即时定位。
+                    // 只有选中项已经离开当前视口时才执行一次无动画的即时定位；
+                    // 如果它本来就在屏幕里，则保持当前滚动位置，避免重新采集等
+                    // 与筛选无关的刷新把列表错误地顶回上方。
                     HistoryList.ScrollIntoView(selected);
                 }
             },
             DispatcherPriority.Render);
+    }
+
+    private bool IsHistoryItemCurrentlyVisible(DownloadHistoryItem item)
+    {
+        var container = HistoryList
+            .GetRealizedContainers()
+            .FirstOrDefault(candidate =>
+                ReferenceEquals(candidate.DataContext, item)
+                || candidate.DataContext is DownloadHistoryItem realized
+                   && realized.Id == item.Id);
+
+        if (container is null)
+            return false;
+
+        var topLeft = container.TranslatePoint(default, HistoryList);
+        if (topLeft is null)
+            return false;
+
+        var top = topLeft.Value.Y;
+        var bottom = top + container.Bounds.Height;
+        return bottom > 0d && top < HistoryList.Bounds.Height;
     }
 
     private void EnsureHistoryMultiSelectItem(Border historyItemBorder)
