@@ -110,6 +110,9 @@ public sealed record MediaTransferProgress(
 
 public sealed class PlatformOption : ObservableObject
 {
+    private static readonly object IconCacheLock = new();
+    private static readonly Dictionary<string, IImage?> IconCache = new(StringComparer.OrdinalIgnoreCase);
+
     private string _displayName;
 
     public PlatformOption(string id, string displayName, string homeUrl)
@@ -139,21 +142,39 @@ public sealed class PlatformOption : ObservableObject
 
     public override string ToString() => DisplayName;
 
-    private static IImage? LoadIcon(string platformId)
+    internal static IImage? LoadIcon(string platformId)
     {
+        if (string.IsNullOrWhiteSpace(platformId))
+            return null;
+
+        var iconId = platformId.Trim().ToLowerInvariant() switch
+        {
+            "xhs" => "xiaohongshu",
+            "kuaishou-live" => "kuaishou",
+            var id => id
+        };
+
+        lock (IconCacheLock)
+        {
+            if (IconCache.TryGetValue(iconId, out var cached))
+                return cached;
+        }
+
+        IImage? icon = null;
         try
         {
-            var iconId = platformId.Equals("kuaishou-live", StringComparison.OrdinalIgnoreCase)
-                ? "kuaishou"
-                : platformId;
             var iconUri = new Uri($"avares://HelloCrab.Core/Assets/Platforms/{iconId}.png");
             using var stream = AssetLoader.Open(iconUri);
-            return new Bitmap(stream);
+            icon = new Bitmap(stream);
         }
         catch
         {
             // 自定义或新增平台暂未提供图标时，仍允许平台列表正常显示文字。
-            return null;
         }
+
+        lock (IconCacheLock)
+            IconCache[iconId] = icon;
+
+        return icon;
     }
 }

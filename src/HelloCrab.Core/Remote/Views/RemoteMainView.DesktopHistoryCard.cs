@@ -120,13 +120,32 @@ public partial class RemoteMainView
         nameText.DataContextChanged += (_, _) => QueueFinalRemoteHistoryNameRefresh(nameText);
         nameText.AttachedToVisualTree += (_, _) => QueueFinalRemoteHistoryNameRefresh(nameText);
 
+        var platformIcon = new Image
+        {
+            Width = 14,
+            Height = 14,
+            Stretch = Stretch.Uniform,
+            IsHitTestVisible = false,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        platformIcon.Bind(Image.SourceProperty, new Binding(nameof(RemoteHistoryItemViewModel.PlatformIcon)));
+
         var platformText = new TextBlock
         {
             FontSize = 11,
-            FontWeight = FontWeight.SemiBold
+            FontWeight = FontWeight.SemiBold,
+            VerticalAlignment = VerticalAlignment.Center
         };
         platformText.Classes.Add("browserDesktopHistoryPrimary");
         platformText.Bind(TextBlock.TextProperty, new Binding(nameof(RemoteHistoryItemViewModel.PlatformDisplayText)));
+
+        var platformContent = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 4,
+            VerticalAlignment = VerticalAlignment.Center,
+            Children = { platformIcon, platformText }
+        };
 
         var platformBadge = new Border
         {
@@ -136,7 +155,7 @@ public partial class RemoteMainView
             BorderBrush = new SolidColorBrush(Color.Parse("#557C3AED")),
             BorderThickness = new Thickness(1),
             VerticalAlignment = VerticalAlignment.Center,
-            Child = platformText
+            Child = platformContent
         };
 
         var titleGrid = new Grid { ColumnSpacing = 7 };

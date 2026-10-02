@@ -885,10 +885,20 @@
                                 BorderBrush="#557C3AED"
                                 BorderThickness="1"
                                 VerticalAlignment="Center">
-                          <TextBlock Text="{Binding PlatformDisplayText}"
-                                     FontSize="11"
-                                     FontWeight="SemiBold"
-                                     Foreground="{DynamicResource TextPrimaryColor}" />
+                          <StackPanel Orientation="Horizontal"
+                                      Spacing="4"
+                                      VerticalAlignment="Center">
+                            <Image Source="{Binding PlatformIcon}"
+                                   Width="14"
+                                   Height="14"
+                                   Stretch="Uniform"
+                                   IsHitTestVisible="False" />
+                            <TextBlock Text="{Binding PlatformDisplayText}"
+                                       FontSize="11"
+                                       FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextPrimaryColor}"
+                                       VerticalAlignment="Center" />
+                          </StackPanel>
                         </Border>
                       </Grid>
                       <TextBlock Classes="caption" Text="{Binding UidText}" TextTrimming="CharacterEllipsis" />

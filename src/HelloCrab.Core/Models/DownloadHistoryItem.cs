@@ -29,7 +29,10 @@ public sealed class DownloadHistoryItem : ObservableObject
         set
         {
             if (SetProperty(ref _platform, value))
+            {
                 OnPropertyChanged(nameof(PlatformDisplayText));
+                OnPropertyChanged(nameof(PlatformIcon));
+            }
         }
     }
     public string HeadUrl { get => _headUrl; set => SetProperty(ref _headUrl, value); }
@@ -83,6 +86,9 @@ public sealed class DownloadHistoryItem : ObservableObject
                 OnPropertyChanged(nameof(UpdatedAtText));
         }
     }
+
+    [JsonIgnore]
+    public IImage? PlatformIcon => PlatformOption.LoadIcon(Platform);
 
     [JsonIgnore]
     public string PlatformDisplayText

@@ -1,6 +1,7 @@
 using Avalonia.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 using HelloCrab.Core.Contracts;
+using HelloCrab.Core.Models;
 using HelloCrab.Core.Services.Localization;
 
 namespace HelloCrab.Core.Remote.ViewModels;
@@ -39,9 +40,14 @@ public sealed class RemoteHistoryItemViewModel : ObservableObject, IDisposable
         private set
         {
             if (SetProperty(ref _platform, value))
+            {
                 OnPropertyChanged(nameof(PlatformDisplayText));
+                OnPropertyChanged(nameof(PlatformIcon));
+            }
         }
     }
+
+    public IImage? PlatformIcon => PlatformOption.LoadIcon(Platform);
 
     public string PlatformDisplayText
     {
