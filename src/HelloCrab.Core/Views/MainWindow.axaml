@@ -846,6 +846,7 @@
                       <MenuItem Header="{DynamicResource Lang.History.OpenHome}" Tag="{Binding}" Click="HistoryOpenHome_Click" />
                       <MenuItem Header="{DynamicResource Lang.History.CopyAuthorUrl}" Tag="{Binding}" Click="HistoryCopyAuthorUrl_Click" />
                       <MenuItem Header="{DynamicResource Lang.History.OpenFolder}" Tag="{Binding}" Click="HistoryOpenFolder_Click" />
+                      <MenuItem Header="{DynamicResource Lang.History.Rename}" Tag="{Binding}" Click="HistoryRename_Click" />
                       <MenuItem Header="{DynamicResource Lang.History.Recollect}" Tag="{Binding}" Click="HistoryRecollect_Click" />
                       <Separator />
                       <MenuItem Header="{DynamicResource Lang.History.Remove}" Tag="{Binding}" Click="HistoryRemove_Click" />
@@ -1014,6 +1015,56 @@
                     Classes="coral sectionAction"
                     Content="{DynamicResource Lang.Dialog.Exit.Confirm}"
                     Click="CloseConfirmButton_Click" />
+          </Grid>
+        </StackPanel>
+      </Border>
+    </Grid>
+
+    <!-- 重命名历史作者 -->
+    <Grid x:Name="HistoryRenameOverlay"
+          Grid.RowSpan="2"
+          Background="#99000000"
+          IsVisible="False"
+          Panel.ZIndex="3090">
+      <Border Width="470"
+              Padding="22"
+              CornerRadius="10"
+              Background="{DynamicResource CardColor}"
+              BorderBrush="{DynamicResource BorderColor}"
+              BorderThickness="1"
+              HorizontalAlignment="Center"
+              VerticalAlignment="Center">
+        <StackPanel Spacing="15">
+          <StackPanel Spacing="7">
+            <TextBlock Text="{DynamicResource Lang.Dialog.Rename.Title}"
+                       FontSize="20"
+                       FontWeight="SemiBold" />
+            <TextBlock x:Name="HistoryRenameAuthorText"
+                       Classes="caption"
+                       TextWrapping="Wrap" />
+            <TextBlock Text="{DynamicResource Lang.Dialog.Rename.Message}"
+                       Classes="caption"
+                       TextWrapping="Wrap" />
+          </StackPanel>
+          <TextBox x:Name="HistoryRenameTextBox"
+                   Height="42"
+                   MaxLength="120"
+                   Padding="12,0"
+                   VerticalContentAlignment="Center"
+                   KeyDown="HistoryRenameTextBox_KeyDown" />
+          <TextBlock x:Name="HistoryRenameErrorText"
+                     Foreground="#F87171"
+                     TextWrapping="Wrap"
+                     IsVisible="False" />
+          <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
+            <Button Classes="sectionAction"
+                    Content="{DynamicResource Lang.Common.Cancel}"
+                    Click="HistoryRenameCancelButton_Click" />
+            <Button x:Name="HistoryRenameConfirmButton"
+                    Grid.Column="1"
+                    Classes="primary sectionAction"
+                    Content="{DynamicResource Lang.Dialog.Rename.Confirm}"
+                    Click="HistoryRenameConfirmButton_Click" />
           </Grid>
         </StackPanel>
       </Border>

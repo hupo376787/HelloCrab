@@ -301,6 +301,45 @@ public sealed class DownloadHistoryService
             HistoryChanged?.Invoke(this, snapshot);
     }
 
+    public async Task RenameAuthorAsync(
+        int itemId,
+        string userName,
+        string folderPath,
+        CancellationToken cancellationToken = default)
+    {
+        IReadOnlyList<DownloadHistoryItem>? snapshot = null;
+        await _gate.WaitAsync(cancellationToken);
+        try
+        {
+            await EnsureLoadedCoreAsync(cancellationToken);
+            var item = _items.FirstOrDefault(x => x.Id == itemId)
+                       ?? throw new InvalidOperationException($"History item {itemId} was not found.");
+
+            var previousName = item.UserName;
+            var previousFolderPath = item.FolderPath;
+            try
+            {
+                item.UserName = userName;
+                item.FolderPath = folderPath;
+                await SaveCoreAsync(cancellationToken);
+                snapshot = Snapshot();
+            }
+            catch
+            {
+                item.UserName = previousName;
+                item.FolderPath = previousFolderPath;
+                throw;
+            }
+        }
+        finally
+        {
+            _gate.Release();
+        }
+
+        if (snapshot is not null)
+            HistoryChanged?.Invoke(this, snapshot);
+    }
+
     public async Task RemoveAsync(
         int itemId,
         CancellationToken cancellationToken = default)

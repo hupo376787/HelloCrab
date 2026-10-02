@@ -18,6 +18,8 @@ public partial class MainWindow : Window
 {
     private DownloadHistoryItem? _draggedHistoryItem;
     private DownloadHistoryItem? _pendingHistoryDeleteItem;
+    private DownloadHistoryItem? _pendingHistoryRenameItem;
+    private bool _isRenamingHistoryAuthor;
     private Point _dragStartPoint;
     private bool _isHistoryDragging;
     private Border? _dragGhost;
@@ -481,6 +483,109 @@ public partial class MainWindow : Window
         {
             viewModel.OpenHistoryFolder(item);
         }
+    }
+
+    private void HistoryRename_Click(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not MenuItem { Tag: DownloadHistoryItem item })
+            return;
+
+        EndHistoryDrag(saveOrder: false);
+        _pendingHistoryRenameItem = item;
+        HistoryRenameAuthorText.Text =
+            LocalizationService.Current?.Format("Dialog.Rename.Author", item.UserName, item.UserId)
+            ?? $"当前作者：{item.UserName}（UID：{item.UserId}）";
+        HistoryRenameTextBox.Text = item.UserName;
+        HistoryRenameErrorText.Text = string.Empty;
+        HistoryRenameErrorText.IsVisible = false;
+        HistoryRenameConfirmButton.IsEnabled = true;
+        HistoryRenameOverlay.IsVisible = true;
+
+        Dispatcher.UIThread.Post(
+            () =>
+            {
+                HistoryRenameTextBox.Focus();
+                HistoryRenameTextBox.SelectAll();
+            },
+            DispatcherPriority.Input);
+    }
+
+    private void HistoryRenameCancelButton_Click(object? sender, RoutedEventArgs e)
+        => CloseHistoryRenameOverlay();
+
+    private async void HistoryRenameConfirmButton_Click(object? sender, RoutedEventArgs e)
+        => await CompleteHistoryRenameAsync();
+
+    private async void HistoryRenameTextBox_KeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Escape)
+        {
+            CloseHistoryRenameOverlay();
+            e.Handled = true;
+            return;
+        }
+
+        if (e.Key == Key.Enter)
+        {
+            e.Handled = true;
+            await CompleteHistoryRenameAsync();
+        }
+    }
+
+    private async Task CompleteHistoryRenameAsync()
+    {
+        if (_isRenamingHistoryAuthor
+            || _pendingHistoryRenameItem is not { } item
+            || DataContext is not MainWindowViewModel viewModel)
+        {
+            return;
+        }
+
+        var newName = HistoryRenameTextBox.Text?.Trim() ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(newName))
+        {
+            HistoryRenameErrorText.Text =
+                LocalizationService.Current?.Get("Dialog.Rename.Empty", "作者名称不能为空。")
+                ?? "作者名称不能为空。";
+            HistoryRenameErrorText.IsVisible = true;
+            HistoryRenameTextBox.Focus();
+            return;
+        }
+
+        _isRenamingHistoryAuthor = true;
+        HistoryRenameConfirmButton.IsEnabled = false;
+        HistoryRenameErrorText.IsVisible = false;
+        try
+        {
+            var error = await viewModel.RenameHistoryAuthorAsync(item, newName);
+            if (string.IsNullOrWhiteSpace(error))
+            {
+                _isRenamingHistoryAuthor = false;
+                CloseHistoryRenameOverlay();
+                return;
+            }
+
+            HistoryRenameErrorText.Text = error;
+            HistoryRenameErrorText.IsVisible = true;
+            HistoryRenameTextBox.Focus();
+            HistoryRenameTextBox.SelectAll();
+        }
+        finally
+        {
+            _isRenamingHistoryAuthor = false;
+            HistoryRenameConfirmButton.IsEnabled = true;
+        }
+    }
+
+    private void CloseHistoryRenameOverlay()
+    {
+        if (_isRenamingHistoryAuthor)
+            return;
+
+        HistoryRenameOverlay.IsVisible = false;
+        HistoryRenameErrorText.Text = string.Empty;
+        HistoryRenameErrorText.IsVisible = false;
+        _pendingHistoryRenameItem = null;
     }
 
     private async void HistoryRecollect_Click(object? sender, RoutedEventArgs e)

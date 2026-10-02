@@ -1582,6 +1582,137 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
         }
     }
 
+    public async Task<string?> RenameHistoryAuthorAsync(
+        DownloadHistoryItem item,
+        string? newName)
+    {
+        var normalizedName = newName?.Trim() ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(normalizedName))
+            return _localization.Get("Dialog.Rename.Empty", "作者名称不能为空。");
+
+        if (string.Equals(item.UserName, normalizedName, StringComparison.Ordinal))
+            return null;
+
+        var platformRoot = Path.Combine(
+            DownloadRoot,
+            PlatformFolderHelper.GetFolderName(item.Platform));
+
+        var storedFolder = string.IsNullOrWhiteSpace(item.FolderPath)
+            ? string.Empty
+            : Path.GetFullPath(item.FolderPath);
+        var currentFolder = !string.IsNullOrWhiteSpace(storedFolder)
+                            && Directory.Exists(storedFolder)
+            ? storedFolder
+            : AuthorFolderResolver.Resolve(
+                platformRoot,
+                item.UserName,
+                item.UserId);
+
+        if ((IsCapturing || IsBusy)
+            && !string.IsNullOrWhiteSpace(CurrentAuthorDirectory)
+            && PathsEqual(currentFolder, CurrentAuthorDirectory))
+        {
+            return _localization.Get(
+                "Dialog.Rename.Busy",
+                "该作者正在下载，任务结束后再重命名。");
+        }
+
+        var parentFolder = Path.GetDirectoryName(currentFolder);
+        if (string.IsNullOrWhiteSpace(parentFolder))
+            parentFolder = platformRoot;
+
+        var targetFolder = Path.Combine(
+            parentFolder,
+            FileNameHelper.BuildAuthorFolderName(normalizedName, item.UserId));
+
+        var previousName = item.UserName;
+        var sourceExists = Directory.Exists(currentFolder);
+        var movedFolder = false;
+        var caseOnlyRename = false;
+        string? temporaryFolder = null;
+
+        try
+        {
+            if (sourceExists
+                && !string.Equals(
+                    NormalizePath(currentFolder),
+                    NormalizePath(targetFolder),
+                    StringComparison.Ordinal))
+            {
+                if (PathsEqual(currentFolder, targetFolder))
+                {
+                    // Windows 上只修改大小写时，目标路径会被认为“已存在”，
+                    // 所以先改成临时名，再移动到最终大小写。
+                    temporaryFolder = Path.Combine(
+                        parentFolder,
+                        $".hellocrab-rename-{Guid.NewGuid():N}");
+                    Directory.Move(currentFolder, temporaryFolder);
+                    Directory.Move(temporaryFolder, targetFolder);
+                    caseOnlyRename = true;
+                    movedFolder = true;
+                }
+                else
+                {
+                    if (Directory.Exists(targetFolder) || File.Exists(targetFolder))
+                    {
+                        return _localization.Format(
+                            "Dialog.Rename.TargetExists",
+                            targetFolder);
+                    }
+
+                    Directory.Move(currentFolder, targetFolder);
+                    movedFolder = true;
+                }
+            }
+
+            await _historyService.RenameAuthorAsync(
+                item.Id,
+                normalizedName,
+                targetFolder);
+
+            AddLog(_localization.Format(
+                "Log.History.Renamed",
+                previousName,
+                normalizedName,
+                targetFolder));
+            return null;
+        }
+        catch (Exception ex) when (ex is IOException
+                                   or UnauthorizedAccessException
+                                   or InvalidOperationException)
+        {
+            // History.json 保存失败时尽量把已经改过的目录名恢复，避免历史记录和磁盘脱节。
+            if (movedFolder)
+            {
+                try
+                {
+                    if (Directory.Exists(targetFolder)
+                        && !Directory.Exists(currentFolder))
+                    {
+                        Directory.Move(targetFolder, currentFolder);
+                    }
+                    else if (caseOnlyRename
+                             && temporaryFolder is not null
+                             && Directory.Exists(temporaryFolder)
+                             && !Directory.Exists(currentFolder))
+                    {
+                        Directory.Move(temporaryFolder, currentFolder);
+                    }
+                }
+                catch
+                {
+                    // 回滚失败时保留原始异常；错误信息会提示用户手工检查目录。
+                }
+            }
+
+            var message = _localization.Format(
+                "Log.History.RenameFailed",
+                ex.Message);
+            AddLog(message);
+            return message;
+        }
+    }
+
     public async Task RecollectHistoryAsync(DownloadHistoryItem item)
     {
         // 当前有任何采集/批量/计划任务，或远程批量队列已经有待处理项目时，
