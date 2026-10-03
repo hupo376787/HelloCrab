@@ -31,6 +31,9 @@ namespace HelloCrab.Desktop;
 
 public partial class App : Application
 {
+    private static readonly TimeSpan MinimumSplashDisplayTime = TimeSpan.FromSeconds(2);
+    private static readonly TimeSpan SplashCompletionHoldTime = TimeSpan.FromMilliseconds(120);
+
     private RemoteApiHostService? _remoteApiHost;
     private MainWindowViewModel? _viewModel;
     private GyanFfmpegInstallerService? _ffmpegInstaller;
@@ -52,7 +55,8 @@ public partial class App : Application
                     return;
 
                 _desktopStartupStarted = true;
-                _ = InitializeDesktopAsync(desktop, splash);
+                var splashShownAt = DateTimeOffset.UtcNow;
+                _ = InitializeDesktopAsync(desktop, splash, splashShownAt);
             };
         }
 
@@ -61,7 +65,8 @@ public partial class App : Application
 
     private async Task InitializeDesktopAsync(
         IClassicDesktopStyleApplicationLifetime desktop,
-        SplashWindow splash)
+        SplashWindow splash,
+        DateTimeOffset splashShownAt)
     {
         try
         {
@@ -145,7 +150,15 @@ public partial class App : Application
             mainWindow.Show();
 
             splash.SetProgress(100, "启动完成", "HelloCrab 已准备就绪");
-            await Task.Delay(120);
+
+            // 闪屏从真正显示出来开始至少保留 2 秒；如果初始化本身已经超过
+            // 2 秒，则只短暂停留完成状态，避免人为拖慢正常启动。
+            var elapsed = DateTimeOffset.UtcNow - splashShownAt;
+            var remaining = MinimumSplashDisplayTime - elapsed;
+            var closeDelay = remaining > SplashCompletionHoldTime
+                ? remaining
+                : SplashCompletionHoldTime;
+            await Task.Delay(closeDelay);
             splash.Close();
         }
         catch (Exception ex)
