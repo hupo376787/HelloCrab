@@ -29,7 +29,7 @@ public sealed class SplashWindow : Window
         MaxHeight = 330;
         CanResize = false;
         ShowInTaskbar = true;
-        SystemDecorations = SystemDecorations.None;
+        WindowDecorations = WindowDecorations.None;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
         Background = new SolidColorBrush(Color.Parse("#FFF4F6FC"));
 
