@@ -6,9 +6,26 @@ namespace HelloCrab.Desktop;
 
 internal static class Program
 {
+    private static EarlyStartupSplash? _earlyStartupSplash;
+
     [STAThread]
     public static void Main(string[] args)
-        => BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
+    {
+        // Avalonia 自身初始化之前先显示一个极轻量的 Win32 启动占位窗口。
+        // 这样 Windows 冷启动时，不会出现双击 exe 后数秒完全没有反馈的情况。
+        _earlyStartupSplash = EarlyStartupSplash.TryStart();
+        try
+        {
+            BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
+        }
+        finally
+        {
+            HideEarlyStartupSplash();
+        }
+    }
+
+    internal static void HideEarlyStartupSplash()
+        => Interlocked.Exchange(ref _earlyStartupSplash, null)?.Dispose();
 
     public static AppBuilder BuildAvaloniaApp()
         => AppBuilder.Configure<App>()

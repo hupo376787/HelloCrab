@@ -4,6 +4,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
+using Avalonia.Threading;
 
 namespace HelloCrab.Desktop;
 
@@ -29,6 +30,7 @@ public sealed class SplashWindow : Window
         MaxHeight = 330;
         CanResize = false;
         ShowInTaskbar = true;
+        Topmost = true;
         WindowDecorations = WindowDecorations.None;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
         Background = new SolidColorBrush(Color.Parse("#FFF4F6FC"));
@@ -155,6 +157,15 @@ public sealed class SplashWindow : Window
             BorderThickness = new Thickness(1),
             Child = content
         };
+    }
+
+    public async Task WaitUntilPresentedAsync()
+    {
+        // 等待 Render 优先级队列执行，并额外给窗口系统一个很短的提交时间。
+        // 这样最低 2 秒是从用户真正看到 Avalonia 闪屏后开始计算，而不是从
+        // Opened 事件触发但 UI 线程仍在初始化时开始计算。
+        await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Render);
+        await Task.Delay(80);
     }
 
     public void SetProgress(double percent, string status, string? detail = null)

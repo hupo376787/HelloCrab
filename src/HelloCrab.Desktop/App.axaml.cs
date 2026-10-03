@@ -49,14 +49,21 @@ public partial class App : Application
             desktop.MainWindow = splash;
             desktop.Exit += Desktop_Exit;
 
-            splash.Opened += (_, _) =>
+            splash.Opened += async (_, _) =>
             {
                 if (_desktopStartupStarted)
                     return;
 
                 _desktopStartupStarted = true;
+
+                // Opened 发生时 Avalonia 的第一帧可能还没有真正绘制到屏幕。
+                // 先让渲染队列跑一帧，再关闭最早期的 Win32 占位闪屏，
+                // 并从这一刻开始计算 2 秒最低显示时间。
+                await splash.WaitUntilPresentedAsync();
+                Program.HideEarlyStartupSplash();
+
                 var splashShownAt = DateTimeOffset.UtcNow;
-                _ = InitializeDesktopAsync(desktop, splash, splashShownAt);
+                await InitializeDesktopAsync(desktop, splash, splashShownAt);
             };
         }
 
