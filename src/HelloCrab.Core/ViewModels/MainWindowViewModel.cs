@@ -214,8 +214,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
         _historyService.HistoryChanged += OnHistoryChanged;
 
         AddLog(_localization.Get("Status.Ready", "准备就绪"));
-        _ = InitializeRuntimeComponentStatusAsync();
-        _ = InitializeHistoryAsync();
+        RuntimeComponentInitializationTask = InitializeRuntimeComponentStatusAsync();
+        HistoryInitializationTask = InitializeHistoryAsync();
         _scheduledDownloadInitializationTask = InitializeScheduledDownloadAsync();
         _ = RecoverPendingPersonDetectionAsync();
         QueueSettingsSave();
@@ -225,6 +225,15 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
     public ObservableCollection<string> Logs { get; } = new();
     public ObservableCollection<DownloadHistoryItem> DownloadHistory { get; } = new();
     public ObservableCollection<DownloadHistoryItem> FilteredDownloadHistory { get; } = new();
+
+    /// <summary>
+    /// 桌面启动闪屏等待的关键初始化任务。头像图片仍在历史数据加载完成后后台补齐，
+    /// 避免网络图片阻塞主窗口显示。
+    /// </summary>
+    public Task RuntimeComponentInitializationTask { get; }
+    public Task HistoryInitializationTask { get; }
+    public Task ScheduledDownloadInitializationTask
+        => _scheduledDownloadInitializationTask ?? Task.CompletedTask;
 
     public IAsyncRelayCommand OpenBrowserCommand { get; }
     public IAsyncRelayCommand InstallChromiumCommand { get; }
@@ -806,8 +815,11 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
         {
             var items = await _historyService.LoadAsync();
             Ui(() => SyncHistory(items));
-            await LoadHistoryAvatarsAsync(items);
             Ui(() => AddLocalizedLog("Log.HistoryLoaded", items.Count));
+
+            // 历史数据已经可用后即可进入主界面。头像来自本地缓存或网络，
+            // 继续在后台逐步补齐，避免某个平台头像 CDN 超时把闪屏卡住几十秒。
+            _ = LoadHistoryAvatarsAsync(items);
         }
         catch (Exception ex)
         {
