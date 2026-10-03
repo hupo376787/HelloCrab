@@ -146,19 +146,20 @@ public partial class App : Application
                 DataContext = viewModel
             };
 
-            desktop.MainWindow = mainWindow;
-            mainWindow.Show();
-
             splash.SetProgress(100, "启动完成", "HelloCrab 已准备就绪");
 
-            // 闪屏从真正显示出来开始至少保留 2 秒；如果初始化本身已经超过
-            // 2 秒，则只短暂停留完成状态，避免人为拖慢正常启动。
+            // 先让闪屏真正显示满最短时长，再显示主窗口。
+            // 之前主窗口会提前 Show() 并覆盖闪屏，因此虽然闪屏仍存在，
+            // 用户实际上看不到它。
             var elapsed = DateTimeOffset.UtcNow - splashShownAt;
             var remaining = MinimumSplashDisplayTime - elapsed;
             var closeDelay = remaining > SplashCompletionHoldTime
                 ? remaining
                 : SplashCompletionHoldTime;
             await Task.Delay(closeDelay);
+
+            desktop.MainWindow = mainWindow;
+            mainWindow.Show();
             splash.Close();
         }
         catch (Exception ex)
