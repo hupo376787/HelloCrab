@@ -92,14 +92,11 @@ public sealed class SplashWindow : Window
             VerticalAlignment = VerticalAlignment.Center
         };
 
-        var statusGrid = new Grid
-        {
-            ColumnDefinitions =
-            {
-                new ColumnDefinition(GridLength.Star),
-                new ColumnDefinition(GridLength.Auto)
-            }
-        };
+        var statusGrid = new Grid();
+        statusGrid.ColumnDefinitions.Add(
+            new ColumnDefinition(new GridLength(1, GridUnitType.Star)));
+        statusGrid.ColumnDefinitions.Add(
+            new ColumnDefinition(GridLength.Auto));
         statusGrid.Children.Add(_statusText);
         Grid.SetColumn(_percentText, 1);
         statusGrid.Children.Add(_percentText);
