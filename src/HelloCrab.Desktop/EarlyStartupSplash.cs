@@ -45,8 +45,14 @@ internal sealed class EarlyStartupSplash : IDisposable
     private const int ContentLeft = 36;
     private const int ContentRight = 524;
     private const int ContentWidth = ContentRight - ContentLeft;
-    private const int ProgressTop = 171;
+
+    // 启动状态区整体靠近窗口底部，顶部品牌区保持不动。
+    private const int StatusTop = 205;
+    private const int StatusBottom = 229;
+    private const int ProgressTop = 241;
     private const int ProgressHeight = 10;
+    private const int DetailTop = 263;
+    private const int DetailBottom = 291;
 
     private static readonly WndProcDelegate WindowProcDelegate = WindowProc;
     private static EarlyStartupSplash? _activeInstance;
@@ -349,7 +355,7 @@ internal sealed class EarlyStartupSplash : IDisposable
                 _status,
                 _statusFont,
                 ToColorRef(0x26, 0x32, 0x4A),
-                new Rect(ContentLeft, 135, 454, 159),
+                new Rect(ContentLeft, StatusTop, 454, StatusBottom),
                 DtLeft | DtVCenter | DtSingleLine | DtNoPrefix | DtEndEllipsis);
 
             DrawText(
@@ -357,7 +363,7 @@ internal sealed class EarlyStartupSplash : IDisposable
                 $"{_progressValue}%",
                 _percentFont,
                 ToColorRef(0x7C, 0x3A, 0xED),
-                new Rect(456, 135, ContentRight, 159),
+                new Rect(456, StatusTop, ContentRight, StatusBottom),
                 DtRight | DtVCenter | DtSingleLine | DtNoPrefix);
 
             // 自绘胶囊进度条，避免 Win32 默认进度条的边框和生硬样式。
@@ -389,7 +395,7 @@ internal sealed class EarlyStartupSplash : IDisposable
                 _detail,
                 _detailFont,
                 ToColorRef(0x7A, 0x84, 0x98),
-                new Rect(ContentLeft, 192, ContentRight, 230),
+                new Rect(ContentLeft, DetailTop, ContentRight, DetailBottom),
                 DtLeft | DtVCenter | DtSingleLine | DtNoPrefix | DtEndEllipsis);
         }
         finally
