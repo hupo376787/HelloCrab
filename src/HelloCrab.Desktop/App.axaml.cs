@@ -235,8 +235,11 @@ public partial class App : Application
             menu.Add(new NativeMenuItemSeparator());
             menu.Add(exitItem);
 
+            // Desktop 项目的程序集名显式设置为 HelloCrab，而不是命名空间
+            // HelloCrab.Desktop。avares URI 必须使用真实程序集名，否则 AssetLoader
+            // 会抛异常，随后托盘初始化被 catch 回退成普通最小化。
             using var iconStream = AssetLoader.Open(
-                new Uri("avares://HelloCrab.Desktop/Assets/app-icon.ico"));
+                new Uri("avares://HelloCrab/Assets/app-icon.ico"));
 
             _trayIcon = new TrayIcon
             {
