@@ -46,6 +46,16 @@ public partial class App : Application
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             var splash = new SplashWindow();
+            var useNativeStartupSplash = Program.HasEarlyStartupSplash;
+            if (useNativeStartupSplash)
+            {
+                // Windows 冷启动时，原生闪屏从进程入口一直保留到主窗口出现。
+                // Avalonia 闪屏只作为生命周期占位窗口，不再显示第二个界面。
+                splash.Opacity = 0;
+                splash.ShowInTaskbar = false;
+                splash.Topmost = false;
+            }
+
             desktop.MainWindow = splash;
             desktop.Exit += Desktop_Exit;
 
@@ -56,13 +66,17 @@ public partial class App : Application
 
                 _desktopStartupStarted = true;
 
-                // Opened 发生时 Avalonia 的第一帧可能还没有真正绘制到屏幕。
-                // 先让渲染队列跑一帧，再关闭最早期的 Win32 占位闪屏，
-                // 并从这一刻开始计算 2 秒最低显示时间。
-                await splash.WaitUntilPresentedAsync();
-                Program.HideEarlyStartupSplash();
+                DateTimeOffset splashShownAt;
+                if (useNativeStartupSplash)
+                {
+                    splashShownAt = Program.EarlyStartupSplashShownAt ?? DateTimeOffset.UtcNow;
+                }
+                else
+                {
+                    await splash.WaitUntilPresentedAsync();
+                    splashShownAt = DateTimeOffset.UtcNow;
+                }
 
-                var splashShownAt = DateTimeOffset.UtcNow;
                 await InitializeDesktopAsync(desktop, splash, splashShownAt);
             };
         }
@@ -77,16 +91,16 @@ public partial class App : Application
     {
         try
         {
-            splash.SetProgress(5, "正在启动 HelloCrab…", "准备应用运行环境");
+            SetStartupProgress(splash, 5, "正在启动 HelloCrab…", "准备应用运行环境");
             await Task.Yield();
 
-            splash.SetProgress(15, "正在加载核心模块…", "初始化浏览器、媒体处理与系统服务");
+            SetStartupProgress(splash, 15, "正在加载核心模块…", "初始化浏览器、媒体处理与系统服务");
             var browser = new PlaywrightBrowserService(new PlaywrightChromiumInstaller());
             var mediaProcessor = new FfmpegMediaService();
             var ffmpegInstaller = _ffmpegInstaller = new GyanFfmpegInstallerService();
             var platformShell = new PlatformShellService();
 
-            splash.SetProgress(28, "正在加载平台模块…", "加载哔哩哔哩、抖音、快手、小红书、微博等平台适配器");
+            SetStartupProgress(splash, 28, "正在加载平台模块…", "加载哔哩哔哩、抖音、快手、小红书、微博等平台适配器");
             var adapters = new SiteAdapterRegistry(new ISiteAdapter[]
             {
                 new BilibiliSiteAdapter(),
@@ -101,7 +115,7 @@ public partial class App : Application
                 new MeipianSiteAdapter()
             });
 
-            splash.SetProgress(40, "正在初始化服务…", "准备下载、历史记录、图片缓存与 AI 模块");
+            SetStartupProgress(splash, 40, "正在初始化服务…", "准备下载、历史记录、图片缓存与 AI 模块");
             var personImageDetector = new YoloPersonImageDetector();
             var downloader = new MediaDownloadService(browser, mediaProcessor, personImageDetector);
             var historyService = new DownloadHistoryService();
@@ -110,7 +124,7 @@ public partial class App : Application
             var localization = new LocalizationService();
             var coordinator = new CrawlCoordinator(browser, adapters, downloader, historyService);
 
-            splash.SetProgress(50, "正在读取设置…", "恢复语言、主题、下载目录与平台配置");
+            SetStartupProgress(splash, 50, "正在读取设置…", "恢复语言、主题、下载目录与平台配置");
             var viewModel = new MainWindowViewModel(
                 browser,
                 coordinator,
@@ -123,37 +137,37 @@ public partial class App : Application
                 ffmpegInstaller,
                 personImageDetector);
 
-            splash.SetProgress(56, "正在检查本地数据…", "检查旧版文件命名并完成必要迁移");
+            SetStartupProgress(splash, 56, "正在检查本地数据…", "检查旧版文件命名并完成必要迁移");
             // 临时启动迁移：统一历史下载文件末尾的“ 空格+序号”为当前“_序号”。
             LegacySequenceFileNameMigration.Run(viewModel.DownloadRoot);
 
-            splash.SetProgress(62, "正在加载历史记录…", "读取已下载作者和作品统计");
+            SetStartupProgress(splash, 62, "正在加载历史记录…", "读取已下载作者和作品统计");
             await viewModel.HistoryInitializationTask;
-            splash.SetProgress(
+            SetStartupProgress(splash, 
                 74,
                 "历史记录加载完成",
                 $"已加载 {viewModel.DownloadHistory.Count} 个作者记录");
 
-            splash.SetProgress(78, "正在检查运行组件…", "检测 Chromium、FFmpeg 与人像识别模型");
+            SetStartupProgress(splash, 78, "正在检查运行组件…", "检测 Chromium、FFmpeg 与人像识别模型");
             await viewModel.RuntimeComponentInitializationTask;
 
-            splash.SetProgress(87, "正在加载定时任务…", "恢复定时自动下载配置");
+            SetStartupProgress(splash, 87, "正在加载定时任务…", "恢复定时自动下载配置");
             await viewModel.ScheduledDownloadInitializationTask;
 
             _viewModel = viewModel;
             _remoteApiHost = new RemoteApiHostService(viewModel);
             viewModel.RemoteApiEnabledChanged += ViewModel_RemoteApiEnabledChanged;
 
-            splash.SetProgress(93, "正在启动后台服务…", "应用远程控制服务配置");
+            SetStartupProgress(splash, 93, "正在启动后台服务…", "应用远程控制服务配置");
             await ApplyRemoteServerStateAsync(viewModel.RemoteApiEnabled);
 
-            splash.SetProgress(97, "正在准备主界面…", "创建窗口并应用界面设置");
+            SetStartupProgress(splash, 97, "正在准备主界面…", "创建窗口并应用界面设置");
             var mainWindow = new MainWindow
             {
                 DataContext = viewModel
             };
 
-            splash.SetProgress(100, "启动完成", "HelloCrab 已准备就绪");
+            SetStartupProgress(splash, 100, "启动完成", "HelloCrab 已准备就绪");
 
             // 先让闪屏真正显示满最短时长，再显示主窗口。
             // 之前主窗口会提前 Show() 并覆盖闪屏，因此虽然闪屏仍存在，
@@ -167,12 +181,29 @@ public partial class App : Application
 
             desktop.MainWindow = mainWindow;
             mainWindow.Show();
+            Program.HideEarlyStartupSplash();
             splash.Close();
         }
         catch (Exception ex)
         {
+            // Windows 原生闪屏只负责正常启动。若初始化失败，则切回 Avalonia
+            // 错误界面，保留详细异常与关闭按钮。
+            Program.HideEarlyStartupSplash();
+            splash.Opacity = 1;
+            splash.ShowInTaskbar = true;
+            splash.Topmost = true;
             splash.ShowFailure(ex.Message);
         }
+    }
+
+    private static void SetStartupProgress(
+        SplashWindow splash,
+        double percent,
+        string status,
+        string? detail = null)
+    {
+        splash.SetProgress(percent, status, detail);
+        Program.UpdateEarlyStartupSplash(percent, status, detail);
     }
 
     private void ViewModel_RemoteApiEnabledChanged(object? sender, bool enabled)

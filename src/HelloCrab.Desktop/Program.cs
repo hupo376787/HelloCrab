@@ -24,6 +24,17 @@ internal static class Program
         }
     }
 
+    internal static bool HasEarlyStartupSplash => _earlyStartupSplash is not null;
+
+    internal static DateTimeOffset? EarlyStartupSplashShownAt
+        => _earlyStartupSplash?.ShownAt;
+
+    internal static void UpdateEarlyStartupSplash(
+        double percent,
+        string status,
+        string? detail = null)
+        => _earlyStartupSplash?.SetProgress(percent, status, detail);
+
     internal static void HideEarlyStartupSplash()
         => Interlocked.Exchange(ref _earlyStartupSplash, null)?.Dispose();
 
