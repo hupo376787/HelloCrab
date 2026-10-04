@@ -4,63 +4,80 @@ namespace HelloCrab.Desktop;
 
 /// <summary>
 /// Windows 冷启动阶段使用的单一原生启动闪屏。
-/// 它从进程入口立即出现，并一直保留到主窗口显示，避免原生闪屏和
-/// Avalonia 闪屏先后出现造成两个启动界面。
+/// 仅负责在 Avalonia 初始化前立即给用户视觉反馈；启动时序由 Program/App 管理。
 /// </summary>
 internal sealed class EarlyStartupSplash : IDisposable
 {
     private const uint WsPopup = 0x80000000;
     private const uint WsVisible = 0x10000000;
-    private const uint WsChild = 0x40000000;
     private const uint WsClipChildren = 0x02000000;
 
     private const uint WsExTopmost = 0x00000008;
     private const uint WsExToolWindow = 0x00000080;
     private const uint WsExNoActivate = 0x08000000;
-    private const uint WsExTransparent = 0x00000020;
-
-    private const uint SsLeft = 0x00000000;
-    private const uint SsCenter = 0x00000001;
-    private const uint SsRight = 0x00000002;
-
-    private const uint PbsSmooth = 0x00000001;
 
     private const int SwShowNoActivate = 4;
     private const uint PmRemove = 0x0001;
+    private const uint WmPaint = 0x000F;
     private const uint WmClose = 0x0010;
-    private const uint WmSetFont = 0x0030;
-    private const uint WmCtlColorStatic = 0x0138;
-    private const int TransparentBkMode = 1;
+    private const uint WmEraseBkgnd = 0x0014;
+    private const uint WmAppRefresh = 0x8001;
 
-    private const uint PbmSetPos = 0x0402;
-    private const uint PbmSetRange32 = 0x0406;
-    private const uint PbmSetBarColor = 0x0409;
-    private const uint PbmSetBkColor = 0x2001;
+    private const int TransparentBkMode = 1;
+    private const int NullPenStockObject = 8;
+
+    private const uint DtLeft = 0x0000;
+    private const uint DtCenter = 0x0001;
+    private const uint DtRight = 0x0002;
+    private const uint DtVCenter = 0x0004;
+    private const uint DtSingleLine = 0x0020;
+    private const uint DtNoPrefix = 0x0800;
+    private const uint DtEndEllipsis = 0x8000;
+
+    private const uint DiNormal = 0x0003;
 
     private const int SmCxScreen = 0;
     private const int SmCyScreen = 1;
-    private const uint IccProgressClass = 0x00000020;
 
     private const int WindowWidth = 560;
     private const int WindowHeight = 330;
 
+    private const int ContentLeft = 36;
+    private const int ContentRight = 524;
+    private const int ContentWidth = ContentRight - ContentLeft;
+    private const int ProgressTop = 171;
+    private const int ProgressHeight = 10;
+
     private static readonly WndProcDelegate WindowProcDelegate = WindowProc;
-    private static nint _backgroundBrush;
+    private static EarlyStartupSplash? _activeInstance;
 
     private readonly Thread _thread;
     private readonly string _windowClassName;
     private readonly ManualResetEventSlim _ready = new(false);
 
     private volatile bool _closing;
+    private volatile int _progressValue;
+    private string _status = "正在启动 HelloCrab…";
+    private string _detail = "准备应用运行环境";
+
     private nint _window;
-    private nint _statusText;
-    private nint _detailText;
-    private nint _percentText;
-    private nint _progressBar;
+    private nint _backgroundBrush;
+    private nint _logoTileBrush;
+    private nint _progressTrackBrush;
+    private nint _progressFillBrush;
+    private nint _dividerBrush;
+    private nint _borderPen;
+
+    private nint _titleFont;
+    private nint _subtitleFont;
+    private nint _statusFont;
+    private nint _detailFont;
+    private nint _percentFont;
+
+    private nint _appIcon;
 
     private EarlyStartupSplash()
     {
-        ShownAt = DateTimeOffset.UtcNow;
         _windowClassName = $"HelloCrab.StartupSplash.{Environment.ProcessId}";
         _thread = new Thread(Run)
         {
@@ -70,8 +87,7 @@ internal sealed class EarlyStartupSplash : IDisposable
         _thread.SetApartmentState(ApartmentState.STA);
         _thread.Start();
 
-        // 等原生窗口真正创建成功再继续初始化 Avalonia；此时用户已经能立即看到反馈。
-        // 如果原生窗口创建失败，则回退为原来的 Avalonia 闪屏，不会出现两个或零个闪屏。
+        // 等原生窗口真正创建成功再继续初始化 Avalonia；如果创建失败则回退到 Avalonia 闪屏。
         if (!_ready.Wait(TimeSpan.FromMilliseconds(500)) || _window == 0)
             throw new InvalidOperationException("Unable to create native startup splash.");
     }
@@ -95,27 +111,13 @@ internal sealed class EarlyStartupSplash : IDisposable
 
     public void SetProgress(double percent, string status, string? detail = null)
     {
-        var value = (int)Math.Round(Math.Clamp(percent, 0d, 100d));
-
-        var statusHandle = _statusText;
-        if (statusHandle != 0)
-            SetWindowTextW(statusHandle, status);
-
-        var detailHandle = _detailText;
-        if (detailHandle != 0)
-            SetWindowTextW(detailHandle, detail ?? string.Empty);
-
-        var percentHandle = _percentText;
-        if (percentHandle != 0)
-            SetWindowTextW(percentHandle, $"{value}%");
-
-        var progressHandle = _progressBar;
-        if (progressHandle != 0)
-            _ = SendMessageW(progressHandle, PbmSetPos, (nint)value, 0);
+        _progressValue = (int)Math.Round(Math.Clamp(percent, 0d, 100d));
+        _status = string.IsNullOrWhiteSpace(status) ? "正在启动 HelloCrab…" : status;
+        _detail = detail ?? string.Empty;
 
         var window = _window;
         if (window != 0)
-            UpdateWindow(window);
+            PostMessageW(window, WmAppRefresh, 0, 0);
     }
 
     public void Dispose()
@@ -131,30 +133,20 @@ internal sealed class EarlyStartupSplash : IDisposable
 
     private void Run()
     {
-        nint backgroundBrush = 0;
-        nint titleFont = 0;
-        nint normalFont = 0;
-        nint smallFont = 0;
         ushort classAtom = 0;
 
         try
         {
-            var init = new InitCommonControlsData
-            {
-                Size = (uint)Marshal.SizeOf<InitCommonControlsData>(),
-                Icc = IccProgressClass
-            };
-            _ = InitCommonControlsEx(ref init);
-
             var instance = GetModuleHandleW(null);
-            backgroundBrush = CreateSolidBrush(ToColorRef(0xF9, 0xFA, 0xFE));
-            _backgroundBrush = backgroundBrush;
+            CreateVisualResources();
+
+            _activeInstance = this;
 
             var windowClass = new WindowClassExData
             {
                 Size = (uint)Marshal.SizeOf<WindowClassExData>(),
                 Instance = instance,
-                BackgroundBrush = backgroundBrush,
+                BackgroundBrush = _backgroundBrush,
                 ClassName = _windowClassName,
                 WindowProc = Marshal.GetFunctionPointerForDelegate(WindowProcDelegate)
             };
@@ -189,109 +181,15 @@ internal sealed class EarlyStartupSplash : IDisposable
                 0,
                 WindowWidth + 1,
                 WindowHeight + 1,
-                24,
-                24);
+                28,
+                28);
             if (roundedRegion != 0)
                 _ = SetWindowRgn(window, roundedRegion, true);
 
-            titleFont = CreateFontW(
-                -30, 0, 0, 0, 600,
-                0, 0, 0, 1, 0, 0, 5, 0,
-                "Segoe UI");
-            normalFont = CreateFontW(
-                -16, 0, 0, 0, 400,
-                0, 0, 0, 1, 0, 0, 5, 0,
-                "Microsoft YaHei UI");
-            smallFont = CreateFontW(
-                -14, 0, 0, 0, 400,
-                0, 0, 0, 1, 0, 0, 5, 0,
-                "Microsoft YaHei UI");
-
-            var title = CreateLabel(
-                window,
-                "HelloCrab",
-                36,
-                42,
-                488,
-                40,
-                SsCenter,
-                titleFont);
-
-            var subtitle = CreateLabel(
-                window,
-                "正在准备应用，请稍候",
-                36,
-                82,
-                488,
-                26,
-                SsCenter,
-                normalFont);
-
-            _statusText = CreateLabel(
-                window,
-                "正在启动 HelloCrab…",
-                36,
-                134,
-                430,
-                24,
-                SsLeft,
-                normalFont);
-
-            _percentText = CreateLabel(
-                window,
-                "0%",
-                468,
-                134,
-                56,
-                24,
-                SsRight,
-                normalFont);
-
-            _progressBar = CreateWindowExW(
-                0,
-                "msctls_progress32",
-                string.Empty,
-                WsChild | WsVisible | PbsSmooth,
-                36,
-                165,
-                488,
-                8,
-                window,
-                0,
-                instance,
-                0);
-
-            if (_progressBar != 0)
-            {
-                _ = SendMessageW(_progressBar, PbmSetRange32, 0, (nint)100);
-                _ = SendMessageW(
-                    _progressBar,
-                    PbmSetBkColor,
-                    0,
-                    (nint)ToColorRef(0xE3, 0xE6, 0xF0));
-                _ = SendMessageW(
-                    _progressBar,
-                    PbmSetBarColor,
-                    0,
-                    (nint)ToColorRef(0x7C, 0x3A, 0xED));
-                _ = SendMessageW(_progressBar, PbmSetPos, (nint)3, 0);
-            }
-
-            _detailText = CreateLabel(
-                window,
-                "准备应用运行环境",
-                36,
-                186,
-                488,
-                42,
-                SsLeft,
-                smallFont);
-
-            _ = title;
-            _ = subtitle;
-
             ShowWindow(window, SwShowNoActivate);
+            InvalidateRect(window, 0, false);
             UpdateWindow(window);
+
             ShownAt = DateTimeOffset.UtcNow;
             _ready.Set();
 
@@ -319,51 +217,240 @@ internal sealed class EarlyStartupSplash : IDisposable
         {
             _ready.Set();
 
-            if (titleFont != 0)
-                DeleteObject(titleFont);
-            if (normalFont != 0)
-                DeleteObject(normalFont);
-            if (smallFont != 0)
-                DeleteObject(smallFont);
+            if (ReferenceEquals(_activeInstance, this))
+                _activeInstance = null;
+
+            DestroyVisualResources();
 
             if (classAtom != 0)
                 UnregisterClassW(_windowClassName, GetModuleHandleW(null));
-
-            if (backgroundBrush != 0)
-                DeleteObject(backgroundBrush);
-
-            _backgroundBrush = 0;
         }
     }
 
-    private static nint CreateLabel(
-        nint parent,
-        string text,
-        int x,
-        int y,
-        int width,
-        int height,
-        uint alignment,
-        nint font)
+    private void CreateVisualResources()
     {
-        var handle = CreateWindowExW(
-            WsExTransparent,
-            "STATIC",
-            text,
-            WsChild | WsVisible | alignment,
-            x,
-            y,
-            width,
-            height,
-            parent,
-            0,
-            GetModuleHandleW(null),
-            0);
+        _backgroundBrush = CreateSolidBrush(ToColorRef(0xF9, 0xFA, 0xFE));
+        _logoTileBrush = CreateSolidBrush(ToColorRef(0xF1, 0xED, 0xFF));
+        _progressTrackBrush = CreateSolidBrush(ToColorRef(0xE6, 0xE8, 0xF0));
+        _progressFillBrush = CreateSolidBrush(ToColorRef(0x7C, 0x3A, 0xED));
+        _dividerBrush = CreateSolidBrush(ToColorRef(0xED, 0xEE, 0xF4));
+        _borderPen = CreatePen(0, 1, ToColorRef(0xDC, 0xD4, 0xF7));
 
-        if (handle != 0 && font != 0)
-            _ = SendMessageW(handle, WmSetFont, font, (nint)1);
+        _titleFont = CreateFontW(
+            -31, 0, 0, 0, 600,
+            0, 0, 0, 1, 0, 0, 5, 0,
+            "Segoe UI");
+        _subtitleFont = CreateFontW(
+            -15, 0, 0, 0, 400,
+            0, 0, 0, 1, 0, 0, 5, 0,
+            "Microsoft YaHei UI");
+        _statusFont = CreateFontW(
+            -16, 0, 0, 0, 600,
+            0, 0, 0, 1, 0, 0, 5, 0,
+            "Microsoft YaHei UI");
+        _detailFont = CreateFontW(
+            -14, 0, 0, 0, 400,
+            0, 0, 0, 1, 0, 0, 5, 0,
+            "Microsoft YaHei UI");
+        _percentFont = CreateFontW(
+            -15, 0, 0, 0, 600,
+            0, 0, 0, 1, 0, 0, 5, 0,
+            "Segoe UI");
 
-        return handle;
+        var executablePath = Environment.ProcessPath;
+        if (!string.IsNullOrWhiteSpace(executablePath))
+        {
+            _ = ExtractIconExW(executablePath, 0, out var largeIcon, out var smallIcon, 1);
+            _appIcon = largeIcon != 0 ? largeIcon : smallIcon;
+
+            if (smallIcon != 0 && smallIcon != _appIcon)
+                DestroyIcon(smallIcon);
+        }
+    }
+
+    private void DestroyVisualResources()
+    {
+        DeleteGdiObject(ref _titleFont);
+        DeleteGdiObject(ref _subtitleFont);
+        DeleteGdiObject(ref _statusFont);
+        DeleteGdiObject(ref _detailFont);
+        DeleteGdiObject(ref _percentFont);
+
+        DeleteGdiObject(ref _backgroundBrush);
+        DeleteGdiObject(ref _logoTileBrush);
+        DeleteGdiObject(ref _progressTrackBrush);
+        DeleteGdiObject(ref _progressFillBrush);
+        DeleteGdiObject(ref _dividerBrush);
+        DeleteGdiObject(ref _borderPen);
+
+        if (_appIcon != 0)
+        {
+            DestroyIcon(_appIcon);
+            _appIcon = 0;
+        }
+    }
+
+    private static void DeleteGdiObject(ref nint handle)
+    {
+        if (handle == 0)
+            return;
+
+        DeleteObject(handle);
+        handle = 0;
+    }
+
+    private void PaintWindow(nint hwnd)
+    {
+        var hdc = GetDC(hwnd);
+        if (hdc == 0)
+            return;
+
+        try
+        {
+            var clientRect = new Rect(0, 0, WindowWidth, WindowHeight);
+            FillRect(hdc, ref clientRect, _backgroundBrush);
+
+            // 外框：轻微紫灰边界，与主界面紫色强调色保持一致。
+            var oldPen = SelectObject(hdc, _borderPen);
+            var oldBrush = SelectObject(hdc, GetStockObject(5));
+            RoundRect(hdc, 0, 0, WindowWidth - 1, WindowHeight - 1, 28, 28);
+            SelectObject(hdc, oldBrush);
+            SelectObject(hdc, oldPen);
+
+            // Logo 背板 + 应用自身图标。
+            FillRoundRect(hdc, _logoTileBrush, 36, 32, 96, 92, 18);
+            if (_appIcon != 0)
+                DrawIconEx(hdc, 43, 39, _appIcon, 46, 46, 0, 0, DiNormal);
+            else
+                DrawFallbackLogo(hdc);
+
+            DrawText(
+                hdc,
+                "HelloCrab",
+                _titleFont,
+                ToColorRef(0x17, 0x20, 0x33),
+                new Rect(112, 37, 515, 69),
+                DtLeft | DtVCenter | DtSingleLine | DtNoPrefix);
+
+            DrawText(
+                hdc,
+                "正在准备应用，请稍候",
+                _subtitleFont,
+                ToColorRef(0x7A, 0x84, 0x98),
+                new Rect(112, 72, 515, 98),
+                DtLeft | DtVCenter | DtSingleLine | DtNoPrefix);
+
+            // 内容区用一条非常淡的分隔线拉开层次。
+            var dividerRect = new Rect(ContentLeft, 116, ContentRight, 117);
+            FillRect(hdc, ref dividerRect, _dividerBrush);
+
+            DrawText(
+                hdc,
+                _status,
+                _statusFont,
+                ToColorRef(0x26, 0x32, 0x4A),
+                new Rect(ContentLeft, 135, 454, 159),
+                DtLeft | DtVCenter | DtSingleLine | DtNoPrefix | DtEndEllipsis);
+
+            DrawText(
+                hdc,
+                $"{_progressValue}%",
+                _percentFont,
+                ToColorRef(0x7C, 0x3A, 0xED),
+                new Rect(456, 135, ContentRight, 159),
+                DtRight | DtVCenter | DtSingleLine | DtNoPrefix);
+
+            // 自绘胶囊进度条，避免 Win32 默认进度条的边框和生硬样式。
+            FillRoundRect(
+                hdc,
+                _progressTrackBrush,
+                ContentLeft,
+                ProgressTop,
+                ContentRight,
+                ProgressTop + ProgressHeight,
+                ProgressHeight);
+
+            if (_progressValue > 0)
+            {
+                var rawFillWidth = (int)Math.Round(ContentWidth * (_progressValue / 100d));
+                var fillWidth = Math.Clamp(rawFillWidth, ProgressHeight, ContentWidth);
+                FillRoundRect(
+                    hdc,
+                    _progressFillBrush,
+                    ContentLeft,
+                    ProgressTop,
+                    ContentLeft + fillWidth,
+                    ProgressTop + ProgressHeight,
+                    ProgressHeight);
+            }
+
+            DrawText(
+                hdc,
+                _detail,
+                _detailFont,
+                ToColorRef(0x7A, 0x84, 0x98),
+                new Rect(ContentLeft, 192, ContentRight, 230),
+                DtLeft | DtVCenter | DtSingleLine | DtNoPrefix | DtEndEllipsis);
+        }
+        finally
+        {
+            ReleaseDC(hwnd, hdc);
+        }
+    }
+
+    private void DrawFallbackLogo(nint hdc)
+    {
+        DrawText(
+            hdc,
+            "HC",
+            _statusFont,
+            ToColorRef(0x7C, 0x3A, 0xED),
+            new Rect(36, 32, 96, 92),
+            DtCenter | DtVCenter | DtSingleLine | DtNoPrefix);
+    }
+
+    private static void DrawText(
+        nint hdc,
+        string text,
+        nint font,
+        uint color,
+        Rect bounds,
+        uint format)
+    {
+        var oldFont = SelectObject(hdc, font);
+        var oldBkMode = SetBkMode(hdc, TransparentBkMode);
+        var oldColor = SetTextColor(hdc, color);
+
+        DrawTextW(hdc, text, -1, ref bounds, format);
+
+        SetTextColor(hdc, oldColor);
+        SetBkMode(hdc, oldBkMode);
+        SelectObject(hdc, oldFont);
+    }
+
+    private static void FillRoundRect(
+        nint hdc,
+        nint brush,
+        int left,
+        int top,
+        int right,
+        int bottom,
+        int radius)
+    {
+        var oldPen = SelectObject(hdc, GetStockObject(NullPenStockObject));
+        var oldBrush = SelectObject(hdc, brush);
+
+        RoundRect(
+            hdc,
+            left,
+            top,
+            right,
+            bottom,
+            radius,
+            radius);
+
+        SelectObject(hdc, oldBrush);
+        SelectObject(hdc, oldPen);
     }
 
     private static nint WindowProc(
@@ -372,12 +459,23 @@ internal sealed class EarlyStartupSplash : IDisposable
         nuint wParam,
         nint lParam)
     {
-        if (message == WmCtlColorStatic)
+        var instance = _activeInstance;
+
+        switch (message)
         {
-            var hdc = (nint)wParam;
-            _ = SetBkMode(hdc, TransparentBkMode);
-            _ = SetTextColor(hdc, ToColorRef(0x17, 0x20, 0x33));
-            return _backgroundBrush;
+            case WmEraseBkgnd:
+                // 整个背景都在 WM_PAINT 中完成，跳过系统擦除可减少启动进度刷新时的闪烁。
+                return 1;
+
+            case WmAppRefresh:
+                InvalidateRect(hwnd, 0, false);
+                UpdateWindow(hwnd);
+                return 0;
+
+            case WmPaint when instance is not null:
+                instance.PaintWindow(hwnd);
+                ValidateRect(hwnd, 0);
+                return 0;
         }
 
         return DefWindowProcW(hwnd, message, wParam, lParam);
@@ -385,13 +483,6 @@ internal sealed class EarlyStartupSplash : IDisposable
 
     private static uint ToColorRef(byte red, byte green, byte blue)
         => (uint)(red | (green << 8) | (blue << 16));
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct InitCommonControlsData
-    {
-        public uint Size;
-        public uint Icc;
-    }
 
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
     private struct WindowClassExData
@@ -429,18 +520,39 @@ internal sealed class EarlyStartupSplash : IDisposable
         public uint Private;
     }
 
+    [StructLayout(LayoutKind.Sequential)]
+    private struct Rect
+    {
+        public Rect(int left, int top, int right, int bottom)
+        {
+            Left = left;
+            Top = top;
+            Right = right;
+            Bottom = bottom;
+        }
+
+        public int Left;
+        public int Top;
+        public int Right;
+        public int Bottom;
+    }
+
     private delegate nint WndProcDelegate(
         nint hwnd,
         uint message,
         nuint wParam,
         nint lParam);
 
-    [DllImport("comctl32.dll", SetLastError = true)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool InitCommonControlsEx(ref InitCommonControlsData init);
-
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
     private static extern nint GetModuleHandleW(string? moduleName);
+
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
+    private static extern uint ExtractIconExW(
+        string file,
+        int iconIndex,
+        out nint largeIcon,
+        out nint smallIcon,
+        uint iconCount);
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
     private static extern ushort RegisterClassExW(ref WindowClassExData windowClass);
@@ -475,12 +587,47 @@ internal sealed class EarlyStartupSplash : IDisposable
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool UpdateWindow(nint hwnd);
 
-    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool SetWindowTextW(nint hwnd, string text);
+    private static extern bool InvalidateRect(nint hwnd, nint rect, bool erase);
 
     [DllImport("user32.dll")]
-    private static extern nint DefWindowProcW(nint hwnd, uint message, nuint wParam, nint lParam);
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool ValidateRect(nint hwnd, nint rect);
+
+    [DllImport("user32.dll")]
+    private static extern nint GetDC(nint hwnd);
+
+    [DllImport("user32.dll")]
+    private static extern int ReleaseDC(nint hwnd, nint hdc);
+
+    [DllImport("user32.dll")]
+    private static extern int FillRect(nint hdc, ref Rect rect, nint brush);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern int DrawTextW(
+        nint hdc,
+        string text,
+        int count,
+        ref Rect rect,
+        uint format);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool DrawIconEx(
+        nint hdc,
+        int xLeft,
+        int yTop,
+        nint icon,
+        int width,
+        int height,
+        uint stepIfAniCur,
+        nint flickerFreeDraw,
+        uint flags);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool DestroyIcon(nint icon);
 
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
@@ -510,8 +657,11 @@ internal sealed class EarlyStartupSplash : IDisposable
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool IsWindow(nint hwnd);
 
-    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
-    private static extern nint SendMessageW(nint hwnd, uint message, nint wParam, nint lParam);
+    [DllImport("user32.dll")]
+    private static extern nint DefWindowProcW(nint hwnd, uint message, nuint wParam, nint lParam);
+
+    [DllImport("user32.dll")]
+    private static extern int SetWindowRgn(nint hwnd, nint region, bool redraw);
 
     [DllImport("gdi32.dll")]
     private static extern nint CreateRoundRectRgn(
@@ -522,11 +672,28 @@ internal sealed class EarlyStartupSplash : IDisposable
         int widthEllipse,
         int heightEllipse);
 
-    [DllImport("user32.dll")]
-    private static extern int SetWindowRgn(nint hwnd, nint region, bool redraw);
-
     [DllImport("gdi32.dll")]
     private static extern nint CreateSolidBrush(uint colorRef);
+
+    [DllImport("gdi32.dll")]
+    private static extern nint CreatePen(int style, int width, uint colorRef);
+
+    [DllImport("gdi32.dll")]
+    private static extern nint GetStockObject(int objectIndex);
+
+    [DllImport("gdi32.dll")]
+    private static extern nint SelectObject(nint hdc, nint gdiObject);
+
+    [DllImport("gdi32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool RoundRect(
+        nint hdc,
+        int left,
+        int top,
+        int right,
+        int bottom,
+        int width,
+        int height);
 
     [DllImport("gdi32.dll")]
     private static extern int SetBkMode(nint hdc, int mode);
