@@ -27,6 +27,8 @@ public partial class MainWindow : Window
     private ObservableCollection<string>? _subscribedLogs;
     private bool _allowClose;
 
+    public event EventHandler? MinimizeToTrayRequested;
+
     public MainWindow()
     {
         InitializeComponent();
@@ -198,6 +200,12 @@ public partial class MainWindow : Window
         CloseConfirmOverlay.IsVisible = true;
     }
 
+    /// <summary>
+    /// 供桌面托盘“退出程序”复用主窗口原有的退出确认逻辑。
+    /// </summary>
+    public void RequestCloseConfirmation()
+        => ShowCloseConfirmation();
+
     private void StopCaptureButton_Click(object? sender, RoutedEventArgs e)
     {
         if (DataContext is not MainWindowViewModel viewModel
@@ -229,6 +237,20 @@ public partial class MainWindow : Window
     private void CloseCancelButton_Click(object? sender, RoutedEventArgs e)
     {
         CloseConfirmOverlay.IsVisible = false;
+    }
+
+    private void CloseMinimizeToTrayButton_Click(object? sender, RoutedEventArgs e)
+    {
+        CloseConfirmOverlay.IsVisible = false;
+
+        if (MinimizeToTrayRequested is { } handler)
+        {
+            handler(this, EventArgs.Empty);
+            return;
+        }
+
+        // 非桌面宿主或托盘功能不可用时，避免窗口直接消失，退化为普通最小化。
+        WindowState = WindowState.Minimized;
     }
 
     private void CloseConfirmButton_Click(object? sender, RoutedEventArgs e)

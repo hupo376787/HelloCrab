@@ -1,6 +1,8 @@
 using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
+using Avalonia.Platform;
 using HelloCrab.Core.Services.Crawling;
 using HelloCrab.Core.Services.Downloading;
 using HelloCrab.Core.Services.History;
@@ -34,9 +36,17 @@ public partial class App : Application
     private static readonly TimeSpan MinimumSplashDisplayTime = TimeSpan.FromSeconds(2);
     private static readonly TimeSpan SplashCompletionHoldTime = TimeSpan.FromMilliseconds(120);
 
+    private static readonly TimeSpan TrayDoubleClickThreshold = TimeSpan.FromMilliseconds(600);
+
     private RemoteApiHostService? _remoteApiHost;
     private MainWindowViewModel? _viewModel;
     private GyanFfmpegInstallerService? _ffmpegInstaller;
+    private MainWindow? _mainWindow;
+    private TrayIcon? _trayIcon;
+    private NativeMenuItem? _trayShowMainWindowItem;
+    private NativeMenuItem? _trayExitProgramItem;
+    private LocalizationService? _trayLocalization;
+    private DateTimeOffset? _lastTrayClickAt;
     private bool _desktopStartupStarted;
 
     public override void Initialize() => AvaloniaXamlLoader.Load(this);
@@ -166,6 +176,7 @@ public partial class App : Application
             {
                 DataContext = viewModel
             };
+            InitializeTrayIcon(mainWindow, localization);
 
             SetStartupProgress(splash, 100, "启动完成", "HelloCrab 已准备就绪");
 
@@ -206,6 +217,163 @@ public partial class App : Application
         Program.UpdateEarlyStartupSplash(percent, status, detail);
     }
 
+    private void InitializeTrayIcon(MainWindow mainWindow, LocalizationService localization)
+    {
+        _mainWindow = mainWindow;
+        _trayLocalization = localization;
+
+        try
+        {
+            var showItem = _trayShowMainWindowItem = new NativeMenuItem();
+            var exitItem = _trayExitProgramItem = new NativeMenuItem();
+
+            showItem.Click += TrayShowMainWindowItem_Click;
+            exitItem.Click += TrayExitProgramItem_Click;
+
+            var menu = new NativeMenu();
+            menu.Add(showItem);
+            menu.Add(new NativeMenuItemSeparator());
+            menu.Add(exitItem);
+
+            using var iconStream = AssetLoader.Open(
+                new Uri("avares://HelloCrab.Desktop/Assets/app-icon.ico"));
+
+            _trayIcon = new TrayIcon
+            {
+                Icon = new WindowIcon(iconStream),
+                ToolTipText = "HelloCrab",
+                Menu = menu,
+                IsVisible = false
+            };
+            _trayIcon.Clicked += TrayIcon_Clicked;
+
+            var trayIcons = new TrayIcons();
+            trayIcons.Add(_trayIcon);
+            TrayIcon.SetIcons(this, trayIcons);
+
+            mainWindow.MinimizeToTrayRequested += MainWindow_MinimizeToTrayRequested;
+            localization.LanguageChanged += TrayLocalization_LanguageChanged;
+            UpdateTrayMenuText();
+        }
+        catch
+        {
+            // 托盘初始化失败不能影响主程序启动。按钮会退化为普通最小化。
+            DisposeTrayIcon();
+        }
+    }
+
+    private void MainWindow_MinimizeToTrayRequested(object? sender, EventArgs e)
+    {
+        if (_mainWindow is not { } mainWindow || _trayIcon is not { } trayIcon)
+        {
+            if (_mainWindow is { } fallbackWindow)
+                fallbackWindow.WindowState = WindowState.Minimized;
+            return;
+        }
+
+        _lastTrayClickAt = null;
+        trayIcon.IsVisible = true;
+        mainWindow.ShowInTaskbar = false;
+        mainWindow.Hide();
+    }
+
+    private void TrayIcon_Clicked(object? sender, EventArgs e)
+    {
+        var now = DateTimeOffset.UtcNow;
+        if (_lastTrayClickAt is { } last
+            && now - last <= TrayDoubleClickThreshold)
+        {
+            _lastTrayClickAt = null;
+            RestoreMainWindowFromTray();
+            return;
+        }
+
+        _lastTrayClickAt = now;
+    }
+
+    private void TrayShowMainWindowItem_Click(object? sender, EventArgs e)
+        => RestoreMainWindowFromTray();
+
+    private void TrayExitProgramItem_Click(object? sender, EventArgs e)
+    {
+        RestoreMainWindowFromTray();
+
+        // 与主窗口右上角关闭按钮完全复用同一个确认退出流程。
+        _mainWindow?.RequestCloseConfirmation();
+    }
+
+    private void RestoreMainWindowFromTray()
+    {
+        if (_mainWindow is not { } mainWindow)
+            return;
+
+        mainWindow.ShowInTaskbar = true;
+        if (!mainWindow.IsVisible)
+            mainWindow.Show();
+
+        if (mainWindow.WindowState == WindowState.Minimized)
+            mainWindow.WindowState = WindowState.Normal;
+
+        mainWindow.Activate();
+
+        if (_trayIcon is not null)
+            _trayIcon.IsVisible = false;
+
+        _lastTrayClickAt = null;
+    }
+
+    private void TrayLocalization_LanguageChanged(object? sender, EventArgs e)
+        => UpdateTrayMenuText();
+
+    private void UpdateTrayMenuText()
+    {
+        var localization = _trayLocalization;
+        if (_trayShowMainWindowItem is not null)
+        {
+            _trayShowMainWindowItem.Header = localization?.Get(
+                "Tray.ShowMainWindow",
+                "显示主界面") ?? "显示主界面";
+        }
+
+        if (_trayExitProgramItem is not null)
+        {
+            _trayExitProgramItem.Header = localization?.Get(
+                "Tray.ExitProgram",
+                "退出程序") ?? "退出程序";
+        }
+    }
+
+    private void DisposeTrayIcon()
+    {
+        if (_mainWindow is not null)
+            _mainWindow.MinimizeToTrayRequested -= MainWindow_MinimizeToTrayRequested;
+
+        if (_trayLocalization is not null)
+            _trayLocalization.LanguageChanged -= TrayLocalization_LanguageChanged;
+
+        if (_trayShowMainWindowItem is not null)
+            _trayShowMainWindowItem.Click -= TrayShowMainWindowItem_Click;
+
+        if (_trayExitProgramItem is not null)
+            _trayExitProgramItem.Click -= TrayExitProgramItem_Click;
+
+        if (_trayIcon is not null)
+        {
+            _trayIcon.Clicked -= TrayIcon_Clicked;
+            _trayIcon.IsVisible = false;
+            _trayIcon.Dispose();
+        }
+
+        TrayIcon.SetIcons(this, null);
+
+        _trayIcon = null;
+        _trayShowMainWindowItem = null;
+        _trayExitProgramItem = null;
+        _trayLocalization = null;
+        _mainWindow = null;
+        _lastTrayClickAt = null;
+    }
+
     private void ViewModel_RemoteApiEnabledChanged(object? sender, bool enabled)
         => _ = ApplyRemoteServerStateAsync(enabled);
 
@@ -227,6 +395,8 @@ public partial class App : Application
 
     private async void Desktop_Exit(object? sender, ControlledApplicationLifetimeExitEventArgs e)
     {
+        DisposeTrayIcon();
+
         if (_viewModel is not null)
             _viewModel.RemoteApiEnabledChanged -= ViewModel_RemoteApiEnabledChanged;
 

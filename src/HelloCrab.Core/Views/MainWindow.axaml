@@ -1000,7 +1000,7 @@
           Background="#99000000"
           IsVisible="False"
           Panel.ZIndex="3000">
-      <Border Width="420"
+      <Border Width="560"
               Padding="22"
               CornerRadius="10"
               Background="{DynamicResource CardColor}"
@@ -1017,11 +1017,15 @@
                        Classes="caption"
                        TextWrapping="Wrap" />
           </StackPanel>
-          <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
+          <Grid ColumnDefinitions="*,*,*" ColumnSpacing="10">
             <Button Classes="sectionAction"
                     Content="{DynamicResource Lang.Common.Cancel}"
                     Click="CloseCancelButton_Click" />
             <Button Grid.Column="1"
+                    Classes="primary sectionAction"
+                    Content="{DynamicResource Lang.Dialog.Exit.MinimizeToTray}"
+                    Click="CloseMinimizeToTrayButton_Click" />
+            <Button Grid.Column="2"
                     Classes="coral sectionAction"
                     Content="{DynamicResource Lang.Dialog.Exit.Confirm}"
                     Click="CloseConfirmButton_Click" />
