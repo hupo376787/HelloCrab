@@ -76,9 +76,9 @@ internal sealed class EarlyStartupSplash : IDisposable
     {
         try
         {
-            var init = new InitCommonControlsEx
+            var init = new InitCommonControlsData
             {
-                Size = (uint)Marshal.SizeOf<InitCommonControlsEx>(),
+                Size = (uint)Marshal.SizeOf<InitCommonControlsData>(),
                 Icc = IccProgressClass
             };
             _ = InitCommonControlsEx(ref init);
@@ -196,7 +196,7 @@ internal sealed class EarlyStartupSplash : IDisposable
     }
 
     [StructLayout(LayoutKind.Sequential)]
-    private struct InitCommonControlsEx
+    private struct InitCommonControlsData
     {
         public uint Size;
         public uint Icc;
@@ -223,7 +223,7 @@ internal sealed class EarlyStartupSplash : IDisposable
 
     [DllImport("comctl32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool InitCommonControlsEx(ref InitCommonControlsEx init);
+    private static extern bool InitCommonControlsEx(ref InitCommonControlsData init);
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
     private static extern nint CreateWindowExW(
