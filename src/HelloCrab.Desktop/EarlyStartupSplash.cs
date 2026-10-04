@@ -70,11 +70,13 @@ internal sealed class EarlyStartupSplash : IDisposable
         _thread.SetApartmentState(ApartmentState.STA);
         _thread.Start();
 
-        // 不长时间阻塞进程入口，只给原生窗口线程一个很短的创建机会。
-        _ready.Wait(TimeSpan.FromMilliseconds(120));
+        // 等原生窗口真正创建成功再继续初始化 Avalonia；此时用户已经能立即看到反馈。
+        // 如果原生窗口创建失败，则回退为原来的 Avalonia 闪屏，不会出现两个或零个闪屏。
+        if (!_ready.Wait(TimeSpan.FromMilliseconds(500)) || _window == 0)
+            throw new InvalidOperationException("Unable to create native startup splash.");
     }
 
-    public DateTimeOffset ShownAt { get; }
+    public DateTimeOffset ShownAt { get; private set; }
 
     public static EarlyStartupSplash? TryStart()
     {
@@ -290,6 +292,7 @@ internal sealed class EarlyStartupSplash : IDisposable
 
             ShowWindow(window, SwShowNoActivate);
             UpdateWindow(window);
+            ShownAt = DateTimeOffset.UtcNow;
             _ready.Set();
 
             while (!_closing && IsWindow(window))
@@ -510,7 +513,7 @@ internal sealed class EarlyStartupSplash : IDisposable
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     private static extern nint SendMessageW(nint hwnd, uint message, nint wParam, nint lParam);
 
-    [DllImport("user32.dll")]
+    [DllImport("gdi32.dll")]
     private static extern nint CreateRoundRectRgn(
         int left,
         int top,
