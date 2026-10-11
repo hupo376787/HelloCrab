@@ -223,6 +223,7 @@ public sealed class CrawlCoordinator : IAsyncDisposable
             RaiseLog(RuntimeLocalization.Get("Log.Crawl.TabLocked", "采集标签页已锁定：页面操作、新标签页和误导航将被阻止。"));
             await TryRecoverDouyinTotalWorkCountAsync(adapter, token);
             await _browser.ReloadAsync(token);
+            await HandleVerificationChallengeIfNeededAsync(token);
             RaiseLog(RuntimeLocalization.Get("Log.Crawl.WaitFirstPage", "等待第一页作品接口和作品列表完成加载……"));
             await WaitForResponseOrNewWorkAsync(0, 0, TimeSpan.FromSeconds(20), token);
             if (!_totalWorkCount.HasValue)
@@ -677,6 +678,14 @@ public sealed class CrawlCoordinator : IAsyncDisposable
         {
             await WaitUntilPipelineIdleAsync(cancellationToken);
 
+            if (await HandleVerificationChallengeIfNeededAsync(cancellationToken))
+            {
+                stagnantRounds = 0;
+                bottomStagnantRounds = 0;
+                firstResponseDeadline = DateTimeOffset.Now.AddSeconds(25);
+                continue;
+            }
+
             if (_duplicateStopRequested)
                 return RuntimeLocalization.Format("Completion.DuplicateThreshold", "已连续发现 {0} 个历史作品，达到设置阈值，采集完成。", _consecutiveCompletedDuplicates);
 
@@ -1077,15 +1086,51 @@ public sealed class CrawlCoordinator : IAsyncDisposable
         CancellationToken cancellationToken)
     {
         var deadline = DateTimeOffset.Now + timeout;
+        var nextVerificationCheck = DateTimeOffset.MinValue;
+
         while (DateTimeOffset.Now < deadline)
         {
             cancellationToken.ThrowIfCancellationRequested();
             if (Interlocked.Read(ref _responseVersion) > beforeVersion || _discoveredCount > beforeDiscovered)
                 return true;
+
+            if (DateTimeOffset.Now >= nextVerificationCheck)
+            {
+                if (await HandleVerificationChallengeIfNeededAsync(cancellationToken))
+                {
+                    // 人工验证耗时不计入原页面响应超时。
+                    deadline = DateTimeOffset.Now + timeout;
+                }
+
+                nextVerificationCheck = DateTimeOffset.Now.AddSeconds(1);
+            }
+
             await Task.Delay(250, cancellationToken);
         }
 
         return false;
+    }
+
+    private async Task<bool> HandleVerificationChallengeIfNeededAsync(
+        CancellationToken cancellationToken)
+    {
+        if (!await _browser.HandleVerificationChallengeAsync(cancellationToken))
+            return false;
+
+        // 浏览器上下文可能在 headless/visible 之间重建。旧游标模板可能包含已失效的
+        // 动态签名，恢复后等待页面重新产生最新作品接口再继续分页。
+        _lastPaginationRequest = null;
+        _nextCursor = null;
+        _directFetchResponseUrl = null;
+        _capturePageUrl = _browser.CurrentUrl;
+        _lastResponseAt = DateTimeOffset.Now;
+        _lastNewWorkAt = DateTimeOffset.Now;
+
+        RaiseLog(RuntimeLocalization.Get(
+            "Log.Crawl.VerificationRecovered",
+            "安全验证已完成，采集任务已自动恢复。"));
+
+        return true;
     }
 
     private void ResetState()

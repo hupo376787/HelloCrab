@@ -30,6 +30,13 @@ public interface IBrowserAutomationService : IAsyncDisposable
         CancellationToken cancellationToken = default);
     Task ReloadAsync(CancellationToken cancellationToken = default);
     Task SetCaptureLockAsync(bool isLocked, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 检测页面上的验证码/安全验证挑战。检测到后暂停自动化，必要时切换为显示模式，
+    /// 等待用户手动完成验证，再恢复原采集页面。不会自动识别或操作验证码。
+    /// </summary>
+    Task<bool> HandleVerificationChallengeAsync(CancellationToken cancellationToken = default);
+
     Task<BrowserDownloadContext> GetDownloadContextAsync(CancellationToken cancellationToken = default);
 
     Task<JsonElement> EvaluatePageAsync(

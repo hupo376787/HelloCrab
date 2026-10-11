@@ -27,6 +27,7 @@ public sealed class PlaywrightBrowserService : IBrowserAutomationService
     private bool _requestedHeadless;
     private bool _actualHeadless;
     private bool _loginRecoveryActive;
+    private bool _verificationRecoveryActive;
     private CancellationTokenSource? _authenticationMonitorCts;
     private long _authenticationMonitorGeneration;
 
@@ -70,6 +71,7 @@ public sealed class PlaywrightBrowserService : IBrowserAutomationService
             StopAuthenticationMonitorCore();
             _requestedHeadless = headless;
             _loginRecoveryActive = false;
+            _verificationRecoveryActive = false;
             _targetUrl = normalizedUrl;
 
             await EnsureContextCoreAsync(headless, cancellationToken);
@@ -344,6 +346,39 @@ public sealed class PlaywrightBrowserService : IBrowserAutomationService
                 _page = active;
                 UpdateUrl(active.Url, RuntimeLocalization.Get("BrowserState.CaptureUnlocked", "采集标签页已解锁"));
             }
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    public async Task<bool> HandleVerificationChallengeAsync(
+        CancellationToken cancellationToken = default)
+    {
+        var page = ActivePage;
+        if (page is null
+            || page.IsClosed
+            || _verificationRecoveryActive
+            || !await HasVerificationChallengeAsync(page, cancellationToken))
+        {
+            return false;
+        }
+
+        await _gate.WaitAsync(cancellationToken);
+        try
+        {
+            page = ActivePage;
+            if (page is null
+                || page.IsClosed
+                || _verificationRecoveryActive
+                || !await HasVerificationChallengeAsync(page, cancellationToken))
+            {
+                return false;
+            }
+
+            await RecoverVerificationChallengeCoreAsync(cancellationToken);
+            return true;
         }
         finally
         {
@@ -712,7 +747,7 @@ public sealed class PlaywrightBrowserService : IBrowserAutomationService
 
                 // 采集期间禁止登录监测重启浏览器上下文。快手作者页可能常驻“登录后查看更多”
                 // 提示，但作品接口仍能正常加载；旧逻辑会误判登录失效并关闭采集页面。
-                if (_captureLockEnabled)
+                if (_captureLockEnabled || _verificationRecoveryActive)
                     continue;
 
                 var page = ActivePage;
@@ -775,6 +810,314 @@ public sealed class PlaywrightBrowserService : IBrowserAutomationService
                 _context is not null,
                 _targetUrl,
                 RuntimeLocalization.Format("BrowserState.AuthMonitorFailed", "登录状态监测失败：{0}", ex.Message));
+        }
+    }
+
+    private async Task RecoverVerificationChallengeCoreAsync(
+        CancellationToken cancellationToken)
+    {
+        var currentPage = GetActivePage();
+        var targetUrl = !string.IsNullOrWhiteSpace(_lockedUrl)
+            ? _lockedUrl!
+            : !string.IsNullOrWhiteSpace(_targetUrl)
+                ? _targetUrl
+                : currentPage.Url;
+
+        var wasCaptureLocked = _captureLockEnabled;
+        var shouldReturnHeadless = _requestedHeadless && _actualHeadless;
+        _verificationRecoveryActive = true;
+
+        try
+        {
+            RaiseState(
+                true,
+                targetUrl,
+                RuntimeLocalization.Get(
+                    "BrowserState.VerificationDetected",
+                    "检测到网站安全验证，已暂停自动采集"));
+
+            if (wasCaptureLocked)
+            {
+                await RemoveCaptureLockOverlayAsync(currentPage);
+                _captureLockEnabled = false;
+                _lockedPage = null;
+                _lockedUrl = null;
+                _restoringLockedPage = false;
+            }
+
+            if (_actualHeadless)
+            {
+                RaiseState(
+                    true,
+                    targetUrl,
+                    RuntimeLocalization.Get(
+                        "BrowserState.VerificationSwitchingVisible",
+                        "正在切换到显示浏览器，请手动完成验证码"));
+
+                await RestartContextCoreAsync(false, cancellationToken);
+                await NavigateCoreAsync(
+                    targetUrl,
+                    RuntimeLocalization.Get(
+                        "BrowserState.VerificationVisible",
+                        "已打开显示浏览器，等待手动完成安全验证"),
+                    cancellationToken);
+            }
+            else
+            {
+                await GetActivePage().BringToFrontAsync();
+            }
+
+            RaiseState(
+                true,
+                targetUrl,
+                RuntimeLocalization.Get(
+                    "BrowserState.VerificationInstruction",
+                    "请在 Chromium 中手动完成滑块或其他安全验证；验证通过后 HelloCrab 会自动继续"));
+
+            await WaitForVerificationToClearAsync(cancellationToken);
+            RaiseState(
+                true,
+                targetUrl,
+                RuntimeLocalization.Get(
+                    "BrowserState.VerificationCompleted",
+                    "已检测到安全验证完成，正在恢复采集"));
+
+            await Task.Delay(800, cancellationToken);
+
+            if (shouldReturnHeadless)
+            {
+                RaiseState(
+                    true,
+                    targetUrl,
+                    RuntimeLocalization.Get(
+                        "BrowserState.VerificationRestoringHeadless",
+                        "正在恢复无头模式并返回作者主页"));
+
+                await RestartContextCoreAsync(true, cancellationToken);
+                await NavigateCoreAsync(
+                    targetUrl,
+                    RuntimeLocalization.Get(
+                        "BrowserState.VerificationHeadlessRestored",
+                        "已恢复无头模式并返回作者主页"),
+                    cancellationToken);
+
+                await Task.Delay(1_000, cancellationToken);
+
+                if (await HasVerificationChallengeAsync(GetActivePage(), cancellationToken))
+                {
+                    // 某些站点会仅在 headless 环境再次触发验证。此时不要无限来回切换，
+                    // 本次采集直接保持显示模式，让用户再次完成验证后继续。
+                    RaiseState(
+                        true,
+                        targetUrl,
+                        RuntimeLocalization.Get(
+                            "BrowserState.VerificationHeadlessRejected",
+                            "无头模式再次触发安全验证，本次采集将保持显示浏览器"));
+
+                    await RestartContextCoreAsync(false, cancellationToken);
+                    await NavigateCoreAsync(
+                        targetUrl,
+                        RuntimeLocalization.Get(
+                            "BrowserState.VerificationVisibleFallback",
+                            "已保持显示模式，请再次完成安全验证"),
+                        cancellationToken);
+
+                    RaiseState(
+                        true,
+                        targetUrl,
+                        RuntimeLocalization.Get(
+                            "BrowserState.VerificationInstruction",
+                            "请在 Chromium 中手动完成滑块或其他安全验证；验证通过后 HelloCrab 会自动继续"));
+
+                    await WaitForVerificationToClearAsync(cancellationToken);
+                    await Task.Delay(500, cancellationToken);
+                }
+            }
+
+            var recoveredPage = GetActivePage();
+            if (wasCaptureLocked)
+            {
+                AttachPage(recoveredPage);
+                _page = recoveredPage;
+                _captureLockEnabled = true;
+                _lockedPage = recoveredPage;
+                _lockedUrl = recoveredPage.Url;
+                await ApplyCaptureLockOverlayAsync(recoveredPage);
+            }
+
+            UpdateUrl(
+                recoveredPage.Url,
+                RuntimeLocalization.Get(
+                    "BrowserState.VerificationResumed",
+                    "安全验证已通过，已恢复自动采集"));
+        }
+        finally
+        {
+            _verificationRecoveryActive = false;
+
+            // RestartContextCoreAsync 会停止原登录监测；验证恢复后重新挂上。
+            StartAuthenticationMonitorCore();
+        }
+    }
+
+    private async Task WaitForVerificationToClearAsync(
+        CancellationToken cancellationToken)
+    {
+        var challengeSeen = false;
+        var clearRounds = 0;
+        var initialGraceDeadline = DateTimeOffset.UtcNow.AddSeconds(5);
+
+        await Task.Delay(700, cancellationToken);
+
+        while (true)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var page = GetActivePage();
+            var hasChallenge = await HasVerificationChallengeAsync(page, cancellationToken);
+            if (hasChallenge)
+            {
+                challengeSeen = true;
+                clearRounds = 0;
+            }
+            else if (challengeSeen)
+            {
+                clearRounds++;
+                if (clearRounds >= 2)
+                    return;
+            }
+            else if (DateTimeOffset.UtcNow >= initialGraceDeadline)
+            {
+                // 重启显示浏览器后挑战有时不会再次出现，说明站点已接受当前会话。
+                return;
+            }
+
+            await Task.Delay(800, cancellationToken);
+        }
+    }
+
+    private static async Task<bool> HasVerificationChallengeAsync(
+        IPage page,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (page.IsClosed)
+            return false;
+
+        if (IsLikelyVerificationUrl(page.Url))
+            return true;
+
+        try
+        {
+            var task = page.EvaluateAsync<bool>(
+                """
+                () => {
+                    const isVisible = element => {
+                        if (!(element instanceof Element)) return false;
+                        const style = getComputedStyle(element);
+                        if (style.display === 'none'
+                            || style.visibility === 'hidden'
+                            || Number(style.opacity) === 0)
+                            return false;
+                        const rect = element.getBoundingClientRect();
+                        return rect.width > 50 && rect.height > 24;
+                    };
+
+                    const textSignals = [
+                        '滑动滑块', '拖动滑块', '向右滑动', '完成拼图',
+                        '安全验证', '请完成验证', '验证码', '通过验证',
+                        '请拖动', '请按住滑块',
+                        'captcha', 'security verification', 'verify you are human',
+                        'drag the slider', 'complete the puzzle'
+                    ];
+
+                    const selectorSignals = [
+                        'iframe[src*="captcha" i]',
+                        'iframe[src*="verify" i]',
+                        'iframe[src*="challenge" i]',
+                        '[class*="captcha" i]',
+                        '[id*="captcha" i]',
+                        '[class*="geetest" i]',
+                        '[id*="geetest" i]',
+                        '[class*="tcaptcha" i]',
+                        '[id*="tcaptcha" i]',
+                        '[class*="secsdk-captcha" i]',
+                        '[class*="verify-bar" i]',
+                        '[class*="slider" i][class*="verify" i]',
+                        '[class*="puzzle" i]'
+                    ];
+
+                    for (const selector of selectorSignals) {
+                        for (const element of document.querySelectorAll(selector)) {
+                            if (isVisible(element))
+                                return true;
+                        }
+                    }
+
+                    const candidates = [
+                        ...document.querySelectorAll(
+                            'dialog, [role="dialog"], section, aside, div, p, span, button, h1, h2, h3'
+                        )
+                    ].filter(isVisible).slice(0, 3500);
+
+                    for (const element of candidates) {
+                        const text = (element.innerText || element.textContent || '')
+                            .trim()
+                            .toLowerCase();
+                        if (!text || text.length > 260)
+                            continue;
+                        if (textSignals.some(signal => text.includes(signal.toLowerCase())))
+                            return true;
+                    }
+
+                    return false;
+                }
+                """);
+
+            return await task.WaitAsync(cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch
+        {
+            // 页面正在切换时脚本可能瞬时失败，不直接误判为挑战。
+            return false;
+        }
+    }
+
+    private static bool IsLikelyVerificationUrl(string? url)
+    {
+        if (string.IsNullOrWhiteSpace(url))
+            return false;
+
+        return url.Contains("captcha", StringComparison.OrdinalIgnoreCase)
+               || url.Contains("/verify", StringComparison.OrdinalIgnoreCase)
+               || url.Contains("verification", StringComparison.OrdinalIgnoreCase)
+               || url.Contains("/challenge", StringComparison.OrdinalIgnoreCase)
+               || url.Contains("security-check", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static async Task RemoveCaptureLockOverlayAsync(IPage page)
+    {
+        if (page.IsClosed)
+            return;
+
+        try
+        {
+            await page.EvaluateAsync(
+                """
+                () => {
+                    const cleanup = window.__smcCaptureLockCleanup;
+                    if (typeof cleanup === 'function') cleanup();
+                    document.getElementById('__social_media_crawler_capture_lock__')?.remove();
+                }
+                """);
+        }
+        catch
+        {
+            // 页面可能已经切换或关闭，恢复流程会重建上下文。
         }
     }
 
@@ -996,7 +1339,9 @@ public sealed class PlaywrightBrowserService : IBrowserAutomationService
         if (!string.IsNullOrWhiteSpace(page.Url)
             && !page.Url.Equals("about:blank", StringComparison.OrdinalIgnoreCase))
         {
-            UpdateUrl(_loginRecoveryActive ? _targetUrl : page.Url, RuntimeLocalization.Get("BrowserState.PageConnected", "已连接浏览器页面"));
+            UpdateUrl(
+                _loginRecoveryActive || _verificationRecoveryActive ? _targetUrl : page.Url,
+                RuntimeLocalization.Get("BrowserState.PageConnected", "已连接浏览器页面"));
         }
     }
 
@@ -1053,6 +1398,9 @@ public sealed class PlaywrightBrowserService : IBrowserAutomationService
             return;
 
         var currentUrl = page.Url;
+        if (_verificationRecoveryActive)
+            return;
+
         if (_requestedHeadless
             && _actualHeadless
             && !_loginRecoveryActive
