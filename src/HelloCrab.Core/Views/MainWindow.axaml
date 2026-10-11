@@ -849,6 +849,9 @@
                       <MenuItem Header="{DynamicResource Lang.History.Rename}" Tag="{Binding}" Click="HistoryRename_Click" />
                       <MenuItem Header="{DynamicResource Lang.History.Recollect}" Tag="{Binding}" Click="HistoryRecollect_Click" />
                       <Separator />
+                      <MenuItem Header="{DynamicResource Lang.History.MoveToTop}" Tag="{Binding}" Click="HistoryMoveToTop_Click" />
+                      <MenuItem Header="{DynamicResource Lang.History.MoveToBottom}" Tag="{Binding}" Click="HistoryMoveToBottom_Click" />
+                      <Separator />
                       <MenuItem Header="{DynamicResource Lang.History.Remove}" Tag="{Binding}" Click="HistoryRemove_Click" />
                     </ContextMenu>
                   </Border.ContextMenu>

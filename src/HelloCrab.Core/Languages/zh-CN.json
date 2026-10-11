@@ -109,6 +109,8 @@
     "Log.History.Renamed": "作者“{0}”已重命名为“{1}”，文件夹已同步为：{2}",
     "Log.History.RenameFailed": "重命名作者失败：{0}",
     "History.Recollect": "重新采集数据",
+    "History.MoveToTop": "移动到顶部",
+    "History.MoveToBottom": "移动到底部",
     "History.Remove": "从历史列表移除",
     "History.Drag": "按住并拖动排序",
     "History.Show": "显示下载历史",

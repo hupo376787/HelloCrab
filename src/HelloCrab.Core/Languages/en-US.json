@@ -109,6 +109,8 @@
     "Log.History.Renamed": "Renamed author “{0}” to “{1}” and synchronized the folder name: {2}",
     "Log.History.RenameFailed": "Failed to rename author: {0}",
     "History.Recollect": "Collect again",
+    "History.MoveToTop": "Move to top",
+    "History.MoveToBottom": "Move to bottom",
     "History.Remove": "Remove from history",
     "History.Drag": "Hold and drag to reorder",
     "History.Show": "Show download history",

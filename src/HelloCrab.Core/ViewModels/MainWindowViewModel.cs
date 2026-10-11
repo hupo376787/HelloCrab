@@ -1895,6 +1895,28 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
             DownloadHistory[index].SortOrder = index;
     }
 
+    public async Task MoveHistoryItemToBoundaryAsync(
+        DownloadHistoryItem source,
+        bool moveToTop)
+    {
+        var sourceIndex = DownloadHistory.IndexOf(source);
+        if (sourceIndex < 0 || DownloadHistory.Count < 2)
+            return;
+
+        var targetIndex = moveToTop ? 0 : DownloadHistory.Count - 1;
+        if (sourceIndex == targetIndex)
+            return;
+
+        DownloadHistory.Move(sourceIndex, targetIndex);
+
+        for (var index = 0; index < DownloadHistory.Count; index++)
+            DownloadHistory[index].SortOrder = index;
+
+        // 搜索/收藏筛选开启时也要同步当前可见列表顺序。
+        RefreshFilteredDownloadHistory();
+        await PersistHistoryOrderAsync();
+    }
+
     public async Task PersistHistoryOrderAsync()
     {
         try

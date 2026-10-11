@@ -619,6 +619,24 @@ public partial class MainWindow : Window
         }
     }
 
+    private async void HistoryMoveToTop_Click(object? sender, RoutedEventArgs e)
+    {
+        if (sender is MenuItem { Tag: DownloadHistoryItem item }
+            && DataContext is MainWindowViewModel viewModel)
+        {
+            await viewModel.MoveHistoryItemToBoundaryAsync(item, moveToTop: true);
+        }
+    }
+
+    private async void HistoryMoveToBottom_Click(object? sender, RoutedEventArgs e)
+    {
+        if (sender is MenuItem { Tag: DownloadHistoryItem item }
+            && DataContext is MainWindowViewModel viewModel)
+        {
+            await viewModel.MoveHistoryItemToBoundaryAsync(item, moveToTop: false);
+        }
+    }
+
     private void HistoryRemove_Click(object? sender, RoutedEventArgs e)
     {
         if (sender is not MenuItem { Tag: DownloadHistoryItem item }
