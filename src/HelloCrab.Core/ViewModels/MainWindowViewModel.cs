@@ -211,6 +211,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
         _coordinator.Log += OnCoordinatorLog;
         _coordinator.ProgressChanged += OnCoordinatorProgressChanged;
         _coordinator.Completed += OnCoordinatorCompleted;
+        _coordinator.DiskSpaceRetryRequested = RequestDiskSpaceRetryAsync;
         _historyService.HistoryChanged += OnHistoryChanged;
 
         AddLog(_localization.Get("Status.Ready", "准备就绪"));
@@ -222,6 +223,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
     }
 
     public IReadOnlyList<PlatformOption> Platforms { get; }
+    public Func<CancellationToken, Task<bool>>? DiskSpaceRetryPromptAsync { get; set; }
     public ObservableCollection<string> Logs { get; } = new();
     public ObservableCollection<DownloadHistoryItem> DownloadHistory { get; } = new();
     public ObservableCollection<DownloadHistoryItem> FilteredDownloadHistory { get; } = new();
@@ -1315,6 +1317,33 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
                 "已请求停止定时自动下载任务；当前作者停止后不会继续处理后续历史任务。"));
         }
         _coordinator.Stop();
+    }
+
+    private async Task<bool> RequestDiskSpaceRetryAsync(CancellationToken cancellationToken)
+    {
+        Ui(() => StatusText = _localization.Get("Status.DiskSpacePaused", "磁盘空间不足，已暂停下载"));
+        bool retry;
+        try
+        {
+            retry = DiskSpaceRetryPromptAsync is { } prompt
+                    && await prompt(cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            retry = false;
+        }
+        if (!retry)
+        {
+            CancelManualBatchCapture();
+            _scheduledBatchCts?.Cancel();
+            _coordinator.Stop();
+        }
+        else
+        {
+            Ui(() => StatusText = _localization.Get("Status.Capturing", "正在采集…"));
+        }
+
+        return retry;
     }
 
     private void ToggleTheme() => SetTheme(!IsDarkTheme);
@@ -2702,6 +2731,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
         _coordinator.Log -= OnCoordinatorLog;
         _coordinator.ProgressChanged -= OnCoordinatorProgressChanged;
         _coordinator.Completed -= OnCoordinatorCompleted;
+        _coordinator.DiskSpaceRetryRequested = null;
+        DiskSpaceRetryPromptAsync = null;
         _historyService.HistoryChanged -= OnHistoryChanged;
         await _coordinator.DisposeAsync();
 

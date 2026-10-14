@@ -385,6 +385,10 @@ public sealed class MediaDownloadService : IAsyncDisposable
                         RaiseLog(ex.Message);
                         break;
                     }
+                    catch (Exception ex) when (DiskSpaceFailure.IsDiskFull(ex))
+                    {
+                        throw;
+                    }
                     catch (Exception ex) when (ex is not OperationCanceledException)
                     {
                         lastError = ex;
@@ -501,6 +505,12 @@ public sealed class MediaDownloadService : IAsyncDisposable
                         ClearTransferProgress(completedFileName, asset.Type);
                     return new AssetDownloadResult(targetPath, AlreadyExisted: false);
                 }
+                catch (Exception ex) when (DiskSpaceFailure.IsDiskFull(ex))
+                {
+                    if (asset.Type is MediaAssetType.Video or MediaAssetType.Music or MediaAssetType.LivePhoto)
+                        ClearTransferProgress(Path.GetFileName(targetWithoutExtension), asset.Type);
+                    throw;
+                }
                 catch (Exception ex) when (ex is not OperationCanceledException)
                 {
                     if (asset.Type is MediaAssetType.Video or MediaAssetType.Music or MediaAssetType.LivePhoto)
@@ -591,7 +601,7 @@ public sealed class MediaDownloadService : IAsyncDisposable
             {
                 throw;
             }
-            catch (Exception ex) when (ex is not OperationCanceledException)
+            catch (Exception ex) when (ex is not OperationCanceledException && !DiskSpaceFailure.IsDiskFull(ex))
             {
                 // 某些非常规 HLS（例如外置音轨或特殊加密）无法完整本地化时，
                 // 保留 FFmpeg 直连作为兼容回退。正常情况下 Pinterest 会走上面的
@@ -917,7 +927,8 @@ public sealed class MediaDownloadService : IAsyncDisposable
         Exception exception,
         CancellationToken cancellationToken)
     {
-        if (cancellationToken.IsCancellationRequested
+        if (DiskSpaceFailure.IsDiskFull(exception)
+            || cancellationToken.IsCancellationRequested
             || exception is OperationCanceledException && cancellationToken.IsCancellationRequested)
         {
             return false;

@@ -56,6 +56,7 @@ public partial class MainWindow : Window
 
     private void MainWindow_DataContextChanged(object? sender, EventArgs e)
     {
+        BindDiskSpacePrompt();
         if (_subscribedLogs is not null)
             _subscribedLogs.CollectionChanged -= Logs_CollectionChanged;
 
@@ -690,6 +691,8 @@ public partial class MainWindow : Window
 
     private async void OnClosed(object? sender, EventArgs e)
     {
+        UnbindDiskSpacePrompt();
+        CancelDiskSpacePrompt();
         if (_subscribedLogs is not null)
             _subscribedLogs.CollectionChanged -= Logs_CollectionChanged;
 

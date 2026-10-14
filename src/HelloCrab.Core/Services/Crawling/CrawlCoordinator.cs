@@ -149,6 +149,9 @@ public sealed class CrawlCoordinator : IAsyncDisposable
     public event EventHandler<CrawlProgressSnapshot>? ProgressChanged;
     public event EventHandler<string>? Completed;
 
+    /// <summary>磁盘空间不足时等待用户决定是否重试当前作品；没有可用界面时终止采集。</summary>
+    public Func<CancellationToken, Task<bool>>? DiskSpaceRetryRequested { get; set; }
+
     public async Task<CrawlSessionResult> StartAsync(
         string platformId,
         string downloadRoot,
@@ -608,39 +611,68 @@ public sealed class CrawlCoordinator : IAsyncDisposable
                         continue;
                     }
 
-                    await RegisterTouchedAuthorAsync(work, authorFolder);
-
-                    try
+                    while (true)
                     {
-                        var downloadResult = await _downloader.DownloadWorkAsync(
-                            work,
-                            authorFolder,
-                            _downloadOptions,
-                            _personDetectionSessionId,
-                            cancellationToken);
-                        await _index.MarkCompletedAsync(authorFolder, completionKey, cancellationToken);
-                        if (downloadResult.AllSelectedOutputsAlreadyExisted)
+                        cancellationToken.ThrowIfCancellationRequested();
+                        try
                         {
-                            if (RegisterCompletedDuplicate(work.WorkId))
-                                break;
+                            await RegisterTouchedAuthorAsync(work, authorFolder);
+                            var downloadResult = await _downloader.DownloadWorkAsync(
+                                work,
+                                authorFolder,
+                                _downloadOptions,
+                                _personDetectionSessionId,
+                                cancellationToken);
+                            await _index.MarkCompletedAsync(authorFolder, completionKey, cancellationToken);
+                            if (downloadResult.AllSelectedOutputsAlreadyExisted)
+                            {
+                                RegisterCompletedDuplicate(work.WorkId);
+                            }
+                            else
+                            {
+                                _consecutiveCompletedDuplicates = 0;
+                                Interlocked.Increment(ref _downloadedCount);
+                            }
+
+                            break;
                         }
-                        else
+                        catch (Exception ex) when (DiskSpaceFailure.IsDiskFull(ex))
+                        {
+                            ResetDownloadProgress();
+                            PublishProgress();
+                            RaiseLog(RuntimeLocalization.Format(
+                                "Log.Crawl.DiskSpacePaused",
+                                "磁盘空间不足，已暂停作品 {0} 的下载，等待用户选择。",
+                                work.WorkId));
+                            var retry = DiskSpaceRetryRequested is { } prompt
+                                && await prompt(cancellationToken);
+                            if (retry)
+                            {
+                                RaiseLog(RuntimeLocalization.Get(
+                                    "Log.Crawl.DiskSpaceRetry",
+                                    "用户选择继续重试当前作品。"));
+                                continue;
+                            }
+
+                            Stop();
+                            cancellationToken.ThrowIfCancellationRequested();
+                        }
+                        catch (Exception ex) when (ex is not OperationCanceledException)
                         {
                             _consecutiveCompletedDuplicates = 0;
-                            Interlocked.Increment(ref _downloadedCount);
+                            Interlocked.Increment(ref _failedCount);
+                            RaiseLog(RuntimeLocalization.Format("Log.Crawl.WorkDownloadFailed", "作品下载失败 {0}：{1}", work.WorkId, ex.Message));
+                            break;
+                        }
+                        finally
+                        {
+                            ResetDownloadProgress();
+                            PublishProgress();
                         }
                     }
-                    catch (Exception ex) when (ex is not OperationCanceledException)
-                    {
-                        _consecutiveCompletedDuplicates = 0;
-                        Interlocked.Increment(ref _failedCount);
-                        RaiseLog(RuntimeLocalization.Format("Log.Crawl.WorkDownloadFailed", "作品下载失败 {0}：{1}", work.WorkId, ex.Message));
-                    }
-                    finally
-                    {
-                        ResetDownloadProgress();
-                        PublishProgress();
-                    }
+
+                    if (_duplicateStopRequested)
+                        break;
                 }
 
                 if (batch.Works.Count > 0 && !_duplicateStopRequested && _hasMore != false)

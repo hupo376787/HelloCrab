@@ -961,6 +961,40 @@
       </Border>
     </Grid>
 
+    <!-- 磁盘空间不足时暂停当前作品，等待用户释放空间后重试或终止。 -->
+    <Grid x:Name="DiskSpaceOverlay"
+          Grid.RowSpan="2"
+          Background="#99000000"
+          IsVisible="False"
+          Panel.ZIndex="3100">
+      <Border Width="470"
+              Padding="22"
+              CornerRadius="10"
+              Background="{DynamicResource CardColor}"
+              BorderBrush="{DynamicResource BorderColor}"
+              BorderThickness="1"
+              HorizontalAlignment="Center"
+              VerticalAlignment="Center">
+        <StackPanel Spacing="16">
+          <TextBlock Text="{DynamicResource Lang.Dialog.DiskSpace.Title}"
+                     FontSize="20"
+                     FontWeight="SemiBold" />
+          <TextBlock Text="{DynamicResource Lang.Dialog.DiskSpace.Message}"
+                     Classes="caption"
+                     TextWrapping="Wrap" />
+          <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
+            <Button Classes="coral sectionAction"
+                    Content="{DynamicResource Lang.Dialog.DiskSpace.Stop}"
+                    Click="DiskSpaceStopButton_Click" />
+            <Button Grid.Column="1"
+                    Classes="primary sectionAction"
+                    Content="{DynamicResource Lang.Dialog.DiskSpace.Retry}"
+                    Click="DiskSpaceRetryButton_Click" />
+          </Grid>
+        </StackPanel>
+      </Border>
+    </Grid>
+
     <!-- 停止采集确认对话框：与退出程序保持相同样式。 -->
     <Grid x:Name="StopCaptureConfirmOverlay"
           Grid.RowSpan="2"
