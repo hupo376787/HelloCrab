@@ -7,8 +7,8 @@
     <SupportedOSPlatformVersion>23</SupportedOSPlatformVersion>
     <ApplicationTitle>HelloCrab Remote</ApplicationTitle>
     <ApplicationId>com.xiaowei.hellocrab</ApplicationId>
-    <ApplicationVersion>4</ApplicationVersion>
-    <ApplicationDisplayVersion>2.2.0</ApplicationDisplayVersion>
+    <ApplicationVersion>5</ApplicationVersion>
+    <ApplicationDisplayVersion>2.3.0</ApplicationDisplayVersion>
   </PropertyGroup>
 
   <!--
