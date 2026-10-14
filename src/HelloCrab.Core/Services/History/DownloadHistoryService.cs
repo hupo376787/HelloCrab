@@ -488,7 +488,7 @@ public sealed class DownloadHistoryService
         if (!Directory.Exists(authorFolder))
             return (0, 0);
 
-        // 新版本不再为每个作品生成元数据 JSON，完成作品以 crawler-index.json 为准。
+        // 新版本不再为每个作品生成元数据 JSON，完成作品以 .index 为准，兼容旧索引。
         // 仍兼容读取旧版本已经生成的作品 JSON，用于迁移期间恢复历史统计。
         var workIds = ReadUniqueWorkIdsFromIndex(authorFolder);
         var metadataFallbackCount = 0;
@@ -504,14 +504,14 @@ public sealed class DownloadHistoryService
                                              StringComparison.OrdinalIgnoreCase)
                                          || fileName.EndsWith(".part", StringComparison.OrdinalIgnoreCase);
                 if (!isPendingOrPartial
-                    && !fileName.Equals("crawler-index.json", StringComparison.OrdinalIgnoreCase))
+                    && !JsonDownloadIndex.IsIndexArtifactFileName(fileName))
                 {
                     totalSize += new FileInfo(path).Length;
                 }
 
                 if (isPendingOrPartial
                     || !Path.GetExtension(path).Equals(".json", StringComparison.OrdinalIgnoreCase)
-                    || fileName.Equals("crawler-index.json", StringComparison.OrdinalIgnoreCase))
+                    || JsonDownloadIndex.IsIndexArtifactFileName(fileName))
                 {
                     continue;
                 }
@@ -538,58 +538,29 @@ public sealed class DownloadHistoryService
     private static HashSet<string> ReadUniqueWorkIdsFromIndex(string authorFolder)
     {
         var workIds = new HashSet<string>(StringComparer.Ordinal);
-        var indexPath = Path.Combine(authorFolder, "crawler-index.json");
-        if (!File.Exists(indexPath))
-            return workIds;
-
-        try
+        foreach (var indexPath in JsonDownloadIndex.EnumerateExistingPaths(authorFolder))
         {
-            var keys = JsonSerializer.Deserialize<HashSet<string>>(File.ReadAllText(indexPath));
-            if (keys is null)
-                return workIds;
-
-            var normalizedKeys = JsonDownloadIndex.NormalizeStoredKeys(keys, out var changed);
-            if (changed)
-                TryRewriteNormalizedIndex(indexPath, normalizedKeys);
-
-            foreach (var key in normalizedKeys)
+            try
             {
-                var workId = TryExtractWorkId(key);
-                if (!string.IsNullOrWhiteSpace(workId))
-                    workIds.Add(workId);
+                var keys = JsonSerializer.Deserialize<HashSet<string>>(File.ReadAllText(indexPath));
+                if (keys is null)
+                    continue;
+
+                var normalizedKeys = JsonDownloadIndex.NormalizeStoredKeys(keys, out _);
+                foreach (var key in normalizedKeys)
+                {
+                    var workId = TryExtractWorkId(key);
+                    if (!string.IsNullOrWhiteSpace(workId))
+                        workIds.Add(workId);
+                }
             }
-        }
-        catch
-        {
-            // 索引损坏时仍可由作品元数据恢复统计。
+            catch
+            {
+                // 某个索引损坏时继续读取另一个，作品元数据仍可补足统计。
+            }
         }
 
         return workIds;
-    }
-
-    private static void TryRewriteNormalizedIndex(
-        string indexPath,
-        HashSet<string> normalizedKeys)
-    {
-        try
-        {
-            var tempPath = indexPath + ".tmp";
-            File.WriteAllText(
-                tempPath,
-                JsonSerializer.Serialize(normalizedKeys, new JsonSerializerOptions
-                {
-                    WriteIndented = true
-                }),
-                Utf8WithoutBom);
-            File.Move(tempPath, indexPath, true);
-        }
-        catch (IOException)
-        {
-            // 文件被下载线程占用时由下次历史刷新或采集流程继续迁移。
-        }
-        catch (UnauthorizedAccessException)
-        {
-        }
     }
 
     private static string? TryReadWorkIdFromMetadata(string metadataPath)

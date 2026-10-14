@@ -5,6 +5,9 @@ namespace HelloCrab.Core.Services.Downloading;
 
 public sealed class JsonDownloadIndex
 {
+    public const string FileName = ".index";
+    public const string LegacyFileName = "crawler-index.json";
+
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         WriteIndented = true
@@ -67,7 +70,16 @@ public sealed class JsonDownloadIndex
             if (string.IsNullOrWhiteSpace(normalizedKey) || !set.Add(normalizedKey))
                 return;
 
-            await WriteIndexCoreAsync(authorFolder, set, cancellationToken);
+            try
+            {
+                await WriteIndexCoreAsync(authorFolder, set, cancellationToken);
+            }
+            catch
+            {
+                // 写入失败（例如磁盘已满）时不能让内存缓存误认为作品已完成。
+                set.Remove(normalizedKey);
+                throw;
+            }
         }
         finally
         {
@@ -98,9 +110,8 @@ public sealed class JsonDownloadIndex
             return cached;
 
         var set = new HashSet<string>(StringComparer.Ordinal);
-        var filePath = Path.Combine(authorFolder, "crawler-index.json");
         var needsRewrite = false;
-        if (File.Exists(filePath))
+        foreach (var filePath in EnumerateExistingPaths(authorFolder))
         {
             try
             {
@@ -109,11 +120,19 @@ public sealed class JsonDownloadIndex
                     stream,
                     cancellationToken: cancellationToken);
                 if (items is not null)
-                    set = NormalizeStoredKeys(items, out needsRewrite);
+                {
+                    var normalized = NormalizeStoredKeys(items, out var changed);
+                    set.UnionWith(normalized);
+                    needsRewrite |= changed;
+                }
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
             }
             catch
             {
-                // 单个作者索引损坏时不阻止采集，后续完成项会重建该索引。
+                // 单个索引损坏时仍尝试读取另一个文件，后续完成项会重建新索引。
             }
         }
 
@@ -133,6 +152,22 @@ public sealed class JsonDownloadIndex
         }
 
         return set;
+    }
+
+    internal static bool IsIndexArtifactFileName(string fileName)
+        => fileName.Equals(FileName, StringComparison.OrdinalIgnoreCase)
+           || fileName.Equals(LegacyFileName, StringComparison.OrdinalIgnoreCase)
+           || fileName.Equals(FileName + ".tmp", StringComparison.OrdinalIgnoreCase)
+           || fileName.Equals(LegacyFileName + ".tmp", StringComparison.OrdinalIgnoreCase);
+
+    internal static IEnumerable<string> EnumerateExistingPaths(string authorFolder)
+    {
+        foreach (var fileName in new[] { FileName, LegacyFileName })
+        {
+            var path = Path.Combine(authorFolder, fileName);
+            if (File.Exists(path))
+                yield return path;
+        }
     }
 
     internal static HashSet<string> NormalizeStoredKeys(
@@ -236,7 +271,7 @@ public sealed class JsonDownloadIndex
         CancellationToken cancellationToken)
     {
         Directory.CreateDirectory(authorFolder);
-        var filePath = Path.Combine(authorFolder, "crawler-index.json");
+        var filePath = Path.Combine(authorFolder, FileName);
         var temp = filePath + ".tmp";
         await using (var stream = File.Create(temp))
         {
