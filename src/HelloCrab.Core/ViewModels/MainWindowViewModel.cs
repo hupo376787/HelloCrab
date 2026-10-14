@@ -884,8 +884,14 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
             "正在准备 Chromium 下载…");
 
         var startedAt = DateTimeOffset.Now;
+        var acceptProgress = true;
         var progress = new Progress<ChromiumInstallProgress>(item =>
         {
+            // Progress<T> 会把回调排入 UI Dispatcher。安装器已经返回后，队列中仍可能
+            // 残留一两个旧进度事件；忽略它们，避免 100% 又被改回“不确定进度”动画。
+            if (!acceptProgress)
+                return;
+
             IsChromiumInstallProgressIndeterminate = item.Percent is null;
             if (item.Percent is { } percent)
                 ChromiumInstallProgressPercent = Math.Clamp(percent, 0d, 100d);
@@ -899,6 +905,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
             AddLocalizedLog("Log.Chromium.InstallStarting", _browser.PreferredChromiumInstallDirectory);
 
             var exitCode = await _browser.InstallChromiumAsync(progress);
+            acceptProgress = false;
             var elapsed = DateTimeOffset.Now - startedAt;
 
             if (exitCode == 0)
@@ -918,6 +925,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
             }
             else
             {
+                IsChromiumInstallProgressIndeterminate = false;
                 ChromiumInstallProgressText = _localization.Format(
                     "Browser.ChromiumDownloadFailed",
                     exitCode);
@@ -927,6 +935,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
         }
         catch (Exception ex)
         {
+            acceptProgress = false;
+            IsChromiumInstallProgressIndeterminate = false;
             ChromiumInstallProgressText = _localization.Get(
                 "Browser.ChromiumDownloadFailedGeneral",
                 "Chromium 下载或安装失败");
@@ -984,6 +994,12 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
 
         return detail switch
         {
+            "source:official" => _localization.Get(
+                "Browser.ChromiumOfficialConnecting",
+                "正在连接 Playwright 官方 CDN…"),
+            "source:mirror" => _localization.Get(
+                "Browser.ChromiumMirrorFallback",
+                "官方 CDN 连接失败，正在切换国内镜像…"),
             "extracting" => _localization.Get(
                 "Browser.ChromiumDownloadExtracting",
                 "正在解压…"),

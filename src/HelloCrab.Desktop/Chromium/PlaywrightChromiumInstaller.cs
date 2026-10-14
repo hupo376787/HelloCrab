@@ -12,6 +12,12 @@ namespace HelloCrab.Desktop.Chromium;
 public sealed class PlaywrightChromiumInstaller
 {
     private const string BrowsersPathEnvironmentVariable = "PLAYWRIGHT_BROWSERS_PATH";
+    private const string DownloadHostEnvironmentVariable = "PLAYWRIGHT_DOWNLOAD_HOST";
+    private const string ChromiumDownloadHostEnvironmentVariable = "PLAYWRIGHT_CHROMIUM_DOWNLOAD_HOST";
+    private const string DownloadTimeoutEnvironmentVariable = "PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT";
+    private const string DomesticMirror = "https://cdn.npmmirror.com/binaries/playwright";
+    private const string OfficialIdleTimeoutMilliseconds = "8000";
+    private const string MirrorIdleTimeoutMilliseconds = "30000";
     private static readonly SemaphoreSlim InstallGate = new(1, 1);
 
     /// <summary>
@@ -28,57 +34,139 @@ public sealed class PlaywrightChromiumInstaller
         try
         {
             EnsureInstallDirectoryWritable();
-            progress?.Report(new ChromiumInstallProgress(
-                null,
-                "Chromium"));
 
             var previousBrowsersPath = Environment.GetEnvironmentVariable(
                 BrowsersPathEnvironmentVariable,
                 EnvironmentVariableTarget.Process);
-            var originalOut = Console.Out;
-            var originalError = Console.Error;
-
-            using var outputWriter = new PlaywrightInstallProgressWriter(
-                originalOut,
-                progress);
-            using var errorWriter = new PlaywrightInstallProgressWriter(
-                originalError,
-                progress);
+            var previousDownloadHost = Environment.GetEnvironmentVariable(
+                DownloadHostEnvironmentVariable,
+                EnvironmentVariableTarget.Process);
+            var previousChromiumDownloadHost = Environment.GetEnvironmentVariable(
+                ChromiumDownloadHostEnvironmentVariable,
+                EnvironmentVariableTarget.Process);
+            var previousDownloadTimeout = Environment.GetEnvironmentVariable(
+                DownloadTimeoutEnvironmentVariable,
+                EnvironmentVariableTarget.Process);
 
             try
             {
-                // Playwright 安装器通过该变量决定浏览器保存位置。
                 Environment.SetEnvironmentVariable(
                     BrowsersPathEnvironmentVariable,
                     PreferredInstallDirectory,
                     EnvironmentVariableTarget.Process);
 
-                // Microsoft.Playwright.Program.Main 会把下载百分比输出到 Console。
-                // 临时使用 Tee TextWriter 捕获输出并解析百分比，同时仍转发到原控制台。
-                Console.SetOut(outputWriter);
-                Console.SetError(errorWriter);
+                // 第一轮严格走 Playwright 官方 CDN。PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT
+                // 实际是“socket 无数据空闲超时”，这里设置为 8 秒：只要官方源持续有数据，
+                // 下载就继续；若卡住约 8 秒则快速失败并进入国内镜像重试。
+                ConfigureDownloadSource(
+                    host: null,
+                    timeoutMilliseconds: OfficialIdleTimeoutMilliseconds);
+                progress?.Report(new ChromiumInstallProgress(
+                    null,
+                    "Chromium",
+                    "source:official"));
 
-                var exitCode = await Task.Run(
-                    () => Microsoft.Playwright.Program.Main(new[] { "install", "chromium" }),
+                var officialExitCode = await RunInstallAttemptAsync(
+                    progress,
                     cancellationToken);
+                if (officialExitCode == 0)
+                    return 0;
 
-                outputWriter.FlushPending();
-                errorWriter.FlushPending();
-                return exitCode;
+                cancellationToken.ThrowIfCancellationRequested();
+
+                // 官方 CDN 失败后才切到国内镜像。使用相同 Playwright 版本路径，
+                // 已成功写入的组件会由安装器自行复用，不重复做无意义下载。
+                ConfigureDownloadSource(
+                    DomesticMirror,
+                    MirrorIdleTimeoutMilliseconds);
+                progress?.Report(new ChromiumInstallProgress(
+                    null,
+                    "Chromium",
+                    "source:mirror"));
+
+                return await RunInstallAttemptAsync(
+                    progress,
+                    cancellationToken);
             }
             finally
             {
-                Console.SetOut(originalOut);
-                Console.SetError(originalError);
                 Environment.SetEnvironmentVariable(
                     BrowsersPathEnvironmentVariable,
                     previousBrowsersPath,
+                    EnvironmentVariableTarget.Process);
+                Environment.SetEnvironmentVariable(
+                    DownloadHostEnvironmentVariable,
+                    previousDownloadHost,
+                    EnvironmentVariableTarget.Process);
+                Environment.SetEnvironmentVariable(
+                    ChromiumDownloadHostEnvironmentVariable,
+                    previousChromiumDownloadHost,
+                    EnvironmentVariableTarget.Process);
+                Environment.SetEnvironmentVariable(
+                    DownloadTimeoutEnvironmentVariable,
+                    previousDownloadTimeout,
                     EnvironmentVariableTarget.Process);
             }
         }
         finally
         {
             InstallGate.Release();
+        }
+    }
+
+    private static void ConfigureDownloadSource(
+        string? host,
+        string timeoutMilliseconds)
+    {
+        Environment.SetEnvironmentVariable(
+            DownloadHostEnvironmentVariable,
+            host,
+            EnvironmentVariableTarget.Process);
+        Environment.SetEnvironmentVariable(
+            ChromiumDownloadHostEnvironmentVariable,
+            host,
+            EnvironmentVariableTarget.Process);
+        Environment.SetEnvironmentVariable(
+            DownloadTimeoutEnvironmentVariable,
+            timeoutMilliseconds,
+            EnvironmentVariableTarget.Process);
+    }
+
+    private static async Task<int> RunInstallAttemptAsync(
+        IProgress<ChromiumInstallProgress>? progress,
+        CancellationToken cancellationToken)
+    {
+        var originalOut = Console.Out;
+        var originalError = Console.Error;
+
+        using var outputWriter = new PlaywrightInstallProgressWriter(
+            originalOut,
+            progress);
+        using var errorWriter = new PlaywrightInstallProgressWriter(
+            originalError,
+            progress);
+
+        try
+        {
+            // HelloCrab 无头/显示模式都显式使用完整 Chrome for Testing 可执行文件，
+            // 不需要额外下载 chromium-headless-shell。Playwright 仍会完成它自身需要
+            // 的小型支持组件，但 UI 在 Chromium 100% 后保持静止，不再来回滚动。
+            Console.SetOut(outputWriter);
+            Console.SetError(errorWriter);
+
+            var exitCode = await Task.Run(
+                () => Microsoft.Playwright.Program.Main(
+                    new[] { "install", "chromium", "--no-shell" }),
+                cancellationToken);
+
+            outputWriter.FlushPending();
+            errorWriter.FlushPending();
+            return exitCode;
+        }
+        finally
+        {
+            Console.SetOut(originalOut);
+            Console.SetError(originalError);
         }
     }
 
@@ -288,6 +376,9 @@ public sealed class PlaywrightChromiumInstaller
         private readonly object _sync = new();
         private string _stage = "Chromium";
         private string? _lastReportKey;
+        private bool _chromiumDownloadSeen;
+        private bool _chromiumDownloadCompleted;
+        private bool _supportComponentPhase;
 
         public PlaywrightInstallProgressWriter(
             TextWriter inner,
@@ -385,9 +476,35 @@ public sealed class PlaywrightChromiumInstaller
             var stageMatch = DownloadStageRegex.Match(line);
             if (stageMatch.Success)
             {
-                _stage = NormalizeStage(stageMatch.Groups["stage"].Value);
-                Report(null, _stage, null);
+                var nextStage = NormalizeStage(stageMatch.Groups["stage"].Value);
+                var isChromiumStage = nextStage.Equals(
+                    "Chromium",
+                    StringComparison.OrdinalIgnoreCase);
+
+                if (isChromiumStage)
+                {
+                    _stage = "Chromium";
+                    _chromiumDownloadSeen = true;
+                    _supportComponentPhase = false;
+                    Report(null, _stage, null);
+                }
+                else if (_chromiumDownloadCompleted)
+                {
+                    // Playwright 在 Chromium 之后还会处理 FFmpeg/WinLDD 等内部支持组件。
+                    // HelloCrab 的界面只表示 Chromium 安装进度，因此 Chromium 到 100%
+                    // 后固定显示“正在整理文件”，不要又切回不确定进度动画。
+                    _supportComponentPhase = true;
+                    Report(100d, "Chromium", "finalizing");
+                }
+                else
+                {
+                    _stage = nextStage;
+                    Report(null, _stage, null);
+                }
             }
+
+            if (_supportComponentPhase)
+                return;
 
             var percentMatch = PercentRegex.Match(line);
             if (percentMatch.Success
@@ -402,14 +519,38 @@ public sealed class PlaywrightChromiumInstaller
                 var detail = sizeMatch.Success
                     ? $"size:{sizeMatch.Groups["size"].Value}"
                     : null;
+
+                if (_stage.Equals("Chromium", StringComparison.OrdinalIgnoreCase))
+                {
+                    _chromiumDownloadSeen = true;
+                    if (percent >= 100d)
+                        _chromiumDownloadCompleted = true;
+                }
+
                 Report(percent, _stage, detail);
                 return;
             }
 
             if (line.Contains("downloaded to", StringComparison.OrdinalIgnoreCase))
-                Report(100d, _stage, "finalizing");
+            {
+                if (_stage.Equals("Chromium", StringComparison.OrdinalIgnoreCase)
+                    || _chromiumDownloadSeen)
+                {
+                    _chromiumDownloadCompleted = true;
+                    Report(100d, "Chromium", "finalizing");
+                }
+                else
+                {
+                    Report(100d, _stage, "finalizing");
+                }
+            }
             else if (line.Contains("extract", StringComparison.OrdinalIgnoreCase))
-                Report(null, _stage, "extracting");
+            {
+                if (_chromiumDownloadCompleted)
+                    Report(100d, "Chromium", "finalizing");
+                else
+                    Report(null, _stage, "extracting");
+            }
         }
 
         private void Report(double? percent, string stage, string? detail)
