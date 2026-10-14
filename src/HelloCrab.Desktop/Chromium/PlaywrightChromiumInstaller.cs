@@ -66,9 +66,23 @@ public sealed class PlaywrightChromiumInstaller
                     "Chromium",
                     "source:official"));
 
-                var officialExitCode = await RunInstallAttemptAsync(
-                    progress,
-                    cancellationToken);
+                int officialExitCode;
+                try
+                {
+                    officialExitCode = await RunInstallAttemptAsync(
+                        progress,
+                        cancellationToken);
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch
+                {
+                    // 网络层异常同样视为官方源失败，继续尝试国内镜像。
+                    officialExitCode = -1;
+                }
+
                 if (officialExitCode == 0)
                     return 0;
 
@@ -84,9 +98,20 @@ public sealed class PlaywrightChromiumInstaller
                     "Chromium",
                     "source:mirror"));
 
-                return await RunInstallAttemptAsync(
-                    progress,
-                    cancellationToken);
+                try
+                {
+                    return await RunInstallAttemptAsync(
+                        progress,
+                        cancellationToken);
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch
+                {
+                    return -1;
+                }
             }
             finally
             {
