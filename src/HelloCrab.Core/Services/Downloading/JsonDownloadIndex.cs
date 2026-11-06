@@ -107,7 +107,14 @@ public sealed class JsonDownloadIndex
         CancellationToken cancellationToken)
     {
         if (_cache.TryGetValue(authorFolder, out var cached))
-            return cached;
+        {
+            // 作者目录可能在两次采集之间被用户删除。索引文件已不存在时，
+            // 旧的内存完成记录不能继续阻止重新下载。
+            if (EnumerateExistingPaths(authorFolder).Any())
+                return cached;
+
+            _cache.Remove(authorFolder);
+        }
 
         var set = new HashSet<string>(StringComparer.Ordinal);
         var needsRewrite = false;

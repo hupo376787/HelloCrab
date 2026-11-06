@@ -136,7 +136,7 @@ public partial class MainWindow
             Height = 38,
             MinWidth = 78,
             MinHeight = 38,
-            Margin = new Thickness(0, -5, 44, 0),
+            Margin = new Thickness(0, -5, 86, 0),
             Padding = new Thickness(4, 0),
             HorizontalAlignment = HorizontalAlignment.Right,
             VerticalAlignment = VerticalAlignment.Top,

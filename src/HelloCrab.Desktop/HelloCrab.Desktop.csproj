@@ -27,6 +27,19 @@
           CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 
+  <!-- 已发布的 Browser/WASM 页面也复制到本地调试输出；正式发布脚本会先重新生成它。 -->
+  <ItemGroup Condition="Exists('..\..\publish\browser\index.html')">
+    <None Include="..\..\publish\browser\**\*"
+          Exclude="..\..\publish\browser\remote-storage.js"
+          Link="web\%(RecursiveDir)%(Filename)%(Extension)"
+          CopyToOutputDirectory="PreserveNewest"
+          CopyToPublishDirectory="PreserveNewest" />
+    <None Include="..\HelloCrab.Browser\wwwroot\remote-storage.js"
+          Link="web\remote-storage.js"
+          CopyToOutputDirectory="PreserveNewest"
+          CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="Avalonia" Version="12.1.0" />
     <PackageReference Include="Avalonia.Desktop" Version="12.1.0" />

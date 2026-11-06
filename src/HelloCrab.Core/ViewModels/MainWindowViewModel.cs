@@ -100,6 +100,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
     private bool _isDarkTheme;
     private bool _isHistoryVisible;
     private string _historySearchText = string.Empty;
+    private IReadOnlyList<DownloadHistoryItem>? _historyGridItemsSource;
     private readonly HistoryPinyinMatcher _historySearchMatcher = new();
     private Func<DownloadHistoryItem, bool>? _additionalHistoryFilter;
     private string? _currentAuthorDirectory;
@@ -177,6 +178,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
         _isDarkTheme = settings.Theme.Equals("Dark", StringComparison.OrdinalIgnoreCase);
         _remoteApiEnabled = settings.RemoteApiEnabled;
         _remoteApiPort = Math.Clamp(settings.RemoteApiPort, 1024, 65535);
+        RemoteApiPortState.Set(_remoteApiPort);
         _remoteApiToken = settings.RemoteApiToken;
         _remoteApiTokenDraft = _remoteApiToken;
         _isHistoryVisible = false;
@@ -227,6 +229,17 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
     public ObservableCollection<string> Logs { get; } = new();
     public ObservableCollection<DownloadHistoryItem> DownloadHistory { get; } = new();
     public ObservableCollection<DownloadHistoryItem> FilteredDownloadHistory { get; } = new();
+    public IReadOnlyList<DownloadHistoryItem> HistoryItemsSource
+        => _historyGridItemsSource ?? FilteredDownloadHistory;
+
+    public void SetHistoryGridItemsSource(IReadOnlyList<DownloadHistoryItem>? items)
+    {
+        if (ReferenceEquals(_historyGridItemsSource, items))
+            return;
+
+        _historyGridItemsSource = items;
+        OnPropertyChanged(nameof(HistoryItemsSource));
+    }
 
     /// <summary>
     /// 桌面启动闪屏等待的关键初始化任务。头像图片仍在历史数据加载完成后后台补齐，
@@ -751,7 +764,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
         }
     }
 
-    public int RemoteApiPort => _remoteApiPort;
+    public int RemoteApiPort => EffectiveRemoteApiPort;
     public string RemoteApiToken => _remoteApiToken;
 
     public string RemoteApiTokenDraft
@@ -1621,16 +1634,22 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
     {
         try
         {
-            var path = item.FolderPath;
-            if (string.IsNullOrWhiteSpace(path))
+            var platformRoot = Path.Combine(
+                DownloadRoot,
+                PlatformFolderHelper.GetFolderName(item.Platform));
+            var matchingFolder = AuthorFolderResolver.Resolve(
+                platformRoot,
+                item.UserName,
+                item.UserId);
+            var path = Directory.Exists(matchingFolder)
+                ? matchingFolder
+                : item.FolderPath;
+            if (string.IsNullOrWhiteSpace(path) || !Directory.Exists(path))
             {
-                path = AuthorFolderResolver.Resolve(
-                    Path.Combine(
-                        DownloadRoot,
-                        PlatformFolderHelper.GetFolderName(item.Platform)),
-                    item.UserName,
-                    item.UserId);
+                AddLocalizedLog("Log.History.FolderMissing", item.UserName);
+                return;
             }
+
             _platformShell.OpenFolder(path);
         }
         catch (Exception ex)

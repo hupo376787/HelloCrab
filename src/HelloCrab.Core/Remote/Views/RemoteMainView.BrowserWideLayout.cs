@@ -33,6 +33,7 @@ public partial class RemoteMainView
     private StackPanel? _browserWideLeftColumn;
     private StackPanel? _browserWideCenterColumn;
     private StackPanel? _browserWideRightColumn;
+    private Control? _browserWideFooter;
 
     private Control? _browserConnectionCard;
     private Control? _browserHostActionsCard;
@@ -98,6 +99,7 @@ public partial class RemoteMainView
     {
         _browserWideRootStack = rootStack;
         _browserNormalContentMaxWidth = rootStack.MaxWidth;
+        _browserWideFooter = rootStack.Children.LastOrDefault();
 
         _browserConnectionCard = FindSectionCard(rootStack, "连接桌面客户端");
         _browserHostActionsCard = FindSectionCard(rootStack, "主机操作");
@@ -226,7 +228,7 @@ public partial class RemoteMainView
         };
         _browserWideGrid.ColumnDefinitions.Add(new ColumnDefinition
         {
-            Width = new GridLength(360)
+            Width = new GridLength(430)
         });
         _browserWideGrid.ColumnDefinitions.Add(new ColumnDefinition
         {
@@ -234,7 +236,7 @@ public partial class RemoteMainView
         });
         _browserWideGrid.ColumnDefinitions.Add(new ColumnDefinition
         {
-            Width = new GridLength(360)
+            Width = new GridLength(390)
         });
 
         Grid.SetColumn(_browserWideLeftScrollViewer, 0);
@@ -286,6 +288,8 @@ public partial class RemoteMainView
         MoveBrowserWideControl(_browserHistoryCard, _browserWideRightColumn);
 
         _browserWideRootStack.MaxWidth = BrowserWideContentMaxWidth;
+        _browserWideFooter?.IsVisible = false;
+        RootScrollViewer.VerticalScrollBarVisibility = ScrollBarVisibility.Disabled;
         _browserWideLayoutActive = true;
 
         Dispatcher.UIThread.Post(
@@ -309,7 +313,49 @@ public partial class RemoteMainView
 
         var availableHeight = Bounds.Height - topLeft.Value.Y - BrowserWideBottomMargin;
         if (availableHeight > 0)
+        {
+            _browserWideGrid.Height = availableHeight;
             _browserWideLeftScrollViewer.Height = availableHeight;
+            _browserWideRightColumn!.Height = availableHeight;
+            _browserHistoryCard!.Height = availableHeight;
+
+            if (_browserHistoryCard is Border historyCard
+                && historyCard.Child is StackPanel historyContent
+                && historyContent.Children.OfType<ListBox>().FirstOrDefault() is { } historyList)
+            {
+                historyList.Height = Math.Max(
+                    0,
+                    availableHeight - GetBrowserCardChromeHeight(historyCard, historyContent, historyList));
+            }
+
+            if (_browserLogsCard is Border logsCard
+                && logsCard.Child is StackPanel logsContent
+                && logsContent.Children.OfType<ListBox>().FirstOrDefault() is { } logsList)
+            {
+                var precedingHeight = (_browserMetricsPanel?.Bounds.Height ?? 0)
+                    + (_browserStatusCard?.Bounds.Height ?? 0)
+                    + _browserWideCenterColumn!.Spacing * 2;
+                var logsHeight = Math.Max(0, availableHeight - precedingHeight);
+                logsCard.Height = logsHeight;
+                logsList.Height = Math.Max(
+                    0,
+                    logsHeight - GetBrowserCardChromeHeight(logsCard, logsContent, logsList));
+            }
+        }
+    }
+
+    private static double GetBrowserCardChromeHeight(
+        Border card,
+        StackPanel content,
+        ListBox scrollingList)
+    {
+        var otherContentHeight = content.Children
+            .Where(child => !ReferenceEquals(child, scrollingList))
+            .Sum(child => child.Bounds.Height > 0 ? child.Bounds.Height : child.DesiredSize.Height);
+        return card.Padding.Top + card.Padding.Bottom
+            + card.BorderThickness.Top + card.BorderThickness.Bottom
+            + otherContentHeight
+            + content.Spacing * Math.Max(0, content.Children.Count - 1);
     }
 
     private void RestoreBrowserNarrowLayout()
@@ -331,6 +377,24 @@ public partial class RemoteMainView
         }
 
         _browserWideRootStack.MaxWidth = _browserNormalContentMaxWidth;
+        _browserWideFooter?.IsVisible = true;
+        RootScrollViewer.VerticalScrollBarVisibility = ScrollBarVisibility.Auto;
+        if (_browserWideGrid is not null)
+            _browserWideGrid.Height = double.NaN;
+        if (_browserWideLeftScrollViewer is not null)
+            _browserWideLeftScrollViewer.Height = double.NaN;
+        if (_browserWideRightColumn is not null)
+            _browserWideRightColumn.Height = double.NaN;
+        if (_browserHistoryCard is not null)
+            _browserHistoryCard.Height = double.NaN;
+        if (_browserHistoryCard is Border { Child: StackPanel historyContent }
+            && historyContent.Children.OfType<ListBox>().FirstOrDefault() is { } historyList)
+            historyList.Height = 430;
+        if (_browserLogsCard is not null)
+            _browserLogsCard.Height = double.NaN;
+        if (_browserLogsCard is Border { Child: StackPanel logsContent }
+            && logsContent.Children.OfType<ListBox>().FirstOrDefault() is { } logsList)
+            logsList.Height = 270;
         _browserWideLayoutActive = false;
     }
 

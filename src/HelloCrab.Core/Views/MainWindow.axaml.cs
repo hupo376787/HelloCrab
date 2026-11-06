@@ -37,6 +37,7 @@ public partial class MainWindow : Window
         Opened += (_, _) => UpdateWindowFrame();
         PropertyChanged += MainWindow_PropertyChanged;
         DataContextChanged += MainWindow_DataContextChanged;
+        InitializeHistoryGrid();
         Deactivated += (_, _) => EndHistoryDrag(saveOrder: true);
 
         // ListBox/ScrollViewer 可能把 PointerMoved 标记为已处理，使用 handledEventsToo
@@ -291,6 +292,30 @@ public partial class MainWindow : Window
 
         var targetIndex = -1;
         var realizedContainers = HistoryList.GetRealizedContainers();
+        if (_isHistoryGridExpanded)
+        {
+            var nearestDistance = double.MaxValue;
+            foreach (var container in realizedContainers)
+            {
+                var topLeft = container.TranslatePoint(default, HistoryList);
+                if (topLeft is null)
+                    continue;
+
+                var deltaX = pointerInHistoryList.X - topLeft.Value.X - container.Bounds.Width / 2d;
+                var deltaY = pointerInHistoryList.Y - topLeft.Value.Y - container.Bounds.Height / 2d;
+                var distance = deltaX * deltaX + deltaY * deltaY;
+                if (distance >= nearestDistance)
+                    continue;
+
+                nearestDistance = distance;
+                targetIndex = HistoryList.IndexFromContainer(container);
+            }
+
+            if (targetIndex >= 0)
+                viewModel.MoveHistoryItemPreview(_draggedHistoryItem, targetIndex);
+            return;
+        }
+
         foreach (var container in realizedContainers)
         {
             var topLeft = container.TranslatePoint(default, HistoryList);

@@ -5,6 +5,8 @@ using Avalonia.Threading;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.StaticFiles;
+using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using HelloCrab.Core.Contracts;
@@ -49,6 +51,20 @@ public sealed class RemoteApiHostService : IAsyncDisposable
         }
     }
 
+    public async Task RestartAsync(CancellationToken cancellationToken = default)
+    {
+        await _lifecycleGate.WaitAsync(cancellationToken);
+        try
+        {
+            await StopCoreAsync();
+            await StartCoreAsync(cancellationToken);
+        }
+        finally
+        {
+            _lifecycleGate.Release();
+        }
+    }
+
     private async Task StartCoreAsync(CancellationToken cancellationToken)
     {
         if (_application is not null)
@@ -74,6 +90,23 @@ public sealed class RemoteApiHostService : IAsyncDisposable
 
             app = builder.Build();
 
+            // 桌面包内的 Browser/WASM 资源与 API 使用同一个局域网地址。
+            // 网页资源公开加载，实际控制命令仍由下面的令牌中间件验证。
+            var webRoot = Path.Combine(AppContext.BaseDirectory, "web");
+            if (File.Exists(Path.Combine(webRoot, "index.html")))
+            {
+                var webFiles = new PhysicalFileProvider(webRoot);
+                var contentTypes = new FileExtensionContentTypeProvider();
+                contentTypes.Mappings[".dat"] = "application/octet-stream";
+                contentTypes.Mappings[".wasm"] = "application/wasm";
+                app.UseDefaultFiles(new DefaultFilesOptions { FileProvider = webFiles });
+                app.UseStaticFiles(new StaticFileOptions
+                {
+                    FileProvider = webFiles,
+                    ContentTypeProvider = contentTypes
+                });
+            }
+
             // Private Network Access 头必须在 CORS 中间件之前写入，因为 CORS
             // 可能直接完成 OPTIONS 预检而不再调用后续中间件。
             app.Use(async (context, next) =>
@@ -93,7 +126,8 @@ public sealed class RemoteApiHostService : IAsyncDisposable
             app.Use(async (context, next) =>
             {
                 if (HttpMethods.IsOptions(context.Request.Method)
-                    || context.Request.Path == "/api/health")
+                    || context.Request.Path == "/api/health"
+                    || !context.Request.Path.StartsWithSegments("/api"))
                 {
                     await next();
                     return;

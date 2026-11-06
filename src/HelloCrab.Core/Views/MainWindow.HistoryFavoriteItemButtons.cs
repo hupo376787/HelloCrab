@@ -185,6 +185,14 @@ public partial class MainWindow
         var isFavorite = IsHistoryFavorite(item);
         star.Text = isFavorite ? "★" : "☆";
 
+        var isSmallGridCard = _isHistoryGridExpanded && _historyGridSizeMode == 0;
+        button.VerticalAlignment = isSmallGridCard
+            ? VerticalAlignment.Center
+            : VerticalAlignment.Bottom;
+        button.Margin = _isHistoryGridExpanded && _historyGridSizeMode == 2
+            ? new Thickness(0, 0, 4, 10)
+            : new Thickness(0, 0, 2, 0);
+
         var normalColor = DataContext is MainWindowViewModel { IsDarkTheme: true }
             ? "#D4D7E2"
             : "#6F7484";

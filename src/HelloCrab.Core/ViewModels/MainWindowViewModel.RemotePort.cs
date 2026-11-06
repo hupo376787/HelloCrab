@@ -55,6 +55,7 @@ public sealed partial class MainWindowViewModel
 
         RemoteApiPortState.Set(port);
         OnPropertyChanged(nameof(EffectiveRemoteApiPort));
+        OnPropertyChanged(nameof(RemoteApiPort));
         QueueSettingsSave();
 
         SetRemoteApiStatus(RemoteApiEnabled

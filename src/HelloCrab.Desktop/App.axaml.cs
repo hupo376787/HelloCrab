@@ -167,6 +167,7 @@ public partial class App : Application
             _viewModel = viewModel;
             _remoteApiHost = new RemoteApiHostService(viewModel);
             viewModel.RemoteApiEnabledChanged += ViewModel_RemoteApiEnabledChanged;
+            viewModel.RemoteApiPortChanged += ViewModel_RemoteApiPortChanged;
 
             SetStartupProgress(splash, 93, "正在启动后台服务…", "应用远程控制服务配置");
             await ApplyRemoteServerStateAsync(viewModel.RemoteApiEnabled);
@@ -380,6 +381,22 @@ public partial class App : Application
     private void ViewModel_RemoteApiEnabledChanged(object? sender, bool enabled)
         => _ = ApplyRemoteServerStateAsync(enabled);
 
+    private async void ViewModel_RemoteApiPortChanged(object? sender, int port)
+    {
+        if (_remoteApiHost is null || _viewModel?.RemoteApiEnabled != true)
+            return;
+
+        try
+        {
+            await _remoteApiHost.RestartAsync();
+        }
+        catch (Exception ex)
+        {
+            _viewModel.AddRemoteLocalizedLog("Remote.Log.ToggleFailed", ex.Message);
+            _viewModel.SetRemoteApiLocalizedStatus("Remote.Status.StartFailed", ex.Message);
+        }
+    }
+
     private async Task ApplyRemoteServerStateAsync(bool enabled)
     {
         if (_remoteApiHost is null)
@@ -401,7 +418,10 @@ public partial class App : Application
         DisposeTrayIcon();
 
         if (_viewModel is not null)
+        {
             _viewModel.RemoteApiEnabledChanged -= ViewModel_RemoteApiEnabledChanged;
+            _viewModel.RemoteApiPortChanged -= ViewModel_RemoteApiPortChanged;
+        }
 
         if (_remoteApiHost is not null)
             await _remoteApiHost.DisposeAsync();

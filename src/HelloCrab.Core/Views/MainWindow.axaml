@@ -119,6 +119,85 @@
     <Style Selector="ListBox.historyList ListBoxItem:selected">
       <Setter Property="Background" Value="Transparent" />
     </Style>
+    <Style Selector="Border.historyItem">
+      <Setter Property="Padding" Value="11" />
+      <Setter Property="CornerRadius" Value="9" />
+    </Style>
+    <Style Selector="Border.historyAvatar">
+      <Setter Property="Width" Value="58" />
+      <Setter Property="Height" Value="58" />
+      <Setter Property="CornerRadius" Value="29" />
+    </Style>
+    <Style Selector="TextBlock.historyName">
+      <Setter Property="FontSize" Value="15" />
+    </Style>
+    <Style Selector="StackPanel.historyTextStack">
+      <Setter Property="Spacing" Value="3" />
+    </Style>
+    <Style Selector="ListBox.historyGridList ListBoxItem">
+      <Setter Property="Margin" Value="0,0,12,12" />
+      <Setter Property="VerticalContentAlignment" Value="Stretch" />
+    </Style>
+    <Style Selector="ListBox.historyGridList Border.historyItem">
+      <Setter Property="MinHeight" Value="112" />
+      <Setter Property="CornerRadius" Value="12" />
+    </Style>
+    <Style Selector="ListBox.historyGridList.smallGrid Border.historyItem">
+      <Setter Property="Padding" Value="8" />
+      <Setter Property="MinHeight" Value="62" />
+    </Style>
+    <Style Selector="ListBox.historyGridList.smallGrid Border.historyAvatar">
+      <Setter Property="Width" Value="40" />
+      <Setter Property="Height" Value="40" />
+      <Setter Property="CornerRadius" Value="20" />
+    </Style>
+    <Style Selector="ListBox.historyGridList.smallGrid TextBlock.historyDetail">
+      <Setter Property="IsVisible" Value="False" />
+    </Style>
+    <Style Selector="ListBox.historyGridList.smallGrid Border.historyPlatformBadge">
+      <Setter Property="IsVisible" Value="False" />
+    </Style>
+    <Style Selector="ListBox.historyGridList.smallGrid TextBlock.historyName">
+      <Setter Property="Margin" Value="0,0,25,0" />
+    </Style>
+    <Style Selector="ListBox.historyGridList.smallGrid TextBlock.historyDragHandle">
+      <Setter Property="IsVisible" Value="False" />
+    </Style>
+    <Style Selector="ListBox.historyGridList.largeGrid StackPanel.historyTextStack">
+      <Setter Property="Spacing" Value="9" />
+    </Style>
+    <Style Selector="ListBox.historyGridList.largeGrid Border.historyItem">
+      <Setter Property="Padding" Value="18" />
+      <Setter Property="MinHeight" Value="210" />
+    </Style>
+    <Style Selector="ListBox.historyGridList.largeGrid Border.historyAvatar">
+      <Setter Property="Width" Value="90" />
+      <Setter Property="Height" Value="90" />
+      <Setter Property="CornerRadius" Value="45" />
+    </Style>
+    <Style Selector="ListBox.historyGridList.largeGrid TextBlock.historyName">
+      <Setter Property="FontSize" Value="20" />
+    </Style>
+    <Style Selector="TextBlock.historyLargeDetail">
+      <Setter Property="IsVisible" Value="False" />
+    </Style>
+    <Style Selector="ListBox.historyGridList.largeGrid TextBlock.historyLargeDetail">
+      <Setter Property="IsVisible" Value="True" />
+    </Style>
+    <Style Selector="ToggleButton.historyGridSize">
+      <Setter Property="Width" Value="38" />
+      <Setter Property="Height" Value="32" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="CornerRadius" Value="7" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+    <Style Selector="ToggleButton.historyGridSize:checked">
+      <Setter Property="Background" Value="#267C3AED" />
+      <Setter Property="BorderBrush" Value="#667C3AED" />
+      <Setter Property="Foreground" Value="#7C3AED" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
     <Style Selector="ListBox.logList">
       <Setter Property="Background" Value="Transparent" />
       <Setter Property="BorderBrush" Value="Transparent" />
@@ -253,11 +332,11 @@
       </StackPanel>
     </Grid>
 
-    <Grid Grid.Row="1"
+    <Grid x:Name="ContentGrid" Grid.Row="1"
           Margin="20,14,8,20"
           ColumnDefinitions="*,Auto">
       <!-- 主内容参与布局；历史显示时此区域自动收缩。 -->
-      <Grid Grid.Column="0"
+      <Grid x:Name="MainWorkspace" Grid.Column="0"
             Margin="0,0,8,0"
             ColumnDefinitions="430,*"
             ColumnSpacing="16">
@@ -659,37 +738,62 @@
                 <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto" ColumnSpacing="10" RowSpacing="7">
                   <TextBlock Text="{DynamicResource Lang.Remote.Status}" Classes="caption" />
                   <TextBlock Grid.Column="1" Text="{Binding RemoteApiStatusText}" TextWrapping="Wrap" />
-                  <TextBlock Grid.Row="1" Text="{DynamicResource Lang.Remote.Port}" Classes="caption" />
-                  <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding RemoteApiPort}" />
+                  <TextBlock Grid.Row="1" Text="{DynamicResource Lang.Remote.Port}" Classes="caption" VerticalAlignment="Center" />
+                  <Grid Grid.Row="1" Grid.Column="1" ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                    <TextBox Text="{Binding RemoteApiPortDraft, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                             MaxLength="5"
+                             Height="38"
+                             Padding="10,0"
+                             VerticalContentAlignment="Center" />
+                    <Button Grid.Column="1"
+                            Width="36"
+                            Height="38"
+                            Padding="0"
+                            VerticalAlignment="Center"
+                            HorizontalContentAlignment="Center"
+                            VerticalContentAlignment="Center"
+                            Command="{Binding ApplyRemoteApiPortCommand}"
+                            ToolTip.Tip="{DynamicResource Lang.Remote.SavePort}">
+                      <Viewbox Width="18" Height="18" HorizontalAlignment="Center" VerticalAlignment="Center">
+                        <Path Data="M4,3 H16 L20,7 V21 H4 Z M7,3 V9 H16 V3 M7,21 V14 H17 V21"
+                              Stroke="{DynamicResource TextPrimaryColor}"
+                              StrokeThickness="2"
+                              Fill="Transparent" />
+                      </Viewbox>
+                    </Button>
+                  </Grid>
                   <TextBlock Grid.Row="2"
                              Text="{DynamicResource Lang.Remote.Token}"
                              Classes="caption"
-                             VerticalAlignment="Center" />
+                             VerticalAlignment="Top"
+                             Margin="0,10,0,0" />
                   <StackPanel Grid.Row="2" Grid.Column="1" Spacing="6">
                     <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
                       <TextBox Text="{Binding RemoteApiTokenDraft, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                MaxLength="64"
                                PlaceholderText="{DynamicResource Lang.Remote.TokenWatermark}"
                                FontFamily="Consolas,Menlo,Monospace"
-                               MinHeight="38"
+                               Height="38"
+                               Padding="10,0"
                                VerticalAlignment="Center"
                                VerticalContentAlignment="Center" />
                       <Button Grid.Column="1"
                               Width="36"
-                              Height="34"
+                              Height="38"
                               MinWidth="36"
-                              MinHeight="34"
+                              MinHeight="38"
                               Padding="0"
                               VerticalAlignment="Center"
                               HorizontalContentAlignment="Center"
                               VerticalContentAlignment="Center"
                               Command="{Binding ApplyRemoteApiTokenCommand}"
                               ToolTip.Tip="{DynamicResource Lang.Remote.SaveToken}">
-                        <TextBlock Text="&#xE74E;"
-                                   FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
-                                   FontSize="16"
-                                   HorizontalAlignment="Center"
-                                   VerticalAlignment="Center" />
+                        <Viewbox Width="18" Height="18" HorizontalAlignment="Center" VerticalAlignment="Center">
+                          <Path Data="M4,3 H16 L20,7 V21 H4 Z M7,3 V9 H16 V3 M7,21 V14 H17 V21"
+                                Stroke="{DynamicResource TextPrimaryColor}"
+                                StrokeThickness="2"
+                                Fill="Transparent" />
+                        </Viewbox>
                       </Button>
                     </Grid>
                     <TextBlock Classes="caption"
@@ -794,26 +898,16 @@
       </Grid>
 
       <!-- 下载历史属于主布局右侧列，不悬浮；显示后左侧统计与日志自动收缩。 -->
-      <Border Grid.Column="1"
+      <Border x:Name="HistoryPanel" Grid.Column="1"
               Width="390"
               Margin="0,0,8,0"
               Classes="card"
               IsVisible="{Binding IsHistoryVisible}">
-        <Grid RowDefinitions="Auto,Auto,Auto,*">
-          <StackPanel>
+        <Grid RowDefinitions="Auto,Auto,Auto,Auto,*">
+          <StackPanel Margin="0,0,170,0">
             <TextBlock Text="{DynamicResource Lang.History.Title}" FontSize="19" FontWeight="SemiBold" />
             <TextBlock Classes="caption" Text="{DynamicResource Lang.History.Hint}" Margin="0,3,0,0" />
           </StackPanel>
-
-          <Border Grid.Row="1"
-                  Background="#1FFFFFFF"
-                  CornerRadius="7"
-                  Padding="10,8"
-                  Margin="0,12,0,10">
-            <TextBlock Classes="caption"
-                       Text="{DynamicResource Lang.History.FileHint}"
-                       TextWrapping="Wrap" />
-          </Border>
 
           <TextBox Grid.Row="2"
                    Height="40"
@@ -823,14 +917,37 @@
                    Text="{Binding HistorySearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                    PlaceholderText="{Binding HistorySearchPlaceholderText}" />
 
+          <StackPanel x:Name="HistoryGridSizeControls"
+                      Grid.Row="3"
+                      Orientation="Horizontal"
+                      Spacing="6"
+                      Margin="0,0,0,10"
+                      HorizontalAlignment="Right"
+                      IsVisible="False">
+            <TextBlock Classes="caption"
+                       Text="{DynamicResource Lang.History.CardSize}"
+                       Margin="0,0,3,0"
+                       VerticalAlignment="Center" />
+            <ToggleButton x:Name="HistoryGridSmallButton" Classes="historyGridSize"
+                          Content="{DynamicResource Lang.History.CardSmall}"
+                          Click="HistoryGridSmallButton_Click" />
+            <ToggleButton x:Name="HistoryGridMediumButton" Classes="historyGridSize"
+                          Content="{DynamicResource Lang.History.CardMedium}"
+                          Click="HistoryGridMediumButton_Click" />
+            <ToggleButton x:Name="HistoryGridLargeButton" Classes="historyGridSize"
+                          Content="{DynamicResource Lang.History.CardLarge}"
+                          Click="HistoryGridLargeButton_Click" />
+          </StackPanel>
+
           <ListBox x:Name="HistoryList"
-                   Grid.Row="3"
+                   Grid.Row="4"
                    Margin="0,0,-18,0"
                    Classes="historyList"
-                   ItemsSource="{Binding FilteredDownloadHistory}"
+                   ItemsSource="{Binding HistoryItemsSource}"
                    Background="Transparent"
                    BorderThickness="0"
                    SelectionMode="Single"
+                   SizeChanged="HistoryList_SizeChanged"
                    ScrollViewer.VerticalScrollBarVisibility="Auto">
             <ListBox.ItemTemplate>
               <DataTemplate x:CompileBindings="False">
@@ -838,28 +955,24 @@
                         Background="{DynamicResource HistoryItemColor}"
                         BorderBrush="{DynamicResource BorderColor}"
                         BorderThickness="1"
-                        CornerRadius="9"
-                        Padding="11"
                         PointerPressed="HistoryItem_PointerPressed">
                   <Border.ContextMenu>
-                    <ContextMenu>
-                      <MenuItem Header="{DynamicResource Lang.History.OpenHome}" Tag="{Binding}" Click="HistoryOpenHome_Click" />
-                      <MenuItem Header="{DynamicResource Lang.History.CopyAuthorUrl}" Tag="{Binding}" Click="HistoryCopyAuthorUrl_Click" />
-                      <MenuItem Header="{DynamicResource Lang.History.OpenFolder}" Tag="{Binding}" Click="HistoryOpenFolder_Click" />
-                      <MenuItem Header="{DynamicResource Lang.History.Rename}" Tag="{Binding}" Click="HistoryRename_Click" />
-                      <MenuItem Header="{DynamicResource Lang.History.Recollect}" Tag="{Binding}" Click="HistoryRecollect_Click" />
+                    <ContextMenu Opened="HistoryContextMenu_Opened">
+                      <MenuItem Classes="historyMenuHome" Header="{DynamicResource Lang.History.OpenHome}" Tag="{Binding}" Click="HistoryOpenHome_Click" />
+                      <MenuItem Classes="historyMenuCopy" Header="{DynamicResource Lang.History.CopyAuthorUrl}" Tag="{Binding}" Click="HistoryCopyAuthorUrl_Click" />
+                      <MenuItem Classes="historyMenuFolder" Header="{DynamicResource Lang.History.OpenFolder}" Tag="{Binding}" Click="HistoryOpenFolder_Click" />
+                      <MenuItem Classes="historyMenuRename" Header="{DynamicResource Lang.History.Rename}" Tag="{Binding}" Click="HistoryRename_Click" />
+                      <MenuItem Classes="historyMenuRecollect" Header="{DynamicResource Lang.History.Recollect}" Tag="{Binding}" Click="HistoryRecollect_Click" />
                       <Separator />
-                      <MenuItem Header="{DynamicResource Lang.History.MoveToTop}" Tag="{Binding}" Click="HistoryMoveToTop_Click" />
-                      <MenuItem Header="{DynamicResource Lang.History.MoveToBottom}" Tag="{Binding}" Click="HistoryMoveToBottom_Click" />
+                      <MenuItem Classes="historyMenuTop" Header="{DynamicResource Lang.History.MoveToTop}" Tag="{Binding}" Click="HistoryMoveToTop_Click" />
+                      <MenuItem Classes="historyMenuBottom" Header="{DynamicResource Lang.History.MoveToBottom}" Tag="{Binding}" Click="HistoryMoveToBottom_Click" />
                       <Separator />
-                      <MenuItem Header="{DynamicResource Lang.History.Remove}" Tag="{Binding}" Click="HistoryRemove_Click" />
+                      <MenuItem Classes="historyMenuRemove" Header="{DynamicResource Lang.History.Remove}" Tag="{Binding}" Click="HistoryRemove_Click" />
                     </ContextMenu>
                   </Border.ContextMenu>
 
-                  <Grid ColumnDefinitions="64,*,Auto" ColumnSpacing="11">
-                    <Border Width="58"
-                            Height="58"
-                            CornerRadius="29"
+                  <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="11">
+                    <Border Classes="historyAvatar"
                             ClipToBounds="True"
                             Background="#24FFFFFF"
                             VerticalAlignment="Center">
@@ -873,15 +986,15 @@
                       </Grid>
                     </Border>
 
-                    <StackPanel Grid.Column="1" Spacing="3" VerticalAlignment="Center">
+                    <StackPanel Grid.Column="1" Classes="historyTextStack" VerticalAlignment="Center">
                       <Grid ColumnDefinitions="*,Auto" ColumnSpacing="7">
                         <TextBlock Text="{Binding UserName}"
-                                   Classes="emojiText"
-                                   FontSize="15"
+                                   Classes="emojiText historyName"
                                    FontWeight="SemiBold"
                                    VerticalAlignment="Center"
                                    TextTrimming="CharacterEllipsis" />
                         <Border Grid.Column="1"
+                                Classes="historyPlatformBadge"
                                 Padding="7,2"
                                 CornerRadius="8"
                                 Background="#267C3AED"
@@ -904,12 +1017,19 @@
                           </StackPanel>
                         </Border>
                       </Grid>
-                      <TextBlock Classes="caption" Text="{Binding UidText}" TextTrimming="CharacterEllipsis" />
-                      <TextBlock Classes="caption" Text="{Binding ItemsSummary}" />
-                      <TextBlock Classes="caption" Text="{Binding UpdatedAtText}" />
+                      <TextBlock Classes="caption historyDetail" Text="{Binding UidText}" TextTrimming="CharacterEllipsis" />
+                      <TextBlock Classes="caption historyDetail" Text="{Binding ItemsSummary}" />
+                      <TextBlock Classes="caption historyDetail" Text="{Binding UpdatedAtText}" />
+                      <TextBlock Classes="caption historyLargeDetail"
+                                 Text="{Binding OriginalUrl}"
+                                 TextTrimming="CharacterEllipsis" />
+                      <TextBlock Classes="caption historyLargeDetail"
+                                 Text="{Binding FolderPath}"
+                                 TextTrimming="CharacterEllipsis" />
                     </StackPanel>
 
                     <TextBlock Grid.Column="2"
+                               Classes="historyDragHandle"
                                Text="⋮⋮"
                                FontSize="17"
                                Foreground="{DynamicResource TextSecondaryColor}"
@@ -920,6 +1040,27 @@
               </DataTemplate>
             </ListBox.ItemTemplate>
           </ListBox>
+          <Button x:Name="HistoryGridToggleButton"
+                  Grid.Row="0"
+                  Width="38"
+                  Height="38"
+                  Padding="0"
+                  Margin="0,-5,0,0"
+                  Background="Transparent"
+                  BorderThickness="0"
+                  HorizontalAlignment="Right"
+                  VerticalAlignment="Top"
+                  Click="HistoryGridToggleButton_Click">
+            <Viewbox Width="18" Height="18">
+              <Path x:Name="HistoryGridTogglePath"
+                    Data="M7,2 L2,2 L2,7 M11,2 L16,2 L16,7 M2,11 L2,16 L7,16 M16,11 L16,16 L11,16"
+                    Stroke="{DynamicResource TextSecondaryColor}"
+                    StrokeThickness="2"
+                    StrokeLineCap="Square"
+                    StrokeJoin="Miter"
+                    Fill="Transparent" />
+            </Viewbox>
+          </Button>
         </Grid>
       </Border>
 

@@ -71,23 +71,6 @@ public partial class MainWindow
             }
         }
 
-        // 删除“History.json 保存位置”提示块，只删除界面元素，不影响历史文件本身。
-        var historyFileHint = localization?.Get(
-                                  "History.FileHint",
-                                  "历史记录保存在程序 exe 同目录的 History.json 中。")
-                              ?? "历史记录保存在程序 exe 同目录的 History.json 中。";
-        var fileHintText = descendants
-            .OfType<TextBlock>()
-            .FirstOrDefault(textBlock => string.Equals(
-                textBlock.Text,
-                historyFileHint,
-                StringComparison.Ordinal));
-        if (fileHintText?.Parent is Border fileHintBorder
-            && fileHintBorder.Parent is Panel fileHintParent)
-        {
-            fileHintParent.Children.Remove(fileHintBorder);
-        }
-
         // 当前作品详情卡片固定高度；作者昵称移到最上方并突出显示。
         var currentWorkLabel = localization?.Get("Metrics.CurrentWork", "当前作品") ?? "当前作品";
         var currentWorkText = descendants

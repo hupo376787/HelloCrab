@@ -10,6 +10,14 @@ $ErrorActionPreference = 'Stop'
 $isWindowsHost = $env:OS -eq 'Windows_NT'
 $root = Split-Path -Parent $PSScriptRoot
 $project = Join-Path $root 'src/HelloCrab.Desktop/HelloCrab.Desktop.csproj'
+$browserScript = Join-Path $PSScriptRoot 'publish-browser.ps1'
+
+# 先生成网页资源，Desktop 项目才会将最新的 WASM 页面一起打包。
+& $browserScript -Configuration $Configuration
+if ($LASTEXITCODE -ne 0) {
+    throw "Browser publish 失败，退出代码：$LASTEXITCODE"
+}
+
 $outputRoot = Join-Path $root "publish/desktop/$Runtime"
 $rawOutput = $outputRoot
 

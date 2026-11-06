@@ -129,7 +129,7 @@ public partial class MainWindow
             Height = 38,
             MinWidth = 40,
             MinHeight = 38,
-            Margin = new Thickness(0, -5, 0, 0),
+            Margin = new Thickness(0, -5, 42, 0),
             Padding = new Thickness(0),
             HorizontalAlignment = HorizontalAlignment.Right,
             VerticalAlignment = VerticalAlignment.Top,
@@ -248,6 +248,7 @@ public partial class MainWindow
             Tag = historyItem
         };
         favoriteMenuItem.Classes.Add(FavoriteMenuClass);
+        favoriteMenuItem.Icon = CreateHistoryMenuIcon("favorite");
         favoriteMenuItem.Click += async (_, _) => await ToggleHistoryFavoriteAsync(historyItem);
 
         var insertIndex = menu.Items.Count;

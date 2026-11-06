@@ -472,6 +472,15 @@ public partial class MainWindow
         var item = new MenuItem();
         item.Classes.Add(HistoryBatchMenuClass);
         item.Classes.Add(actionClass);
+        item.Icon = CreateHistoryMenuIcon(actionClass switch
+        {
+            HistoryBatchCopyClass => "copy",
+            HistoryBatchFolderClass => "folder",
+            HistoryBatchRecollectClass => "recollect",
+            HistoryBatchFavoriteClass => "favorite",
+            HistoryBatchRemoveClass => "remove",
+            _ => "copy"
+        });
         item.Click += clickHandler;
         return item;
     }
