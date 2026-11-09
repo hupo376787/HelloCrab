@@ -48,6 +48,8 @@ public partial class MainWindow
         _wasScheduledBatchRunningForLogTitle = viewModel.IsScheduledBatchRunning;
 
         EnsureBatchLogTitleUi();
+        if (viewModel.IsManualBatchRunning)
+            SetBatchLogProgress(viewModel.ManualBatchCurrentItemNumber, viewModel.ManualBatchTotalItemCount);
         if (_batchLogProgressText is null && _batchLogTitleInstallAttempts++ < 5)
         {
             Dispatcher.UIThread.Post(
@@ -127,22 +129,6 @@ public partial class MainWindow
             if (item is not string logText)
                 continue;
 
-            if (viewModel.IsManualBatchRunning
-                && TryReadFormattedProgress(
-                    logText,
-                    LocalizationService.Current?.Get(
-                        "Batch.Log.ItemStarted",
-                        "批量任务 {0}/{1}：正在处理 {2}，地址：{3}")
-                    ?? "批量任务 {0}/{1}：正在处理 {2}，地址：{3}",
-                    currentArgument: 0,
-                    totalArgument: 1,
-                    out var manualCurrent,
-                    out var manualTotal))
-            {
-                SetBatchLogProgress(manualCurrent, manualTotal);
-                return;
-            }
-
             if (viewModel.IsScheduledBatchRunning
                 && TryReadFormattedProgress(
                     logText,
@@ -171,11 +157,19 @@ public partial class MainWindow
         if (e.PropertyName == nameof(MainWindowViewModel.IsManualBatchRunning))
         {
             if (viewModel.IsManualBatchRunning && !_wasManualBatchRunningForLogTitle)
-                ClearBatchLogProgress();
+                SetBatchLogProgress(viewModel.ManualBatchCurrentItemNumber, viewModel.ManualBatchTotalItemCount);
             else if (!viewModel.IsManualBatchRunning && !viewModel.IsScheduledBatchRunning)
                 ClearBatchLogProgress();
 
             _wasManualBatchRunningForLogTitle = viewModel.IsManualBatchRunning;
+            return;
+        }
+
+        if (viewModel.IsManualBatchRunning
+            && e.PropertyName is nameof(MainWindowViewModel.ManualBatchCurrentItemNumber)
+                or nameof(MainWindowViewModel.ManualBatchTotalItemCount))
+        {
+            SetBatchLogProgress(viewModel.ManualBatchCurrentItemNumber, viewModel.ManualBatchTotalItemCount);
             return;
         }
 

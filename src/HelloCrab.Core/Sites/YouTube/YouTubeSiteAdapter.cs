@@ -244,7 +244,10 @@ public sealed class YouTubeSiteAdapter : ISiteAdapter, ISiteManagedDownloadAdapt
             publishedAt.ToLocalTime(),
             work.Description,
             work.WorkId,
-            options.IncludeWorkId);
+            options.IncludeWorkId,
+            dateTimeOnly: options.DateTimeOnlyFileName);
+        if (options.DateTimeOnlyFileName)
+            baseName = FileNameHelper.AvoidDateTimeFileNameCollision(authorFolder, baseName);
 
         using var youtube = new YoutubeClient();
         var manifest = await youtube.Videos.Streams.GetManifestAsync(

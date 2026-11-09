@@ -75,9 +75,13 @@ public static class FileNameHelper
         string? description,
         string? workId,
         bool includeWorkId,
-        int maxLength = 170)
+        int maxLength = 170,
+        bool dateTimeOnly = false)
     {
         var datePrefix = localPublishedAt.ToString("yyyy-MM-dd HH-mm-ss", CultureInfo.InvariantCulture);
+        if (dateTimeOnly)
+            return datePrefix;
+
         var safeWorkId = includeWorkId && !string.IsNullOrWhiteSpace(workId)
             ? Sanitize(workId, 64)
             : string.Empty;
@@ -90,6 +94,20 @@ public static class FileNameHelper
             ? string.Empty
             : Sanitize(description, titleLength);
         return Sanitize(datePrefix + safeTitle + idSuffix, maxLength);
+    }
+
+    public static string AvoidDateTimeFileNameCollision(string authorFolder, string dateTimeBaseName)
+    {
+        var candidate = dateTimeBaseName;
+        for (var number = 2; Directory.EnumerateFiles(authorFolder, candidate + "*")
+                 .Any(path => Path.GetFileName(path).StartsWith(candidate + ".", StringComparison.OrdinalIgnoreCase)
+                              || Path.GetFileName(path).StartsWith(candidate + "_", StringComparison.OrdinalIgnoreCase)); number++)
+        {
+            // 不同作品可能发表于同一秒；只在冲突时追加序号，避免将后一个作品误认作已下载。
+            candidate = $"{dateTimeBaseName}_{number}";
+        }
+
+        return candidate;
     }
 
     public static string ShortenId(string id)

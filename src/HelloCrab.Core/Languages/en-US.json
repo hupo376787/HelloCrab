@@ -54,6 +54,7 @@
     "Download.Video": "Download videos",
     "Download.Image": "Download images",
     "Download.IncludeWorkId": "Add work ID to filenames",
+    "Download.DateTimeOnlyFileName": "Use only date and time in filenames",
     "Download.Cover": "Download cover images",
     "Download.Music": "Download background music",
     "Download.UpdateAuthorNickname": "Update author nickname",

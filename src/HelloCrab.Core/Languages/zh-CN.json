@@ -54,6 +54,7 @@
     "Download.Video": "下载视频",
     "Download.Image": "下载图片",
     "Download.IncludeWorkId": "文件名中添加作品 ID",
+    "Download.DateTimeOnlyFileName": "文件名仅以日期时间命名",
     "Download.Cover": "下载作品封面",
     "Download.Music": "下载背景音乐",
     "Download.UpdateAuthorNickname": "更新作者昵称",

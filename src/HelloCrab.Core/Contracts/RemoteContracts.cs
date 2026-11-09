@@ -47,6 +47,7 @@ public sealed class RemoteSettingsDto
     public bool DownloadVideo { get; set; } = true;
     public bool DownloadImage { get; set; } = true;
     public bool IncludeWorkId { get; set; } = false;
+    public bool DateTimeOnlyFileName { get; set; }
     public bool DownloadCover { get; set; }
     public bool DownloadMusic { get; set; }
     public bool DownloadLivePhoto { get; set; }

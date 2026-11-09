@@ -78,6 +78,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
     private bool _downloadVideo = true;
     private bool _downloadImage = true;
     private bool _includeWorkId;
+    private bool _dateTimeOnlyFileName;
     private bool _downloadCover;
     private bool _downloadMusic;
     private bool _downloadLivePhoto;
@@ -162,7 +163,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
         _downloadRoot = ResolveDownloadRoot(settings.DownloadRoot);
         _downloadVideo = settings.DownloadVideo;
         _downloadImage = settings.DownloadImage;
-        _includeWorkId = settings.IncludeWorkId;
+        _includeWorkId = settings.IncludeWorkId && !settings.DateTimeOnlyFileName;
+        _dateTimeOnlyFileName = settings.DateTimeOnlyFileName;
         _downloadCover = settings.DownloadCover;
         _downloadMusic = settings.DownloadMusic;
         _downloadLivePhoto = settings.DownloadLivePhoto;
@@ -557,7 +559,25 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
         set
         {
             if (SetProperty(ref _includeWorkId, value))
+            {
+                if (value)
+                    DateTimeOnlyFileName = false;
                 QueueSettingsSave();
+            }
+        }
+    }
+
+    public bool DateTimeOnlyFileName
+    {
+        get => _dateTimeOnlyFileName;
+        set
+        {
+            if (SetProperty(ref _dateTimeOnlyFileName, value))
+            {
+                if (value)
+                    IncludeWorkId = false;
+                QueueSettingsSave();
+            }
         }
     }
 
@@ -1271,7 +1291,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
                 DownloadVideo,
                 DownloadImage,
                 UpdateAuthorNickname,
-                PageDelaySeconds);
+                PageDelaySeconds,
+                DateTimeOnlyFileName);
             var result = await _coordinator.StartAsync(
                 capturePlatformId,
                 DownloadRoot,
@@ -1449,6 +1470,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
                 DownloadVideo = DownloadVideo,
                 DownloadImage = DownloadImage,
                 IncludeWorkId = IncludeWorkId,
+                DateTimeOnlyFileName = DateTimeOnlyFileName,
                 DownloadCover = DownloadCover,
                 DownloadMusic = DownloadMusic,
                 DownloadLivePhoto = DownloadLivePhoto,
@@ -1558,6 +1580,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
             DownloadVideo = settings.DownloadVideo;
             DownloadImage = settings.DownloadImage;
             IncludeWorkId = settings.IncludeWorkId;
+            DateTimeOnlyFileName = settings.DateTimeOnlyFileName;
             DownloadCover = settings.DownloadCover;
             DownloadMusic = settings.DownloadMusic;
             DownloadLivePhoto = settings.DownloadLivePhoto;
@@ -2631,6 +2654,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
             DownloadVideo = DownloadVideo,
             DownloadImage = DownloadImage,
             IncludeWorkId = IncludeWorkId,
+            DateTimeOnlyFileName = DateTimeOnlyFileName,
             DownloadCover = DownloadCover,
             DownloadMusic = DownloadMusic,
             DownloadLivePhoto = DownloadLivePhoto,

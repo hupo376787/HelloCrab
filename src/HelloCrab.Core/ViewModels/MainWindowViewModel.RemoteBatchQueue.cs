@@ -46,6 +46,9 @@ public sealed partial class MainWindowViewModel
             _remoteBatchPendingLines.Enqueue(url);
             pendingCount = _remoteBatchPendingLines.Count;
 
+            if (IsManualBatchRunning)
+                ManualBatchTotalItemCount++;
+
             startWorker = !_remoteBatchQueueWorkerRunning;
             if (startWorker)
                 _remoteBatchQueueWorkerRunning = true;
@@ -94,6 +97,9 @@ public sealed partial class MainWindowViewModel
             foreach (var line in lines)
                 _remoteBatchPendingLines.Enqueue(line);
 
+            if (IsManualBatchRunning)
+                ManualBatchTotalItemCount += lines.Length;
+
             startWorker = !_remoteBatchQueueWorkerRunning;
             if (startWorker)
                 _remoteBatchQueueWorkerRunning = true;
@@ -115,6 +121,15 @@ public sealed partial class MainWindowViewModel
         }
 
         return RemoteCommandResult.Ok(message);
+    }
+
+    private void AppendQueuedManualBatchLines(List<string> lines)
+    {
+        lock (_remoteBatchQueueGate)
+        {
+            while (_remoteBatchPendingLines.TryDequeue(out var line))
+                lines.Add(line);
+        }
     }
 
     private async Task RunRemoteBatchQueueAsync()

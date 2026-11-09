@@ -333,11 +333,9 @@ public partial class MainWindow
         {
             var marker = new Border
             {
-                Margin = new Thickness(-6),
-                BorderBrush = new SolidColorBrush(Color.Parse("#B87C3AED")),
-                BorderThickness = new Thickness(2),
-                CornerRadius = new CornerRadius(8),
-                Background = Brushes.Transparent,
+                Margin = new Thickness(-11),
+                CornerRadius = new CornerRadius(9),
+                Background = new SolidColorBrush(Color.Parse("#287C3AED")),
                 HorizontalAlignment = HorizontalAlignment.Stretch,
                 VerticalAlignment = VerticalAlignment.Stretch,
                 IsHitTestVisible = false,
@@ -346,7 +344,7 @@ public partial class MainWindow
             marker.Classes.Add(HistorySelectionMarkerClass);
             Grid.SetColumn(marker, 0);
             Grid.SetColumnSpan(marker, 3);
-            itemGrid.Children.Add(marker);
+            itemGrid.Children.Insert(0, marker);
         }
 
         UpdateHistorySelectionMarker(historyItemBorder);
@@ -572,7 +570,7 @@ public partial class MainWindow
             items.Count));
     }
 
-    private async void HistoryBatchRecollect_Click(object? sender, RoutedEventArgs e)
+    private void HistoryBatchRecollect_Click(object? sender, RoutedEventArgs e)
     {
         if (sender is not MenuItem { Tag: DownloadHistoryItem contextItem }
             || DataContext is not MainWindowViewModel viewModel)
@@ -580,13 +578,8 @@ public partial class MainWindow
             return;
         }
 
-        var urls = GetSelectedHistoryItems(contextItem)
-            .Select(item => item.OriginalUrl?.Trim())
-            .Where(url => !string.IsNullOrWhiteSpace(url))
-            .Select(url => url!)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToArray();
-        if (urls.Length == 0)
+        var selectedItems = GetSelectedHistoryItems(contextItem);
+        if (!selectedItems.Any(item => !string.IsNullOrWhiteSpace(item.OriginalUrl)))
         {
             viewModel.AddRemoteLog(HistoryBatchText(
                 "所选作者没有可用于重新采集的地址。",
@@ -595,7 +588,11 @@ public partial class MainWindow
             return;
         }
 
-        await viewModel.StartManualBatchCaptureAsync(string.Join(Environment.NewLine, urls));
+        var lines = selectedItems.Select(item =>
+            string.IsNullOrWhiteSpace(item.OriginalUrl)
+                ? $"{item.UserName}（{item.UserId}）"
+                : item.OriginalUrl.Trim());
+        viewModel.QueueRemoteManualBatchCapture(string.Join(Environment.NewLine, lines));
     }
 
     private async void HistoryBatchFavorite_Click(object? sender, RoutedEventArgs e)

@@ -61,7 +61,8 @@ public sealed record CrawlerDownloadOptions(
     bool DownloadVideo = true,
     bool DownloadImage = true,
     bool UpdateAuthorNickname = false,
-    int PageDelaySeconds = 10);
+    int PageDelaySeconds = 10,
+    bool DateTimeOnlyFileName = false);
 
 public sealed record ParsedWorkBatch(
     IReadOnlyList<WorkItem> Works,

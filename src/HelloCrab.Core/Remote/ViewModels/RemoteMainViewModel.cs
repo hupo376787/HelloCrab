@@ -49,6 +49,7 @@ public sealed class RemoteMainViewModel : ObservableObject, IAsyncDisposable
     private bool _downloadVideo = true;
     private bool _downloadImage = true;
     private bool _includeWorkId;
+    private bool _dateTimeOnlyFileName;
     private bool _downloadCover;
     private bool _downloadMusic;
     private bool _downloadLivePhoto;
@@ -290,7 +291,29 @@ public sealed class RemoteMainViewModel : ObservableObject, IAsyncDisposable
     public bool IncludeWorkId
     {
         get => _includeWorkId;
-        set { if (SetProperty(ref _includeWorkId, value)) MarkSettingsDirty(); }
+        set
+        {
+            if (SetProperty(ref _includeWorkId, value))
+            {
+                if (value)
+                    DateTimeOnlyFileName = false;
+                MarkSettingsDirty();
+            }
+        }
+    }
+
+    public bool DateTimeOnlyFileName
+    {
+        get => _dateTimeOnlyFileName;
+        set
+        {
+            if (SetProperty(ref _dateTimeOnlyFileName, value))
+            {
+                if (value)
+                    IncludeWorkId = false;
+                MarkSettingsDirty();
+            }
+        }
     }
 
     public bool DownloadCover
@@ -451,6 +474,7 @@ public sealed class RemoteMainViewModel : ObservableObject, IAsyncDisposable
                 DownloadVideo = DownloadVideo,
                 DownloadImage = DownloadImage,
                 IncludeWorkId = IncludeWorkId,
+                DateTimeOnlyFileName = DateTimeOnlyFileName,
                 DownloadCover = DownloadCover,
                 DownloadMusic = DownloadMusic,
                 DownloadLivePhoto = DownloadLivePhoto,
@@ -508,6 +532,7 @@ public sealed class RemoteMainViewModel : ObservableObject, IAsyncDisposable
                 DownloadVideo = snapshot.Settings.DownloadVideo;
                 DownloadImage = snapshot.Settings.DownloadImage;
                 IncludeWorkId = snapshot.Settings.IncludeWorkId;
+                DateTimeOnlyFileName = snapshot.Settings.DateTimeOnlyFileName;
                 DownloadCover = snapshot.Settings.DownloadCover;
                 DownloadMusic = snapshot.Settings.DownloadMusic;
                 DownloadLivePhoto = snapshot.Settings.DownloadLivePhoto;

@@ -113,7 +113,10 @@ public sealed class MediaDownloadService : IAsyncDisposable
             localPublishedAt,
             work.Description,
             work.WorkId,
-            options.IncludeWorkId);
+            options.IncludeWorkId,
+            dateTimeOnly: options.DateTimeOnlyFileName);
+        if (options.DateTimeOnlyFileName)
+            baseName = FileNameHelper.AvoidDateTimeFileNameCollision(authorFolder, baseName);
 
         var availablePrimaryAssets = work.Assets
             .Where(x => x.Type is MediaAssetType.Video or MediaAssetType.Image)

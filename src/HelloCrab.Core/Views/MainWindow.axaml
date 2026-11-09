@@ -23,15 +23,13 @@
   <Window.Styles>
     <Style Selector="Border.card">
       <Setter Property="Background" Value="{DynamicResource CardColor}" />
-      <Setter Property="BorderBrush" Value="{DynamicResource BorderColor}" />
-      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="BorderThickness" Value="0" />
       <Setter Property="CornerRadius" Value="12" />
       <Setter Property="Padding" Value="18" />
     </Style>
     <Style Selector="Border.metricCard">
       <Setter Property="Background" Value="{DynamicResource CardColor}" />
-      <Setter Property="BorderBrush" Value="{DynamicResource BorderColor}" />
-      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="BorderThickness" Value="0" />
       <Setter Property="CornerRadius" Value="10" />
       <Setter Property="Padding" Value="15" />
     </Style>
@@ -218,12 +216,11 @@
 
   <Grid>
     <Border x:Name="WindowFrame"
-            Margin="1"
+            Margin="0"
             CornerRadius="8"
             ClipToBounds="True"
             Background="{DynamicResource PageBackgroundColor}"
-            BorderBrush="{DynamicResource BorderColor}"
-            BorderThickness="1">
+            BorderThickness="0">
       <Grid x:Name="RootGrid" RowDefinitions="78,*">
     <!-- 动态封面背景：没有当前作品时显示底层渐变。 -->
     <Border Grid.RowSpan="2">
@@ -543,6 +540,15 @@
                         Margin="0,4,0,2"
                         Background="{DynamicResource SettingsDividerColor}" />
                 <Grid ColumnDefinitions="*,*" ColumnSpacing="14">
+                  <CheckBox Content="{DynamicResource Lang.Download.DateTimeOnlyFileName}"
+                            IsChecked="{Binding DateTimeOnlyFileName}"
+                            VerticalAlignment="Center" />
+                  <CheckBox Grid.Column="1"
+                            Content="{DynamicResource Lang.Download.IncludeWorkId}"
+                            IsChecked="{Binding IncludeWorkId}"
+                            VerticalAlignment="Center" />
+                </Grid>
+                <Grid ColumnDefinitions="*,*" ColumnSpacing="14">
                   <CheckBox Content="{DynamicResource Lang.Download.Video}"
                             IsChecked="{Binding DownloadVideo}"
                             VerticalAlignment="Center" />
@@ -556,21 +562,16 @@
                             IsChecked="{Binding DownloadLivePhoto}"
                             VerticalAlignment="Center" />
                   <CheckBox Grid.Column="1"
-                            Content="{DynamicResource Lang.Download.IncludeWorkId}"
-                            IsChecked="{Binding IncludeWorkId}"
-                            VerticalAlignment="Center" />
-                </Grid>
-                <Grid ColumnDefinitions="*,*" ColumnSpacing="14">
-                  <CheckBox Content="{DynamicResource Lang.Download.Cover}"
+                            Content="{DynamicResource Lang.Download.Cover}"
                             IsChecked="{Binding DownloadCover}"
                             VerticalAlignment="Center" />
-                  <CheckBox Grid.Column="1"
-                            Content="{DynamicResource Lang.Download.Music}"
-                            IsChecked="{Binding DownloadMusic}"
-                            VerticalAlignment="Center" />
                 </Grid>
                 <Grid ColumnDefinitions="*,*" ColumnSpacing="14">
-                  <CheckBox Content="{DynamicResource Lang.Download.UpdateAuthorNickname}"
+                  <CheckBox Content="{DynamicResource Lang.Download.Music}"
+                            IsChecked="{Binding DownloadMusic}"
+                            VerticalAlignment="Center" />
+                  <CheckBox Grid.Column="1"
+                            Content="{DynamicResource Lang.Download.UpdateAuthorNickname}"
                             IsChecked="{Binding UpdateAuthorNickname}"
                             VerticalAlignment="Center" />
                 </Grid>
@@ -953,8 +954,7 @@
               <DataTemplate x:CompileBindings="False">
                 <Border Classes="historyItem"
                         Background="{DynamicResource HistoryItemColor}"
-                        BorderBrush="{DynamicResource BorderColor}"
-                        BorderThickness="1"
+                        BorderThickness="0"
                         PointerPressed="HistoryItem_PointerPressed">
                   <Border.ContextMenu>
                     <ContextMenu Opened="HistoryContextMenu_Opened">
