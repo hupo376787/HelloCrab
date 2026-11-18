@@ -14,6 +14,7 @@ public sealed class AppSettings
     public bool HeadlessMode { get; set; }
     public string LastBrowserUrl { get; set; } = string.Empty;
     public string DownloadRoot { get; set; } = string.Empty;
+    public List<string> HistorySearchTerms { get; set; } = new();
     public bool DownloadVideo { get; set; } = true;
     public bool DownloadImage { get; set; } = true;
     public bool IncludeWorkId { get; set; } = false;

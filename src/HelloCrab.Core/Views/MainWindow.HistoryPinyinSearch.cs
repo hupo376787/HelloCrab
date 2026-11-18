@@ -3,6 +3,8 @@ using System.ComponentModel;
 using System.Text;
 using Avalonia;
 using Avalonia.Controls;
+using IconPath = Avalonia.Controls.Shapes.Path;
+using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
@@ -29,6 +31,10 @@ public partial class MainWindow
     private MainWindowViewModel? _historyPinyinViewModel;
     private TextBox? _historyPinyinSearchBox;
     private Button? _historyPinyinClearButton;
+    private IconPath? _historyPinyinClearIcon;
+    private Button? _historySearchDropdownButton;
+    private IconPath? _historySearchDropdownIcon;
+    private ContextMenu? _historySearchDropdownMenu;
     private bool _historyPinyinSearchInitialized;
     private bool _historyPinyinFilterApplying;
     private bool _historyPinyinFavoriteButtonHooked;
@@ -67,13 +73,44 @@ public partial class MainWindow
         _historyPinyinViewModel = viewModel;
         _historyPinyinSearchBox = searchBox;
 
-        // 给最右侧的清除按钮留出空间，避免输入文字延伸到按钮下面。
-        searchBox.Padding = new Thickness(12, 0, 42, 0);
+        // 给右侧两个操作按钮留出空间，避免输入文字延伸到按钮下面。
+        searchBox.Padding = new Thickness(12, 0, 72, 0);
         searchBox.TextChanged += HistoryPinyinSearchTextChanged;
+        searchBox.KeyDown += HistorySearchBox_KeyDown;
+        searchBox.LostFocus += HistorySearchBox_LostFocus;
 
+        _historyPinyinClearIcon = CreateHistorySearchActionIcon(
+            "M3.5,3.5 L12.5,12.5 M12.5,3.5 L3.5,12.5",
+            viewModel.IsDarkTheme);
         var clearButton = new Button
         {
-            Content = "×",
+            Content = _historyPinyinClearIcon,
+            Width = 30,
+            Height = 30,
+            MinWidth = 30,
+            MinHeight = 30,
+            Margin = new Thickness(0, 0, 35, 10),
+            Padding = new Thickness(0),
+            HorizontalAlignment = HorizontalAlignment.Right,
+            VerticalAlignment = VerticalAlignment.Center,
+            HorizontalContentAlignment = HorizontalAlignment.Center,
+            VerticalContentAlignment = VerticalAlignment.Center,
+            Background = Brushes.Transparent,
+            BorderThickness = new Thickness(0),
+            CornerRadius = new CornerRadius(6),
+            IsVisible = !string.IsNullOrWhiteSpace(searchBox.Text)
+        };
+        clearButton.Click += HistoryPinyinClearButtonClick;
+        Grid.SetRow(clearButton, 2);
+        historyGrid.Children.Add(clearButton);
+        _historyPinyinClearButton = clearButton;
+
+        _historySearchDropdownIcon = CreateHistorySearchActionIcon(
+            "M3,6 L8,11 L13,6",
+            viewModel.IsDarkTheme);
+        var dropdownButton = new Button
+        {
+            Content = _historySearchDropdownIcon,
             Width = 30,
             Height = 30,
             MinWidth = 30,
@@ -84,17 +121,20 @@ public partial class MainWindow
             VerticalAlignment = VerticalAlignment.Center,
             HorizontalContentAlignment = HorizontalAlignment.Center,
             VerticalContentAlignment = VerticalAlignment.Center,
-            FontSize = 18,
             Background = Brushes.Transparent,
-            Foreground = new SolidColorBrush(Color.Parse(viewModel.IsDarkTheme ? "#D4D7E2" : "#6F7484")),
             BorderThickness = new Thickness(0),
-            CornerRadius = new CornerRadius(6),
-            IsVisible = !string.IsNullOrWhiteSpace(searchBox.Text)
+            CornerRadius = new CornerRadius(6)
         };
-        clearButton.Click += HistoryPinyinClearButtonClick;
-        Grid.SetRow(clearButton, 2);
-        historyGrid.Children.Add(clearButton);
-        _historyPinyinClearButton = clearButton;
+        dropdownButton.Click += HistorySearchDropdownButton_Click;
+        Grid.SetRow(dropdownButton, 2);
+        historyGrid.Children.Add(dropdownButton);
+        _historySearchDropdownButton = dropdownButton;
+        _historySearchDropdownMenu = new ContextMenu
+        {
+            MaxHeight = 360,
+            Placement = PlacementMode.BottomEdgeAlignedLeft,
+            PlacementTarget = searchBox
+        };
 
         viewModel.PropertyChanged += HistoryPinyinViewModelPropertyChanged;
         viewModel.DownloadHistory.CollectionChanged += HistoryPinyinDownloadHistoryChanged;
@@ -108,6 +148,21 @@ public partial class MainWindow
         RefreshHistoryPinyinClearButton();
         HookHistoryPinyinFavoriteButton();
     }
+
+    private static IconPath CreateHistorySearchActionIcon(string geometry, bool isDarkTheme)
+        => new()
+        {
+            Data = Geometry.Parse(geometry),
+            Width = 16,
+            Height = 16,
+            Stretch = Stretch.None,
+            Stroke = new SolidColorBrush(Color.Parse(isDarkTheme ? "#D4D7E2" : "#6F7484")),
+            StrokeThickness = 1.8,
+            StrokeLineCap = PenLineCap.Round,
+            StrokeJoin = PenLineJoin.Round,
+            Fill = Brushes.Transparent,
+            IsHitTestVisible = false
+        };
 
     private void RetryHistoryPinyinSearchInstall()
     {
@@ -123,6 +178,48 @@ public partial class MainWindow
     {
         RefreshHistoryPinyinClearButton();
         QueueHistoryPinyinSearchRefresh();
+    }
+
+    private void HistorySearchBox_KeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter)
+            _historyPinyinViewModel?.RememberHistorySearchTerm();
+    }
+
+    private void HistorySearchBox_LostFocus(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+        => _historyPinyinViewModel?.RememberHistorySearchTerm();
+
+    private void HistorySearchDropdownButton_Click(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        if (_historyPinyinViewModel is not { } viewModel
+            || _historyPinyinSearchBox is not { } searchBox
+            || _historySearchDropdownMenu is not { } menu)
+            return;
+
+        viewModel.RememberHistorySearchTerm();
+        menu.Items.Clear();
+        menu.Width = searchBox.Bounds.Width;
+        foreach (var term in viewModel.HistorySearchTerms)
+        {
+            var item = new MenuItem { Header = term };
+            item.Click += (_, _) =>
+            {
+                viewModel.HistorySearchText = term;
+                viewModel.RememberHistorySearchTerm();
+            };
+            menu.Items.Add(item);
+        }
+
+        if (menu.Items.Count == 0)
+            menu.Items.Add(new MenuItem
+            {
+                Header = LocalizationService.Current?.Get("History.SearchHistoryEmpty", "暂无搜索记录")
+                         ?? "暂无搜索记录",
+                IsEnabled = false
+            });
+
+        menu.Open(searchBox);
+        e.Handled = true;
     }
 
     private void HistoryPinyinClearButtonClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
@@ -161,8 +258,12 @@ public partial class MainWindow
             return;
         }
 
-        _historyPinyinClearButton.Foreground = new SolidColorBrush(Color.Parse(
+        var iconBrush = new SolidColorBrush(Color.Parse(
             viewModel.IsDarkTheme ? "#D4D7E2" : "#6F7484"));
+        if (_historyPinyinClearIcon is not null)
+            _historyPinyinClearIcon.Stroke = iconBrush;
+        if (_historySearchDropdownIcon is not null)
+            _historySearchDropdownIcon.Stroke = iconBrush;
     }
 
     private void QueueHistoryPinyinSearchRefresh()
@@ -372,9 +473,16 @@ public partial class MainWindow
     private void HistoryPinyinWindowClosed(object? sender, EventArgs e)
     {
         if (_historyPinyinSearchBox is not null)
+        {
             _historyPinyinSearchBox.TextChanged -= HistoryPinyinSearchTextChanged;
+            _historyPinyinSearchBox.KeyDown -= HistorySearchBox_KeyDown;
+            _historyPinyinSearchBox.LostFocus -= HistorySearchBox_LostFocus;
+        }
         if (_historyPinyinClearButton is not null)
             _historyPinyinClearButton.Click -= HistoryPinyinClearButtonClick;
+        if (_historySearchDropdownButton is not null)
+            _historySearchDropdownButton.Click -= HistorySearchDropdownButton_Click;
+        _historySearchDropdownMenu?.Close();
         if (_historyFavoritesButton is not null && _historyPinyinFavoriteButtonHooked)
             _historyFavoritesButton.Click -= HistoryPinyinFavoriteFilterChanged;
 

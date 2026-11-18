@@ -55,6 +55,7 @@
     "Download.Image": "画像をダウンロード",
     "Download.IncludeWorkId": "ファイル名に作品 ID を追加",
     "Download.DateTimeOnlyFileName": "ファイル名を日時のみにする",
+    "History.SearchHistoryEmpty": "検索履歴はありません",
     "Download.Cover": "カバー画像をダウンロード",
     "Download.Music": "BGM をダウンロード",
     "Download.UpdateAuthorNickname": "作者名を更新",

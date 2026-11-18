@@ -146,6 +146,13 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
         Platforms = registry.Platforms;
 
         var settings = _settingsService.Load();
+        foreach (var term in settings.HistorySearchTerms ?? new List<string>())
+        {
+            var normalizedTerm = term?.Trim();
+            if (!string.IsNullOrWhiteSpace(normalizedTerm)
+                && !HistorySearchTerms.Contains(normalizedTerm, StringComparer.OrdinalIgnoreCase))
+                HistorySearchTerms.Add(normalizedTerm);
+        }
         _localization.Apply(settings.LanguageCode);
         RefreshPlatformDisplayNames();
         _selectedLanguage = _localization.Languages.FirstOrDefault(language =>
@@ -762,6 +769,36 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
             OnPropertyChanged(nameof(IsHistorySearchActive));
             RefreshFilteredDownloadHistory();
         }
+    }
+
+    public ObservableCollection<string> HistorySearchTerms { get; } = new();
+
+    public void RememberHistorySearchTerm()
+    {
+        var term = HistorySearchText.Trim();
+        if (term.Length == 0)
+            return;
+
+        var existing = HistorySearchTerms.FirstOrDefault(item =>
+            string.Equals(item, term, StringComparison.OrdinalIgnoreCase));
+        if (existing is not null)
+            HistorySearchTerms.Remove(existing);
+
+        HistorySearchTerms.Insert(0, term);
+        QueueSettingsSave();
+    }
+
+    private List<string> GetHistorySearchTermsForSave()
+    {
+        var terms = HistorySearchTerms.ToList();
+        var current = HistorySearchText.Trim();
+        if (current.Length > 0)
+        {
+            terms.RemoveAll(item => string.Equals(item, current, StringComparison.OrdinalIgnoreCase));
+            terms.Insert(0, current);
+        }
+
+        return terms;
     }
 
     public bool IsHistorySearchActive => !string.IsNullOrWhiteSpace(HistorySearchText);
@@ -2651,6 +2688,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
             HeadlessMode = IsHeadlessMode,
             LastBrowserUrl = CurrentUrl,
             DownloadRoot = DownloadRoot,
+            HistorySearchTerms = GetHistorySearchTermsForSave(),
             DownloadVideo = DownloadVideo,
             DownloadImage = DownloadImage,
             IncludeWorkId = IncludeWorkId,
