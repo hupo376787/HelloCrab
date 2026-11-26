@@ -2775,15 +2775,16 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
         if (string.IsNullOrWhiteSpace(text))
             return null;
 
-        if (Uri.TryCreate(text.Trim(), UriKind.Absolute, out var direct)
-            && direct.Scheme is "http" or "https")
-        {
-            return direct.ToString();
-        }
-
+        // Uri.TryCreate 会把短链后面的空格和分享文案编码进路径，导致导航到错误页面。
+        // 先从整段分享文本中截出第一个连续 URL，再校验它。
         var match = Regex.Match(text, @"https?://[^\s]+", RegexOptions.IgnoreCase);
-        return match.Success
-            ? match.Value.TrimEnd('。', '，', ',', '.', '；', ';', ')', '）', ']', '】')
+        if (!match.Success)
+            return null;
+
+        var candidate = match.Value.TrimEnd('。', '，', ',', '.', '；', ';', ')', '）', ']', '】');
+        return Uri.TryCreate(candidate, UriKind.Absolute, out var uri)
+               && uri.Scheme is "http" or "https"
+            ? uri.ToString()
             : null;
     }
 
